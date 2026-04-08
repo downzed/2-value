@@ -24,8 +24,6 @@ let toastId = 0;
 
 const getTypeStyles = (type: ToastType): string => {
   switch (type) {
-    case "success":
-      return "bg-green-500";
     case "error":
       return "bg-red-500";
     case "warning":
@@ -45,6 +43,7 @@ const getIcon = (type: ToastType) => {
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
+          <title>success</title>
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -61,6 +60,7 @@ const getIcon = (type: ToastType) => {
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
+          <title>error</title>
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -77,6 +77,7 @@ const getIcon = (type: ToastType) => {
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
+          <title>warning</title>
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -93,6 +94,7 @@ const getIcon = (type: ToastType) => {
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
+          <title>default</title>
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -140,6 +142,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({
                   stroke="currentColor"
                   viewBox="0 0 24 24"
                 >
+                  <title>close</title>
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"

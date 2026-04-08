@@ -84,6 +84,7 @@ const FloatingImage: React.FC = () => {
         maxWidth: "350px",
       }}
     >
+      {/** biome-ignore lint/a11y/noStaticElementInteractions: TODO: handle a11y */}
       <div
         onMouseDown={handleMouseDown}
         className="flex items-center justify-between px-3 py-2 border-b border-slate-100 cursor-grab active:cursor-grabbing"
