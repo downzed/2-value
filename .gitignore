@@ -3,6 +3,6 @@ dist
 .DS_Store
 *.log
 
-.opencode
+.opencode/node_modules
 .zed
 .env
