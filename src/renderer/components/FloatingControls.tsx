@@ -1,247 +1,191 @@
-import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useImageContext } from "../hooks/ImageContext";
+import { useEffect, useState } from 'react';
+import { UI } from '../constants/ui';
+import { useImageContext } from '../hooks/ImageContext';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
+import FloatingWidget from './shared/FloatingWidget';
+import { Icon } from './shared/Icon';
+import { PillButton } from './shared/PillButton';
+import { SectionHeader } from './shared/SectionHeader';
+import { SliderRow } from './shared/SliderRow';
 
-const STORAGE_KEY = "image-editor-controls-position";
+const STORAGE_KEY = 'image-editor-controls-position';
 const DEFAULT_POSITION = { x: 20, y: 100 };
 
 const FloatingControls: React.FC = () => {
-  const {
-    hasImage,
-    blur,
-    threshold,
-    invert,
-    setBlur,
-    setThreshold,
-    setInvert,
-    resetControls,
-  } = useImageContext();
+	const {
+		hasImage,
+		blur,
+		threshold,
+		values,
+		setBlur,
+		setThreshold,
+		setValues,
+		resetControls,
+		applyPreset,
+		undo,
+		redo,
+		canUndo,
+		canRedo,
+		panels,
+		setPanel,
+	} = useImageContext();
 
-  const [isDragging, setIsDragging] = useState(false);
-  const [position, setPosition] = useState(DEFAULT_POSITION);
-  const [isClosed, setIsClosed] = useState(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
-  const panelRef = useRef<HTMLDivElement>(null);
+	const [localBlur, setLocalBlur] = useState(blur);
+	const [localThreshold, setLocalThreshold] = useState(threshold);
 
-  // Load position from localStorage
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setPosition(parsed);
-      }
-    } catch (e) {
-      console.error("Failed to load position:", e);
-    }
-  }, []);
+	const { call: debouncedSetBlur, cancel: cancelBlur } = useDebouncedCallback(setBlur, 150);
+	const { call: debouncedSetThreshold, cancel: cancelThreshold } = useDebouncedCallback(setThreshold, 150);
 
-  // Reset visibility when image loads
-  useEffect(() => {
-    if (hasImage) {
-      setIsClosed(false);
-    }
-  }, [hasImage]);
+	useEffect(() => {
+		setLocalBlur(blur);
+	}, [blur]);
 
-  // Save position to localStorage
-  const savePosition = useCallback((pos: { x: number; y: number }) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(pos));
-    } catch (e) {
-      console.error("Failed to save position:", e);
-    }
-  }, []);
+	useEffect(() => {
+		setLocalThreshold(threshold);
+	}, [threshold]);
 
-  // Mouse down - start dragging
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!panelRef.current) return;
-    const rect = panelRef.current.getBoundingClientRect();
-    dragOffset.current = {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top,
-    };
-    setIsDragging(true);
-  };
+	useEffect(() => {
+		if (hasImage) {
+			setPanel('controls', true);
+		} else {
+			cancelBlur();
+			cancelThreshold();
+		}
+	}, [hasImage, cancelBlur, cancelThreshold, setPanel]);
 
-  const positionRef = useRef(DEFAULT_POSITION);
+	const handleBlurChange = (value: number) => {
+		setLocalBlur(value);
+		debouncedSetBlur(value);
+	};
 
-  // Mouse move - update position
-  useEffect(() => {
-    if (!isDragging) return;
+	const handleThresholdChange = (value: number) => {
+		setLocalThreshold(value);
+		debouncedSetThreshold(value);
+	};
 
-    const handleMouseMove = (e: MouseEvent) => {
-      const newPos = {
-        x: e.clientX - dragOffset.current.x,
-        y: e.clientY - dragOffset.current.y,
-      };
-      positionRef.current = newPos;
-      setPosition(newPos);
-    };
+	const handleReset = () => {
+		cancelBlur();
+		cancelThreshold();
+		resetControls();
+	};
 
-    const handleMouseUp = () => {
-      setIsDragging(false);
-      savePosition(positionRef.current);
-    };
+	const handleClose = () => {
+		setPanel('controls', false);
+	};
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
+	const isPresetActive = (preset: (typeof UI.PRESETS)[number]) =>
+		blur === preset.blur && threshold === preset.threshold && values === preset.values;
 
-    return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-    };
-  }, [isDragging, savePosition]);
+	return (
+		<FloatingWidget
+			title='Adjustments'
+			storageKey={STORAGE_KEY}
+			defaultPosition={DEFAULT_POSITION}
+			isOpen={panels.controls}
+			onClose={handleClose}
+			panelStyle={{ minWidth: '220px' }}
+		>
+			<div className='p-3 space-y-3'>
+				{/* PRESETS section */}
+				<div className='space-y-1.5'>
+					<SectionHeader>Presets</SectionHeader>
+					<div className='flex items-center gap-1'>
+						{UI.PRESETS.map((preset) => (
+							<PillButton
+								key={preset.name}
+								onClick={() => applyPreset(preset)}
+								disabled={!hasImage}
+								active={isPresetActive(preset)}
+							>
+								{preset.name}
+							</PillButton>
+						))}
+					</div>
+				</div>
 
-  const handleClose = () => {
-    setIsClosed(true);
-  };
+				<div className='border-t border-slate-100' />
 
-  const handleToggle = () => {
-    setIsClosed(false);
-  };
+				{/* ADJUSTMENTS section */}
+				<div className='space-y-2'>
+					<SectionHeader>Adjustments</SectionHeader>
 
-  if (isClosed) {
-    return (
-      <button
-        type="button"
-        onClick={handleToggle}
-        className="fixed bottom-24 left-4 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors z-50"
-        title="Show Controls"
-      >
-        <svg
-          className="w-5 h-5 text-slate-600"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <title>controls</title>
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-          />
-        </svg>
-      </button>
-    );
-  }
+					<SliderRow
+						label='Blur'
+						id='blur-range'
+						min={UI.FILTER.BLUR_MIN}
+						max={UI.FILTER.BLUR_MAX}
+						step={UI.FILTER.BLUR_STEP}
+						value={localBlur}
+						onChange={handleBlurChange}
+						disabled={!hasImage}
+						valueWidth='w-6'
+					/>
 
-  return (
-    <div
-      ref={panelRef}
-      className="fixed bg-white rounded-lg shadow-xl border border-slate-200 z-50 select-none"
-      style={{
-        left: position.x,
-        top: position.y,
-        cursor: isDragging ? "grabbing" : "grab",
-        minWidth: "200px",
-      }}
-    >
-      {/* Header - drag handle */}
-      {/** biome-ignore lint/a11y/noStaticElementInteractions: don't care right now */}
-      <div
-        onMouseDown={handleMouseDown}
-        className="flex items-center justify-between px-3 py-2 border-b border-slate-100 cursor-grab active:cursor-grabbing"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-slate-400">⋮⋮</span>
-          <span className="text-xs font-semibold text-slate-700">
-            Adjustments
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={handleClose}
-          className="text-slate-400 hover:text-slate-600 transition-colors"
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <title>close</title>
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-      </div>
+					<SliderRow
+						label='Thresh'
+						id='thresh-range'
+						min={UI.FILTER.THRESHOLD_MIN}
+						max={UI.FILTER.THRESHOLD_MAX}
+						step={UI.FILTER.THRESHOLD_STEP}
+						value={localThreshold}
+						onChange={handleThresholdChange}
+						disabled={!hasImage}
+						parseValue={(v) => Number.parseInt(v, 10)}
+					/>
 
-      {/* Controls */}
-      <div className="p-3 space-y-3">
-        {/* Blur */}
-        <div className="flex items-center gap-2">
-          <label
-            htmlFor="blur-range"
-            className="text-xs font-medium text-slate-600 w-14"
-          >
-            Blur
-          </label>
-          <input
-            id="blur-range"
-            type="range"
-            min={0}
-            max={10}
-            step={0.5}
-            value={blur}
-            onChange={(e) => setBlur(parseFloat(e.target.value))}
-            disabled={!hasImage}
-            className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
-          />
-          <span className="text-xs text-slate-500 w-6 text-right">{blur}</span>
-        </div>
+					<div className='flex items-center justify-between'>
+						<div className='flex items-center gap-1 bg-slate-100 rounded p-0.5'>
+							<button
+								type='button'
+								onClick={() => setValues(2)}
+								disabled={!hasImage}
+								className={`px-2 py-1 text-xs font-medium rounded ${
+									values === 2 ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'
+								}`}
+							>
+								2
+							</button>
+							<button
+								type='button'
+								onClick={() => setValues(3)}
+								disabled={!hasImage}
+								className={`px-2 py-1 text-xs font-medium rounded ${
+									values === 3 ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'
+								}`}
+							>
+								3
+							</button>
+						</div>
+						<button
+							type='button'
+							onClick={handleReset}
+							disabled={!hasImage}
+							className='text-xs text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed'
+						>
+							Reset
+						</button>
+					</div>
+				</div>
 
-        {/* Threshold */}
-        <div className="flex items-center gap-2">
-          <label
-            htmlFor="thresh-range"
-            className="text-xs font-medium text-slate-600 w-14"
-          >
-            Thresh
-          </label>
-          <input
-            type="range"
-            id="thresh-range"
-            min={0}
-            max={255}
-            value={threshold}
-            onChange={(e) => setThreshold(parseInt(e.target.value, 10))}
-            disabled={!hasImage}
-            className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
-          />
-          <span className="text-xs text-slate-500 w-8 text-right">
-            {threshold}
-          </span>
-        </div>
+				<div className='border-t border-slate-100' />
 
-        {/* Invert */}
-        <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={invert}
-              onChange={(e) => setInvert(e.target.checked)}
-              disabled={!hasImage}
-              className="w-4 h-4 text-blue-600 rounded disabled:opacity-50"
-            />
-            <span className="text-xs font-medium text-slate-600">Invert</span>
-          </label>
-          <button
-            type="button"
-            onClick={resetControls}
-            disabled={!hasImage}
-            className="text-xs text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            Reset
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+				{/* HISTORY section */}
+				<div className='space-y-1.5'>
+					<SectionHeader>History</SectionHeader>
+					<div className='flex items-center gap-2'>
+						<PillButton onClick={undo} disabled={!canUndo} className='flex items-center gap-1'>
+							<Icon name='undo' size='sm' />
+							Undo
+						</PillButton>
+						<PillButton onClick={redo} disabled={!canRedo} className='flex items-center gap-1'>
+							Redo
+							<Icon name='redo' size='sm' />
+						</PillButton>
+					</div>
+				</div>
+			</div>
+		</FloatingWidget>
+	);
 };
 
 export default FloatingControls;

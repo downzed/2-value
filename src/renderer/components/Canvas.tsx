@@ -1,84 +1,222 @@
-import { type Image, type Mask, writeCanvas } from "image-js";
-import { useEffect } from "react";
-import { useImageContext } from "../hooks/ImageContext";
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { UI } from '../constants/ui';
+import { useImageContext } from '../hooks/ImageContext';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
+import { useImageProcessingWorker } from '../hooks/useImageProcessingWorker';
+import { imageToImageData } from '../utils/imageConversion';
+import { Icon } from './shared/Icon';
 
 interface CanvasProps {
-  previewCanvasRef: React.RefObject<HTMLCanvasElement | null>;
+	previewCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
 const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
-  const { currentImage, blur, threshold, invert } = useImageContext();
+	const { currentImage, blur, threshold, values, showOriginal, zoom, fitMode, setZoom, setFitScale } =
+		useImageContext();
 
-  useEffect(() => {
-    if (!currentImage || !previewCanvasRef.current) return;
+	const containerRef = useRef<HTMLDivElement>(null);
+	const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+	const [displayImageData, setDisplayImageData] = useState<ImageData | null>(null);
+	const cancelProcessRef = useRef<(() => void) | null>(null);
 
-    const canvas = previewCanvasRef.current;
-    let processed: Image | Mask | null = currentImage;
+	const { process } = useImageProcessingWorker();
 
-    try {
-      if (threshold > 0) {
-        processed = processed.grey() as Image;
-      }
+	// Memoize the original (unprocessed) ImageData so toggling showOriginal
+	// doesn't create a new object every render and cause an infinite loop.
+	const originalImageData = useMemo(() => (currentImage ? imageToImageData(currentImage) : null), [currentImage]);
 
-      if (blur > 0 && processed) {
-        processed = processed.gaussianBlur({ sigma: blur });
-      }
+	// Debounced full-resolution settle
+	const settleFullRes = useDebouncedCallback(
+		useCallback(
+			(b: number, t: number, v: 2 | 3) => {
+				if (!currentImage || showOriginal) return;
+				// Cancel any ongoing preview job
+				cancelProcessRef.current?.();
+				cancelProcessRef.current = process(
+					currentImage,
+					{ blur: b, threshold: t, values: v },
+					false, // full-res
+					(result) => {
+						if (result.ok) {
+							setDisplayImageData(result.imageData);
+						}
+					},
+				);
+			},
+			[currentImage, process, showOriginal],
+		),
+		UI.PERF.INTERACTIVE_DEBOUNCE_MS,
+	);
 
-      if (threshold > 0 && processed) {
-        const thresholdValue = threshold / 255;
-        processed = processed.threshold({ threshold: thresholdValue });
-      }
+	// When params change: fire interactive (preview) pass immediately,
+	// then schedule a full-res settle after debounce.
+	useEffect(() => {
+		if (!currentImage || showOriginal) return;
 
-      if (invert && processed) {
-        processed = processed.invert();
-      }
+		// Cancel any in-flight job
+		cancelProcessRef.current?.();
 
-      writeCanvas(processed, canvas);
-    } catch (error) {
-      console.error("Preview error:", error);
-      writeCanvas(currentImage, canvas);
-    }
-  }, [currentImage, blur, threshold, invert, previewCanvasRef]);
+		const pixels = currentImage.width * currentImage.height;
+		const needsPreview = pixels > UI.PERF.PREVIEW_MAX_PIXELS;
 
-  if (!currentImage) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-24 h-24 mx-auto mb-4 bg-slate-200 rounded-full flex items-center justify-center">
-            <svg
-              className="w-12 h-12 text-slate-400"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <title>empty-image</title>
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={1.5}
-                d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
-              />
-            </svg>
-          </div>
-          <p className="text-lg font-medium text-slate-600">No image loaded</p>
-          <p className="text-sm text-slate-500 mt-1">
-            Click "Open" to get started
-          </p>
-        </div>
-      </div>
-    );
-  }
+		if (needsPreview) {
+			// Fast: preview pass (downscaled)
+			cancelProcessRef.current = process(
+				currentImage,
+				{ blur, threshold, values },
+				true, // preview
+				(result) => {
+					if (result.ok) {
+						setDisplayImageData(result.imageData);
+					}
+				},
+			);
+			// Slow: schedule full-res after debounce
+			settleFullRes.call(blur, threshold, values);
+		} else {
+			// Image is small enough — go straight to full-res (no preview needed)
+			cancelProcessRef.current = process(
+				currentImage,
+				{ blur, threshold, values },
+				false, // full-res
+				(result) => {
+					if (result.ok) {
+						setDisplayImageData(result.imageData);
+					}
+				},
+			);
+			settleFullRes.cancel();
+		}
 
-  return (
-    <div className="flex-1 flex items-center justify-center p-8">
-      <div className="bg-white rounded-lg shadow-lg p-4">
-        <canvas
-          ref={previewCanvasRef}
-          className="max-w-full max-h-full border border-slate-200 rounded"
-        />
-      </div>
-    </div>
-  );
+		return () => {
+			settleFullRes.cancel();
+		};
+	}, [currentImage, blur, threshold, values, showOriginal, process, settleFullRes]);
+
+	// When showOriginal toggles, render the source image directly.
+	// Uses memoized originalImageData to avoid creating a new ImageData each
+	// render, which previously caused an infinite re-render loop.
+	useEffect(() => {
+		if (!currentImage) return;
+		if (showOriginal) {
+			settleFullRes.cancel();
+			cancelProcessRef.current?.();
+			cancelProcessRef.current = null;
+			if (originalImageData) {
+				setDisplayImageData(originalImageData);
+			}
+		}
+	}, [currentImage, showOriginal, originalImageData, settleFullRes]);
+
+	// When image changes: clear canvas backing store first (memory hygiene)
+	useEffect(() => {
+		const canvas = previewCanvasRef.current;
+		if (!canvas) return;
+		if (!currentImage) {
+			// Clear canvas
+			canvas.width = 0;
+			canvas.height = 0;
+		}
+	}, [currentImage, previewCanvasRef]);
+
+	// Draw displayImageData onto the canvas
+	useEffect(() => {
+		if (!displayImageData || !previewCanvasRef.current) return;
+		const canvas = previewCanvasRef.current;
+		canvas.width = displayImageData.width;
+		canvas.height = displayImageData.height;
+		const ctx = canvas.getContext('2d');
+		ctx?.putImageData(displayImageData, 0, 0);
+	}, [displayImageData, previewCanvasRef]);
+
+	// Track container size with ResizeObserver
+	useEffect(() => {
+		if (!containerRef.current) return;
+		const observer = new ResizeObserver(([entry]) => {
+			setContainerSize({
+				width: entry.contentRect.width,
+				height: entry.contentRect.height,
+			});
+		});
+		observer.observe(containerRef.current);
+		return () => observer.disconnect();
+	}, []);
+
+	// Compute fit scale (never upscale beyond 100%)
+	const fitScale = useMemo(() => {
+		if (!currentImage || containerSize.width === 0 || containerSize.height === 0) return 1;
+		const padding = 48;
+		const availW = containerSize.width - padding;
+		const availH = containerSize.height - padding;
+		return Math.min(availW / currentImage.width, availH / currentImage.height, UI.ZOOM.FIT_MAX);
+	}, [currentImage, containerSize]);
+
+	const effectiveZoom = fitMode === 'fit' ? fitScale : zoom;
+
+	// Report fitScale to context so it can be used as reactive effectiveZoom
+	useEffect(() => {
+		setFitScale(fitScale);
+	}, [fitScale, setFitScale]);
+
+	// Ctrl+wheel handler
+	const handleWheel = useCallback(
+		(e: WheelEvent) => {
+			if (!e.ctrlKey && !e.metaKey) return;
+			e.preventDefault();
+			const delta = e.deltaY > 0 ? -UI.ZOOM.WHEEL_STEP : UI.ZOOM.WHEEL_STEP;
+			const currentEffective = fitMode === 'fit' ? fitScale : zoom;
+			// Round to avoid floating-point drift from repeated wheel events
+			setZoom(Math.round((currentEffective + delta) * 100) / 100);
+		},
+		[fitMode, fitScale, zoom, setZoom],
+	);
+
+	useEffect(() => {
+		const el = containerRef.current;
+		if (!el) return;
+		el.addEventListener('wheel', handleWheel, { passive: false });
+		return () => el.removeEventListener('wheel', handleWheel);
+	}, [handleWheel]);
+
+	// Display dimensions: use processed size if available (may be preview-scaled),
+	// but layout is always based on source dimensions.
+	const canvasWidth = currentImage?.width ?? 0;
+	const canvasHeight = currentImage?.height ?? 0;
+	const scaledWidth = canvasWidth * effectiveZoom;
+	const scaledHeight = canvasHeight * effectiveZoom;
+
+	return (
+		<div className='flex-1 p-3 overflow-hidden'>
+			<div ref={containerRef} className='bg-white rounded-2xl shadow-lg w-full h-full overflow-auto'>
+				{!currentImage ? (
+					<div className='w-full h-full flex items-center justify-center'>
+						<div className='text-center'>
+							<div className='w-24 h-24 mx-auto mb-4 bg-slate-200 rounded-full flex items-center justify-center'>
+								<Icon name='image' size='lg' className='text-slate-400' strokeWidth={1.5} />
+							</div>
+							<p className='text-lg font-medium text-slate-600'>No image loaded</p>
+							<p className='text-sm text-slate-500 mt-1'>Click "Open" to get started</p>
+						</div>
+					</div>
+				) : (
+					<div
+						className='flex items-center justify-center'
+						style={{ minWidth: '100%', minHeight: '100%', padding: 24 }}
+					>
+						<canvas
+							ref={previewCanvasRef}
+							className='block'
+							style={{
+								width: scaledWidth,
+								height: scaledHeight,
+								imageRendering: 'pixelated',
+							}}
+						/>
+					</div>
+				)}
+			</div>
+		</div>
+	);
 };
 
 export default Canvas;

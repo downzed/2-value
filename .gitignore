@@ -1,8 +1,11 @@
 node_modules
 dist
+out
 .DS_Store
 *.log
 
-.opencode
+.opencode/node_modules
 .zed
 .env
+.env.local
+.env.*.local
