@@ -6,6 +6,7 @@
 - `yarn build` - Build for production
 - `yarn start` - Run built app in production mode
 - `yarn typecheck` - Run TypeScript type checking
+- `yarn test` - Run vitest tests (jsdom environment, tests in `tests/`)
 - `yarn package` - Package the app (electron-forge)
 - `yarn make` - Create distributable (electron-forge)
 
