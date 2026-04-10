@@ -9,7 +9,8 @@ interface ImageState {
   // Values study adjustments
   blur: number;
   threshold: number;
-  invert: boolean;
+  values: 2 | 3;
+  showOriginal: boolean;
 }
 
 export const useImage = () => {
@@ -19,11 +20,19 @@ export const useImage = () => {
     fileName: "",
     blur: 0,
     threshold: 0,
-    invert: false,
+    values: 2,
+    showOriginal: false,
   });
 
-  const { currentImage, originalImage, fileName, blur, threshold, invert } =
-    imageState;
+  const {
+    currentImage,
+    originalImage,
+    fileName,
+    blur,
+    threshold,
+    values,
+    showOriginal,
+  } = imageState;
 
   // Load image (already decoded)
   const loadImage = useCallback(async (image: Image, fileName: string = "") => {
@@ -33,7 +42,8 @@ export const useImage = () => {
       fileName,
       blur: 0,
       threshold: 0,
-      invert: false,
+      values: 2,
+      showOriginal: false,
     });
   }, []);
 
@@ -45,7 +55,8 @@ export const useImage = () => {
       fileName: "",
       blur: 0,
       threshold: 0,
-      invert: false,
+      values: 2,
+      showOriginal: false,
     });
   }, []);
 
@@ -55,7 +66,8 @@ export const useImage = () => {
       ...prev,
       blur: 0,
       threshold: 0,
-      invert: false,
+      values: 2,
+      showOriginal: false,
     }));
   }, []);
 
@@ -68,8 +80,12 @@ export const useImage = () => {
     setImageState((prev) => ({ ...prev, threshold: value }));
   }, []);
 
-  const setInvert = useCallback((enabled: boolean) => {
-    setImageState((prev) => ({ ...prev, invert: enabled }));
+  const setValues = useCallback((value: 2 | 3) => {
+    setImageState((prev) => ({ ...prev, values: value }));
+  }, []);
+
+  const toggleShowOriginal = useCallback(() => {
+    setImageState((prev) => ({ ...prev, showOriginal: !prev.showOriginal }));
   }, []);
 
   return {
@@ -87,9 +103,11 @@ export const useImage = () => {
     // Values study adjustments
     blur,
     threshold,
-    invert,
+    values,
+    showOriginal,
     setBlur,
     setThreshold,
-    setInvert,
+    setValues,
+    toggleShowOriginal,
   };
 };

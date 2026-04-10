@@ -1,4 +1,4 @@
-import { type Image, type Mask, writeCanvas } from 'image-js';
+import { type Image, writeCanvas } from 'image-js';
 import { useEffect, useMemo } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
 
@@ -6,35 +6,51 @@ interface CanvasProps {
 	previewCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
+function posterizeThreeValue(image: Image): Image {
+	const data = image.data;
+	for (let i = 0; i < data.length; i += 4) {
+		const gray = data[i];
+		if (gray < 86) {
+			data[i] = data[i + 1] = data[i + 2] = 0;
+		} else if (gray < 171) {
+			data[i] = data[i + 1] = data[i + 2] = 128;
+		} else {
+			data[i] = data[i + 1] = data[i + 2] = 255;
+		}
+	}
+	return image;
+}
+
 const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
-	const { currentImage, blur, threshold, invert } = useImageContext();
+	const { currentImage, blur, threshold, values, showOriginal, toggleShowOriginal } = useImageContext();
 
 	const processed = useMemo(() => {
 		if (!currentImage) return null;
-		let result: Image | Mask = currentImage;
+		let result = currentImage.clone();
 		try {
-			if (threshold > 0) {
-				result = result.grey() as Image;
+			if (values === 3 || threshold > 0) {
+				result = result.grey();
 			}
 			if (blur > 0) {
 				result = result.gaussianBlur({ sigma: blur });
 			}
-			if (threshold > 0) {
+			if (values === 3) {
+				result = posterizeThreeValue(result);
+			} else if (threshold > 0) {
 				result = result.threshold({ threshold: threshold / 255 });
-			}
-			if (invert) {
-				result = result.invert();
 			}
 			return result;
 		} catch {
 			return currentImage;
 		}
-	}, [currentImage, blur, threshold, invert]);
+	}, [currentImage, blur, threshold, values]);
+
+	const displayImage = showOriginal ? currentImage : processed;
 
 	useEffect(() => {
-		if (!processed || !previewCanvasRef.current) return;
-		writeCanvas(processed, previewCanvasRef.current);
-	}, [processed, previewCanvasRef]);
+		if (!displayImage || !previewCanvasRef.current) return;
+		writeCanvas(displayImage, previewCanvasRef.current);
+	}, [displayImage, previewCanvasRef]);
 
 	if (!currentImage) {
 		return (
@@ -61,7 +77,11 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 	return (
 		<div className='flex-1 flex items-center justify-center p-8'>
 			<div className='bg-white rounded-lg shadow-lg p-4'>
-				<canvas ref={previewCanvasRef} className='max-w-full max-h-full border border-slate-200 rounded' />
+				<canvas
+					ref={previewCanvasRef}
+					className='max-w-full max-h-full border border-slate-200 rounded cursor-pointer'
+					onClick={toggleShowOriginal}
+				/>
 			</div>
 		</div>
 	);

@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useImageContext } from "../hooks/ImageContext";
 import { useDraggablePanel } from "../hooks/useDraggablePanel";
-import { debounce } from "../utils/debounce";
 import { UI } from "../constants/ui";
 
 const STORAGE_KEY = "image-editor-controls-position";
@@ -12,10 +11,10 @@ const FloatingControls: React.FC = () => {
     hasImage,
     blur,
     threshold,
-    invert,
+    values,
     setBlur,
     setThreshold,
-    setInvert,
+    setValues,
     resetControls,
   } = useImageContext();
 
@@ -27,16 +26,6 @@ const FloatingControls: React.FC = () => {
     defaultPosition: DEFAULT_POSITION,
     panelRef,
   });
-
-  const debouncedSetBlur = useCallback(
-    debounce((value: number) => setBlur(value), UI.DEBOUNCE_DELAY_MS),
-    [setBlur],
-  );
-
-  const debouncedSetThreshold = useCallback(
-    debounce((value: number) => setThreshold(value), UI.DEBOUNCE_DELAY_MS),
-    [setThreshold],
-  );
 
   useEffect(() => {
     if (hasImage) {
@@ -137,14 +126,14 @@ const FloatingControls: React.FC = () => {
             max={UI.FILTER.BLUR_MAX}
             step={UI.FILTER.BLUR_STEP}
             value={blur}
-            onChange={(e) => debouncedSetBlur(parseFloat(e.target.value))}
+            onChange={(e) => setBlur(parseFloat(e.target.value))}
             disabled={!hasImage}
             className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
           />
           <span className="text-xs text-slate-500 w-6 text-right">{blur}</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className={`flex items-center gap-2 ${values === 3 ? "opacity-40 pointer-events-none" : ""}`}>
           <label
             htmlFor="thresh-range"
             className="text-xs font-medium text-slate-600 w-14"
@@ -158,9 +147,9 @@ const FloatingControls: React.FC = () => {
             max={UI.FILTER.THRESHOLD_MAX}
             value={threshold}
             onChange={(e) =>
-              debouncedSetThreshold(parseInt(e.target.value, 10))
+              setThreshold(parseInt(e.target.value, 10))
             }
-            disabled={!hasImage}
+            disabled={!hasImage || values === 3}
             className="flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
           />
           <span className="text-xs text-slate-500 w-8 text-right">
@@ -169,16 +158,32 @@ const FloatingControls: React.FC = () => {
         </div>
 
         <div className="flex items-center justify-between">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={invert}
-              onChange={(e) => setInvert(e.target.checked)}
+          <div className="flex items-center gap-1 bg-slate-100 rounded p-0.5">
+            <button
+              type="button"
+              onClick={() => setValues(2)}
               disabled={!hasImage}
-              className="w-4 h-4 text-blue-600 rounded disabled:opacity-50"
-            />
-            <span className="text-xs font-medium text-slate-600">Invert</span>
-          </label>
+              className={`px-2 py-1 text-xs font-medium rounded ${
+                values === 2
+                  ? "bg-white shadow text-slate-800"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              2
+            </button>
+            <button
+              type="button"
+              onClick={() => setValues(3)}
+              disabled={!hasImage}
+              className={`px-2 py-1 text-xs font-medium rounded ${
+                values === 3
+                  ? "bg-white shadow text-slate-800"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              3
+            </button>
+          </div>
           <button
             type="button"
             onClick={resetControls}

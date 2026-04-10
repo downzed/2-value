@@ -15,10 +15,12 @@ interface ImageContextValue {
   // Core adjustments
   blur: number;
   threshold: number;
-  invert: boolean;
+  values: 2 | 3;
+  showOriginal: boolean;
   setBlur: (value: number) => void;
   setThreshold: (value: number) => void;
-  setInvert: (enabled: boolean) => void;
+  setValues: (value: 2 | 3) => void;
+  toggleShowOriginal: () => void;
 }
 
 const ImageContext = createContext<ImageContextValue | null>(null);
