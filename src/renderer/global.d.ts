@@ -13,7 +13,6 @@ declare global {
 			openImage: () => Promise<{ dataUrl: string; path: string } | null>;
 			saveImage: (dataUrl: string, defaultPath?: string) => Promise<string | null>;
 			getRecents: () => Promise<RecentEntry[]>;
-			addRecent: (path: string) => Promise<void>;
 			removeRecent: (path: string) => Promise<void>;
 			openImageFromPath: (path: string) => Promise<{ dataUrl: string; path: string } | null>;
 		};

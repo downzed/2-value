@@ -17,26 +17,31 @@ interface RecentEntry {
 
 const RECENTS_MAX = 20;
 
+let recentsCache: RecentEntry[] | null = null;
+
 function getRecentsPath(): string {
 	return path.join(app.getPath('userData'), 'recents.json');
 }
 
-function loadRecents(): RecentEntry[] {
+async function loadRecents(): Promise<RecentEntry[]> {
+	if (recentsCache) return recentsCache;
 	try {
-		const data = fs.readFileSync(getRecentsPath(), 'utf-8');
+		const data = await fs.promises.readFile(getRecentsPath(), 'utf-8');
 		const parsed: unknown = JSON.parse(data);
-		return Array.isArray(parsed) ? parsed : [];
+		recentsCache = Array.isArray(parsed) ? parsed : [];
 	} catch {
-		return [];
+		recentsCache = [];
 	}
+	return recentsCache;
 }
 
-function saveRecents(entries: RecentEntry[]): void {
-	fs.writeFileSync(getRecentsPath(), JSON.stringify(entries, null, 2));
+async function saveRecents(entries: RecentEntry[]): Promise<void> {
+	recentsCache = entries;
+	await fs.promises.writeFile(getRecentsPath(), JSON.stringify(entries, null, 2));
 }
 
-function addRecentEntry(filePath: string): void {
-	const entries = loadRecents().filter((e) => e.path !== filePath);
+async function addRecentEntry(filePath: string): Promise<void> {
+	const entries = (await loadRecents()).filter((e) => e.path !== filePath);
 	const image = nativeImage.createFromPath(filePath);
 	const thumbnail = image.resize({ width: 100 }).toDataURL();
 	entries.unshift({
@@ -45,12 +50,16 @@ function addRecentEntry(filePath: string): void {
 		thumbnail,
 		openedAt: Date.now(),
 	});
-	saveRecents(entries.slice(0, RECENTS_MAX));
+	await saveRecents(entries.slice(0, RECENTS_MAX));
 }
 
-function removeRecentEntry(filePath: string): void {
-	const entries = loadRecents().filter((e) => e.path !== filePath);
-	saveRecents(entries);
+async function removeRecentEntry(filePath: string): Promise<void> {
+	const entries = (await loadRecents()).filter((e) => e.path !== filePath);
+	await saveRecents(entries);
+}
+
+function isInRecents(filePath: string): boolean {
+	return recentsCache?.some((e) => e.path === filePath) ?? false;
 }
 
 // --- Window ---
@@ -121,7 +130,7 @@ ipcMain.handle('open-image', async () => {
 	if (filePaths[0]) {
 		const image = nativeImage.createFromPath(filePaths[0]);
 		const dataUrl = image.toDataURL();
-		addRecentEntry(filePaths[0]);
+		await addRecentEntry(filePaths[0]);
 		return {
 			dataUrl,
 			path: filePaths[0],
@@ -150,22 +159,25 @@ ipcMain.handle('save-image', async (_event, { dataUrl, defaultPath }) => {
 
 // --- Recents IPC handlers ---
 
-ipcMain.handle('get-recents', () => loadRecents());
+ipcMain.handle('get-recents', async () => loadRecents());
 
-ipcMain.handle('add-recent', (_event, { path: filePath }) => addRecentEntry(filePath));
+ipcMain.handle('remove-recent', async (_event, { path: filePath }) => removeRecentEntry(filePath));
 
-ipcMain.handle('remove-recent', (_event, { path: filePath }) => removeRecentEntry(filePath));
-
-ipcMain.handle('open-image-from-path', (_event, { path: filePath }) => {
-	if (!fs.existsSync(filePath)) {
-		removeRecentEntry(filePath);
+ipcMain.handle('open-image-from-path', async (_event, { path: filePath }) => {
+	const resolvedPath = path.resolve(filePath);
+	await loadRecents();
+	if (!isInRecents(resolvedPath)) {
 		return null;
 	}
-	const image = nativeImage.createFromPath(filePath);
-	addRecentEntry(filePath);
+	if (!fs.existsSync(resolvedPath)) {
+		await removeRecentEntry(resolvedPath);
+		return null;
+	}
+	const image = nativeImage.createFromPath(resolvedPath);
+	await addRecentEntry(resolvedPath);
 	return {
 		dataUrl: image.toDataURL(),
-		path: filePath,
+		path: resolvedPath,
 	};
 });
 
