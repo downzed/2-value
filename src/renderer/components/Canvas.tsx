@@ -1,5 +1,6 @@
 import { type Image, writeCanvas } from 'image-js';
 import { useEffect, useMemo } from 'react';
+import { UI } from '../constants/ui';
 import { useImageContext } from '../hooks/ImageContext';
 
 interface CanvasProps {
@@ -71,8 +72,8 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 };
 
 function applyThreeZones(image: Image, threshold: number): Image {
-	const lowerThreshold = Math.max(0, threshold - 40);
-	const upperThreshold = Math.min(255, threshold + 40);
+	const lowerThreshold = Math.max(0, threshold - UI.FILTER.THREE_ZONE_BOUNDARY);
+	const upperThreshold = Math.min(255, threshold + UI.FILTER.THREE_ZONE_BOUNDARY);
 	const size = image.size;
 	const components = image.components;
 
