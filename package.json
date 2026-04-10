@@ -11,10 +11,13 @@
 		"typecheck": "tsc --noEmit",
 		"start": "ELECTRON_DISABLE_SANDBOX=1 electron-forge start",
 		"test": "vitest run",
+		"lint": "biome lint .",
+		"format:check": "biome format .",
 		"package": "electron-forge package",
 		"make": "electron-forge make"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "^2.4.11",
 		"@electron-forge/cli": "^7.11.1",
 		"@electron-forge/maker-flatpak": "^7.11.1",
 		"@tailwindcss/vite": "^4.2.2",
