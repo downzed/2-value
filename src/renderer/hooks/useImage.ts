@@ -1,107 +1,163 @@
-import type { Image } from "image-js";
-import { useCallback, useState } from "react";
+import type { Image } from 'image-js';
+import { useCallback, useState, useRef } from 'react';
 
 interface ImageState {
-  currentImage: Image | null;
-  originalImage: Image | null;
-  fileName: string;
+	currentImage: Image | null;
+	originalImage: Image | null;
+	fileName: string;
 
-  // Adjustments
-  blur: number;
-  threshold: number;
-  showOriginal: boolean;
+	// Adjustments
+	blur: number;
+	threshold: number;
+	showOriginal: boolean;
+
+	// Counter
+	counter: number;
+	counterRunning: boolean;
+	counterDuration: number | null;
 }
 
 export const useImage = () => {
-  const [imageState, setImageState] = useState<ImageState>({
-    currentImage: null,
-    originalImage: null,
-    fileName: "",
-    blur: 0,
-    threshold: 0,
-    showOriginal: false,
-  });
+	const [imageState, setImageState] = useState<ImageState>({
+		currentImage: null,
+		originalImage: null,
+		fileName: '',
+		blur: 0,
+		threshold: 0,
+		showOriginal: false,
+		counter: 0,
+		counterRunning: false,
+		counterDuration: null,
+	});
 
-  const {
-    currentImage,
-    originalImage,
-    fileName,
-    blur,
-    threshold,
-    showOriginal,
-  } = imageState;
+	const {
+		currentImage,
+		originalImage,
+		fileName,
+		blur,
+		threshold,
+		showOriginal,
+		counter,
+		counterRunning,
+		counterDuration,
+	} = imageState;
 
-  // Load image (already decoded)
-  const loadImage = useCallback(async (image: Image, fileName: string = "") => {
-    setImageState({
-      currentImage: image.clone(),
-      originalImage: image.clone(),
-      fileName,
-      blur: 0,
-      threshold: 0,
-      showOriginal: false,
-    });
-  }, []);
+	// Load image (already decoded)
+	const loadImage = useCallback(async (image: Image, fileName: string = '') => {
+		if (timerRef.current) clearInterval(timerRef.current);
+		setImageState({
+			currentImage: image.clone(),
+			originalImage: image.clone(),
+			fileName,
+			blur: 0,
+			threshold: 0,
+			showOriginal: false,
+			counter: 0,
+			counterRunning: false,
+			counterDuration: null,
+		});
+	}, []);
 
-  // Reset image (clear all)
-  const resetImage = useCallback(() => {
-    setImageState({
-      currentImage: null,
-      originalImage: null,
-      fileName: "",
-      blur: 0,
-      threshold: 0,
-      showOriginal: false,
-    });
-  }, []);
+	// Reset image (clear all)
+	const resetImage = useCallback(() => {
+		if (timerRef.current) clearInterval(timerRef.current);
+		setImageState({
+			currentImage: null,
+			originalImage: null,
+			fileName: '',
+			blur: 0,
+			threshold: 0,
+			showOriginal: false,
+			counter: 0,
+			counterRunning: false,
+			counterDuration: null,
+		});
+	}, []);
 
-  // Reset controls only (keep image)
-  const resetControls = useCallback(() => {
-    setImageState((prev) => ({
-      ...prev,
-      blur: 0,
-      threshold: 0,
-      showOriginal: false,
-    }));
-  }, []);
+	// Reset controls only (keep image)
+	const resetControls = useCallback(() => {
+		setImageState((prev) => ({
+			...prev,
+			blur: 0,
+			threshold: 0,
+			showOriginal: false,
+			counter: 0,
+			counterRunning: false,
+			counterDuration: null,
+		}));
+	}, []);
 
-  // Adjustments setters
-  const setBlur = useCallback((value: number) => {
-    setImageState((prev) => ({ ...prev, blur: value }));
-  }, []);
+	// Adjustments setters
+	const setBlur = useCallback((value: number) => {
+		setImageState((prev) => ({ ...prev, blur: value }));
+	}, []);
 
-  const setThreshold = useCallback((value: number) => {
-    setImageState((prev) => ({ ...prev, threshold: value }));
-  }, []);
+	const setThreshold = useCallback((value: number) => {
+		setImageState((prev) => ({ ...prev, threshold: value }));
+	}, []);
 
-  const setValues = useCallback((value: 2 | 3) => {
-    setImageState((prev) => ({ ...prev, values: value }));
-  }, []);
+	const toggleShowOriginal = useCallback(() => {
+		setImageState((prev) => ({ ...prev, showOriginal: !prev.showOriginal }));
+	}, []);
 
-  const toggleShowOriginal = useCallback(() => {
-    setImageState((prev) => ({ ...prev, showOriginal: !prev.showOriginal }));
-  }, []);
+	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  return {
-    // State
-    currentImage,
-    originalImage,
-    fileName,
-    hasImage: !!currentImage,
+	const startCounter = useCallback((duration: number) => {
+		if (timerRef.current) clearInterval(timerRef.current);
+		setImageState((prev) => ({
+			...prev,
+			counter: 0,
+			counterRunning: true,
+			counterDuration: duration,
+		}));
+		timerRef.current = setInterval(() => {
+			setImageState((prev) => {
+				if (prev.counter >= duration) {
+					if (timerRef.current) clearInterval(timerRef.current);
+					timerRef.current = null;
+					return { ...prev, counter: duration, counterRunning: false };
+				}
+				return { ...prev, counter: prev.counter + 1 };
+			});
+		}, 1000);
+	}, []);
 
-    // Actions
-    loadImage,
-    resetImage,
-    resetControls,
+	const stopCounter = useCallback(() => {
+		if (timerRef.current) {
+			clearInterval(timerRef.current);
+			timerRef.current = null;
+		}
+		setImageState((prev) => ({
+			...prev,
+			counterRunning: false,
+		}));
+	}, []);
 
-    // Values study adjustments
-    blur,
-    threshold,
-    values,
-    showOriginal,
-    setBlur,
-    setThreshold,
-    setValues,
-    toggleShowOriginal,
-  };
+	return {
+		// State
+		currentImage,
+		originalImage,
+		fileName,
+		hasImage: !!currentImage,
+
+		// Actions
+		loadImage,
+		resetImage,
+		resetControls,
+
+		// Values study adjustments
+		blur,
+		threshold,
+		showOriginal,
+		setBlur,
+		setThreshold,
+		toggleShowOriginal,
+
+		// Counter
+		counter,
+		counterRunning,
+		counterDuration,
+		startCounter,
+		stopCounter,
+	};
 };

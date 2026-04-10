@@ -1,7 +1,6 @@
 import { readImg } from 'image-js';
 import { useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
-import { useToast } from '../hooks/useToast';
 
 type Status = 'ready' | 'loading' | 'loaded' | 'saving' | 'saved' | 'error';
 
@@ -11,7 +10,6 @@ interface BottomPanelProps {
 
 const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	const { hasImage, currentImage, fileName, loadImage } = useImageContext();
-	const { showToast } = useToast();
 	const [status, setStatus] = useState<Status>('ready');
 
 	const width = currentImage?.width ?? '--';
@@ -34,14 +32,12 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 				await loadImage(image, fileName);
 				setStatus('loaded');
-				showToast(`Loaded: ${fileName}`, 'success');
 			} else {
 				setStatus('ready');
 			}
 		} catch (error) {
 			setStatus('error');
 			console.error('Failed to open image:', error);
-			showToast('Failed to open image', 'error');
 		}
 	};
 
@@ -56,8 +52,6 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			const savedPath = await window.electronAPI.saveImage(dataUrl);
 			if (savedPath) {
 				setStatus('saved');
-				const savedName = savedPath.split(/[/\\]/).pop() || 'image';
-				showToast(`Saved: ${savedName}`, 'success');
 				setTimeout(() => setStatus('loaded'), 2000);
 			} else {
 				setStatus('loaded');
@@ -65,7 +59,6 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		} catch (error) {
 			setStatus('error');
 			console.error('Failed to save image:', error);
-			showToast('Failed to save image', 'error');
 		}
 	};
 

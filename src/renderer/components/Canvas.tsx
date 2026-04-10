@@ -6,51 +6,27 @@ interface CanvasProps {
 	previewCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
-function posterizeThreeValue(image: Image, thresholdValue: number): Image {
-  const data = image.data;
-  // Convert threshold from 0-255 range to use for zone boundaries
-  // We'll create zones: black (0-threshold), gray (threshold-range to threshold+range), white (threshold+range to 255)
-  // But we need to ensure valid ranges
-  const range = Math.min(thresholdValue, 255 - thresholdValue) * 0.4; // 40% of distance to nearest edge
-  const lowerBound = Math.max(0, thresholdValue - range);
-  const upperBound = Math.min(255, thresholdValue + range);
-  
-  for (let i = 0; i < data.length; i += 4) {
-    const gray = data[i];
-    if (gray < lowerBound) {
-      data[i] = data[i + 1] = data[i + 2] = 0; // black
-    } else if (gray > upperBound) {
-      data[i] = data[i + 1] = data[i + 2] = 255; // white
-    } else {
-      data[i] = data[i + 1] = data[i + 2] = 128; // gray
-    }
-  }
-  return image;
-}
-
 const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
-	const { currentImage, blur, threshold, values, showOriginal, toggleShowOriginal } = useImageContext();
+	const { currentImage, blur, threshold, showOriginal } = useImageContext();
 
 	const processed = useMemo(() => {
 		if (!currentImage) return null;
 		let result = currentImage.clone();
 		try {
-			if (values === 3 || threshold > 0) {
+			if (threshold > 0) {
 				result = result.grey();
 			}
 			if (blur > 0) {
 				result = result.gaussianBlur({ sigma: blur });
 			}
-if (values === 3) {
-      result = posterizeThreeValue(result, threshold);
-    } else if (threshold > 0) {
-      result = result.threshold({ threshold: threshold / 255 });
-    }
+			if (threshold > 0) {
+				result = result.threshold({ threshold: threshold / 255 });
+			}
 			return result;
 		} catch {
 			return currentImage;
 		}
-	}, [currentImage, blur, threshold, values]);
+	}, [currentImage, blur, threshold]);
 
 	const displayImage = showOriginal ? currentImage : processed;
 
@@ -84,11 +60,7 @@ if (values === 3) {
 	return (
 		<div className='flex-1 flex items-center justify-center p-8'>
 			<div className='bg-white rounded-lg shadow-lg p-4'>
-				<canvas
-					ref={previewCanvasRef}
-					className='max-w-full max-h-full border border-slate-200 rounded cursor-pointer'
-					onClick={toggleShowOriginal}
-				/>
+				<canvas ref={previewCanvasRef} className='max-w-full max-h-full border border-slate-200 rounded' />
 			</div>
 		</div>
 	);
