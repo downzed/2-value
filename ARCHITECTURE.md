@@ -87,7 +87,7 @@ User drags blur/threshold slider
     ↓
 FloatingControls onChange
     ↓
-setBlur(value) / setThreshold(value) [debounce utility exists but not yet wired in]
+setBlur(value) / setThreshold(value)
     ↓
 useImage updates state
     ↓
@@ -103,8 +103,8 @@ Filter chain (3-value mode):
     1. if (threshold > 0 || values === 3) → grey({ algorithm: 'luma709' })
     2. if (blur > 0) → gaussianBlur({ sigma: blur })
     3. if (threshold > 0) → applyThreeZones(image, threshold)
-       └─ lowerThreshold = max(0, threshold - 40)
-       └─ upperThreshold = min(255, threshold + 40)
+       └─ lowerThreshold = max(0, threshold - UI.FILTER.THREE_ZONE_BOUNDARY)
+       └─ upperThreshold = min(255, threshold + UI.FILTER.THREE_ZONE_BOUNDARY)
        └─ < lower → black (0), > upper → white (255), else → gray (128)
     ↓
 writeCanvas(processed, ref)
@@ -193,16 +193,15 @@ App.tsx
 ### Canvas.tsx (Main Preview)
 - **Input:** currentImage, blur, threshold, values, showOriginal from context
 - **Output:** Canvas element with filtered preview
-- **Effect:** Recalculates filters on prop changes using useMemo (problematic - no debounce)
+- **Effect:** Recalculates filters on prop changes using useMemo
 - **Performance:** Full reprocessing on every change
 - **2-value mode:** grey → blur → threshold (binary)
-- **3-value mode:** grey (always) → blur → threeZones (black/gray/white)
+- **3-value mode:** grey (always) → blur → threeZones (black/gray/white, boundaries from `UI.FILTER.THREE_ZONE_BOUNDARY`)
 
 ### FloatingControls.tsx (Adjustment Panel)
 - **Drag:** Position persistence via localStorage (uses `useDraggablePanel` hook)
 - **UI:** Blur slider (0-10, step 0.5), Threshold slider (0-255), 2/3 value toggle, Reset button
-- **Constants:** Uses `UI.FILTER.*` from `constants/ui.ts` for slider ranges
-- **Note:** Debounce utility exists (`utils/debounce.ts`) but is not yet wired into slider onChange
+- **Constants:** Uses `UI.FILTER.*` from `constants/ui.ts` for slider ranges and zone boundaries
 
 ### FloatingImage.tsx (Original Preview)
 - **Display:** Unfiltered image thumbnail
@@ -262,13 +261,7 @@ Dragging Blur Slider:
   ├─ Filter passes: 60 × 4 filters = 240/sec
   ├─ gaussianBlur(): Most expensive
   ├─ Canvas update: ~16ms per frame
-  └─ CPU: ~30-50% (noticeable lag)
-
-WITH DEBOUNCE (150ms):
-  ├─ onChange events: 60/sec (visual)
-  ├─ Actual updates: 6-7/sec
-  ├─ Filter passes: ~20/sec
-  └─ CPU: ~5-8% (much better)
+  └─ CPU: ~30-50% (noticeable on large images)
 ```
 
 ### Build Times
@@ -323,12 +316,7 @@ App.tsx
         └── saveImage (IPC)
 
 Shared Hooks:
-├── useDraggablePanel.ts (used by FloatingControls, FloatingImage, FloatingCounter)
-└── useToast.tsx (implemented but not yet integrated)
-
-Utilities:
-├── utils/debounce.ts (implemented but not yet wired into sliders)
-└── constants/ui.ts (filter ranges, debounce delay, drag threshold)
+└── useDraggablePanel.ts (used by FloatingControls, FloatingImage, FloatingCounter)
 
 External Dependencies:
 ├── react@19.2.4
@@ -363,7 +351,7 @@ Bottleneck: File I/O and image decoding
 ```
 Drag Slider → onChange (60x/sec) → setBlur() → useEffect triggered →
 gaussianBlur() → writeCanvas() → Canvas render
-Total Time: ~16-30ms per frame (with debounce: ~150ms total update)
+Total Time: ~16-30ms per frame
 Bottleneck: gaussianBlur() calculation (most expensive filter)
 ```
 
@@ -483,25 +471,19 @@ yarn start                      # Uses electron-forge
 
 ## Known Issues & Tech Debt
 
-### Important
-- **Slider debounce not wired:** `utils/debounce.ts` and `UI.DEBOUNCE_DELAY_MS` constant exist but are not yet connected to slider onChange handlers in FloatingControls
-- **Toast not integrated:** `useToast.tsx` (ToastProvider + useToast hook) is implemented but not wrapped in App.tsx — errors still go to console only
-- **No error UI:** Until ToastProvider is integrated, errors only appear in console
-
 ### Minor
-- **Magic numbers:** Zone boundary offset (±40) in `applyThreeZones()` is hardcoded in Canvas.tsx
-- **Unused constants:** `DRAG_THRESHOLD`, `ZOOM_STEP`, `RESIZE_HANDLE_SIZE` in `constants/ui.ts` are not referenced
+- **Unused paths alias:** `@/*` alias in `tsconfig.json` is not consistently used
 
 ---
 
 ## Future Optimization Opportunities
 
-### Short Term (1-2 weeks)
+### Short Term
 1. ~~Extract `useDraggablePanel()` hook~~ ✅ Done
-2. Wire debounce into slider onChange handlers (utility + constant already exist)
-3. ~~Replace fs.writeFileSync() with async~~ ✅ Done
-4. Extract magic numbers to constants (zone boundary ±40 in Canvas.tsx)
-5. Integrate ToastProvider into App.tsx for user-facing error/success messages
+2. ~~Replace fs.writeFileSync() with async~~ ✅ Done
+3. ~~Extract magic numbers to constants~~ ✅ Done (`UI.FILTER.THREE_ZONE_BOUNDARY`)
+4. ~~Remove unused debounce utility~~ ✅ Done
+5. ~~Remove unused toast system~~ ✅ Done
 
 ### Medium Term (1 month)
 1. Add component-level test coverage (Canvas, FloatingImage, FloatingCounter, BottomPanel)
