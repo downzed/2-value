@@ -32,6 +32,19 @@ export default defineConfig({
 				input: resolve(__dirname, 'src/renderer/index.html'),
 			},
 		},
-		plugins: [react(), tailwindcss()],
+		plugins: [
+			react(),
+			tailwindcss(),
+			{
+				// Replace direct eval with indirect eval in file-type to suppress
+				// rolldown's [EVAL] warning. See: https://rolldown.rs/guide/troubleshooting#avoiding-direct-eval
+				name: 'fix-file-type-eval',
+				transform(code, id) {
+					if (id.includes('node_modules/file-type/')) {
+						return code.replace(/\beval\('require'\)/g, "(0, eval)('require')");
+					}
+				},
+			},
+		],
 	},
 });
