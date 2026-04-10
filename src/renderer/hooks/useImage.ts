@@ -9,6 +9,7 @@ interface ImageState {
 	// Adjustments
 	blur: number;
 	threshold: number;
+	values: 2 | 3;
 	showOriginal: boolean;
 
 	// Counter
@@ -24,6 +25,7 @@ export const useImage = () => {
 		fileName: '',
 		blur: 0,
 		threshold: 0,
+		values: 2,
 		showOriginal: false,
 		counter: 0,
 		counterRunning: false,
@@ -36,6 +38,7 @@ export const useImage = () => {
 		fileName,
 		blur,
 		threshold,
+		values,
 		showOriginal,
 		counter,
 		counterRunning,
@@ -51,6 +54,7 @@ export const useImage = () => {
 			fileName,
 			blur: 0,
 			threshold: 0,
+			values: 2,
 			showOriginal: false,
 			counter: 0,
 			counterRunning: false,
@@ -67,6 +71,7 @@ export const useImage = () => {
 			fileName: '',
 			blur: 0,
 			threshold: 0,
+			values: 2,
 			showOriginal: false,
 			counter: 0,
 			counterRunning: false,
@@ -80,6 +85,7 @@ export const useImage = () => {
 			...prev,
 			blur: 0,
 			threshold: 0,
+			values: 2,
 			showOriginal: false,
 			counter: 0,
 			counterRunning: false,
@@ -96,6 +102,10 @@ export const useImage = () => {
 		setImageState((prev) => ({ ...prev, threshold: value }));
 	}, []);
 
+	const setValues = useCallback((value: 2 | 3) => {
+		setImageState((prev) => ({ ...prev, values: value }));
+	}, []);
+
 	const toggleShowOriginal = useCallback(() => {
 		setImageState((prev) => ({ ...prev, showOriginal: !prev.showOriginal }));
 	}, []);
@@ -106,18 +116,18 @@ export const useImage = () => {
 		if (timerRef.current) clearInterval(timerRef.current);
 		setImageState((prev) => ({
 			...prev,
-			counter: 0,
+			counter: duration,
 			counterRunning: true,
 			counterDuration: duration,
 		}));
 		timerRef.current = setInterval(() => {
 			setImageState((prev) => {
-				if (prev.counter >= duration) {
+				if (prev.counter <= 0) {
 					if (timerRef.current) clearInterval(timerRef.current);
 					timerRef.current = null;
-					return { ...prev, counter: duration, counterRunning: false };
+					return { ...prev, counter: 0, counterRunning: false };
 				}
-				return { ...prev, counter: prev.counter + 1 };
+				return { ...prev, counter: prev.counter - 1 };
 			});
 		}, 1000);
 	}, []);
@@ -148,9 +158,11 @@ export const useImage = () => {
 		// Values study adjustments
 		blur,
 		threshold,
+		values,
 		showOriginal,
 		setBlur,
 		setThreshold,
+		setValues,
 		toggleShowOriginal,
 
 		// Counter

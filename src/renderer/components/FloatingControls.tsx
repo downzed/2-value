@@ -7,7 +7,7 @@ const STORAGE_KEY = 'image-editor-controls-position';
 const DEFAULT_POSITION = { x: 20, y: 100 };
 
 const FloatingControls: React.FC = () => {
-	const { hasImage, blur, threshold, setBlur, setThreshold, resetControls } = useImageContext();
+	const { hasImage, blur, threshold, values, setBlur, setThreshold, setValues, resetControls } = useImageContext();
 
 	const [isClosed, setIsClosed] = useState(false);
 	const panelRef = useRef<HTMLDivElement>(null);
@@ -117,7 +117,29 @@ const FloatingControls: React.FC = () => {
 					<span className='text-xs text-slate-500 w-8 text-right'>{threshold}</span>
 				</div>
 
-				<div className='flex items-center justify-end'>
+				<div className='flex items-center justify-between'>
+					<div className='flex items-center gap-1 bg-slate-100 rounded p-0.5'>
+						<button
+							type='button'
+							onClick={() => setValues(2)}
+							disabled={!hasImage}
+							className={`px-2 py-1 text-xs font-medium rounded ${
+								values === 2 ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'
+							}`}
+						>
+							2
+						</button>
+						<button
+							type='button'
+							onClick={() => setValues(3)}
+							disabled={!hasImage}
+							className={`px-2 py-1 text-xs font-medium rounded ${
+								values === 3 ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'
+							}`}
+						>
+							3
+						</button>
+					</div>
 					<button
 						type='button'
 						onClick={resetControls}

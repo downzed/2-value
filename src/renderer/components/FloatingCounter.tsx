@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
 import { useDraggablePanel } from '../hooks/useDraggablePanel';
 
@@ -31,23 +31,36 @@ const FloatingCounter: React.FC = () => {
 		setIsClosed(false);
 	};
 
+	const formatTime = (seconds: number): string => {
+		const mins = Math.floor(seconds / 60);
+		const secs = seconds % 60;
+		return mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}`;
+	};
+
 	if (isClosed) {
 		return (
 			<button
 				type='button'
 				onClick={handleToggle}
 				className='fixed bottom-24 left-28 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors z-50'
-				title='Show Timer'
+				title={counterRunning ? `Timer: ${formatTime(counter)} remaining` : 'Show Timer'}
 			>
-				<svg className='w-5 h-5 text-slate-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-					<title>timer</title>
-					<path
-						strokeLinecap='round'
-						strokeLinejoin='round'
-						strokeWidth={2}
-						d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
-					/>
-				</svg>
+				<div className='relative'>
+					<svg className='w-5 h-5 text-slate-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
+						<title>timer</title>
+						<path
+							strokeLinecap='round'
+							strokeLinejoin='round'
+							strokeWidth={2}
+							d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
+						/>
+					</svg>
+					{counterRunning && counterDuration && (
+						<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center'>
+							{counter < 60 ? counter : Math.floor(counter / 60)}
+						</span>
+					)}
+				</div>
 			</button>
 		);
 	}
@@ -99,8 +112,10 @@ const FloatingCounter: React.FC = () => {
 				</div>
 
 				<div className='text-center'>
-					<span className='text-2xl font-mono text-slate-700'>{counter}</span>
-					<span className='text-xs text-slate-500 ml-1'>sec</span>
+					<span className='text-2xl font-mono text-slate-700'>{formatTime(counter)}</span>
+					<span className='text-xs text-slate-500 ml-1'>
+						{counterRunning && counterDuration ? 'remaining' : 'total'}
+					</span>
 				</div>
 
 				<div className='flex items-center justify-center gap-2'>

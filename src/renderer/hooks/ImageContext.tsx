@@ -15,9 +15,11 @@ interface ImageContextValue {
 	// Core adjustments
 	blur: number;
 	threshold: number;
+	values: 2 | 3;
 	showOriginal: boolean;
 	setBlur: (value: number) => void;
 	setThreshold: (value: number) => void;
+	setValues: (value: 2 | 3) => void;
 	toggleShowOriginal: () => void;
 
 	// Counter

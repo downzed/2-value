@@ -7,26 +7,30 @@ interface CanvasProps {
 }
 
 const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
-	const { currentImage, blur, threshold, showOriginal } = useImageContext();
+	const { currentImage, blur, threshold, values, showOriginal } = useImageContext();
 
 	const processed = useMemo(() => {
 		if (!currentImage) return null;
-		let result = currentImage.clone();
+		let result: Image = currentImage.clone();
 		try {
-			if (threshold > 0) {
-				result = result.grey();
+			if (threshold > 0 || values === 3) {
+				result = result.grey({ algorithm: 'luma709' }) as unknown as Image;
 			}
 			if (blur > 0) {
-				result = result.gaussianBlur({ sigma: blur });
+				result = result.gaussianBlur({ sigma: blur }) as Image;
 			}
 			if (threshold > 0) {
-				result = result.threshold({ threshold: threshold / 255 });
+				if (values === 3) {
+					result = applyThreeZones(result, threshold);
+				} else {
+					result = result.threshold({ threshold: threshold / 255 }) as unknown as Image;
+				}
 			}
 			return result;
 		} catch {
 			return currentImage;
 		}
-	}, [currentImage, blur, threshold]);
+	}, [currentImage, blur, threshold, values]);
 
 	const displayImage = showOriginal ? currentImage : processed;
 
@@ -65,5 +69,28 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 		</div>
 	);
 };
+
+function applyThreeZones(image: Image, threshold: number): Image {
+	const lowerThreshold = Math.max(0, threshold - 40);
+	const upperThreshold = Math.min(255, threshold + 40);
+	const size = image.size;
+	const components = image.components;
+
+	for (let index = 0; index < size; index++) {
+		const value = image.getValueByIndex(index, 0);
+		let newValue: number;
+		if (value < lowerThreshold) {
+			newValue = 0;
+		} else if (value > upperThreshold) {
+			newValue = 255;
+		} else {
+			newValue = 128;
+		}
+		for (let channel = 0; channel < components; channel++) {
+			image.setValueByIndex(index, channel, newValue);
+		}
+	}
+	return image;
+}
 
 export default Canvas;
