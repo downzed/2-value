@@ -66,7 +66,7 @@ BottomPanel receives result
 useImage.ts: setImageState()
     ├─ currentImage = image.clone()
     ├─ originalImage = image.clone()
-    └─ reset blur/threshold/values/showOriginal/counter
+    └─ reset blur/threshold/values/showOriginal/counter/panels/history
     ↓
 ImageContext updates
     ↓
@@ -83,11 +83,13 @@ FloatingImage receives originalImage
 ### Filter Pipeline Flow
 
 ```
-User drags blur/threshold slider
+User drags blur/threshold slider (or uses h/j/k/l keys)
     ↓
-FloatingControls onChange
+FloatingControls onChange (debounced 150ms) / useKeyboardShortcuts
     ↓
 setBlur(value) / setThreshold(value)
+    ├─ Pushes current snapshot to adjustmentHistory
+    └─ Clears adjustmentFuture
     ↓
 useImage updates state
     ↓
@@ -143,6 +145,14 @@ BottomPanel receives success
 ### State Structure
 
 ```typescript
+type PanelId = 'controls' | 'original' | 'timer';
+
+interface AdjustmentSnapshot {
+  blur: number;
+  threshold: number;
+  values: 2 | 3;
+}
+
 ImageState = {
   // Image data
   currentImage: Image | null,      // After filters
@@ -159,6 +169,13 @@ ImageState = {
   counter: number,                 // Seconds remaining
   counterRunning: boolean,         // Timer active
   counterDuration: number | null,  // Selected duration
+
+  // Panel visibility
+  panels: Record<PanelId, boolean>, // true = open, false = minimized
+
+  // Undo/redo
+  adjustmentHistory: AdjustmentSnapshot[], // Past states (stack, max 50)
+  adjustmentFuture: AdjustmentSnapshot[],  // Redo stack
 }
 ```
 
@@ -167,28 +184,45 @@ ImageState = {
 ```
 App.tsx
 └── ImageProvider (Context)
-    └── useImage hook
-        └── [ImageState] ← Central state
-            ├─ Canvas (reads: currentImage, blur, threshold, values, showOriginal)
-            ├─ BottomPanel (reads: fileName, currentImage, hasImage)
-            ├─ FloatingControls (reads: all; writes: setBlur, setThreshold, setValues, resetControls)
-            ├─ FloatingImage (reads: originalImage, showOriginal, toggleShowOriginal)
-            ├─ FloatingCounter (reads: counter, counterRunning, counterDuration; writes: startCounter, stopCounter)
-            └── [setters]
-                ├─ setBlur
-                ├─ setThreshold
-                ├─ setValues
-                ├─ toggleShowOriginal
-                ├─ loadImage
-                ├─ resetImage
-                ├─ resetControls
-                ├─ startCounter
-                └─ stopCounter
+    └── AppContent
+        ├── useKeyboardShortcuts() — global keybinds (h/j/k/l, Ctrl+Z/Shift+Z, Alt+1/2/3)
+        └── useImage hook
+            └── [ImageState] ← Central state
+                ├─ Canvas (reads: currentImage, blur, threshold, values, showOriginal)
+                ├─ BottomPanel (reads: fileName, hasImage, panels, counter, counterRunning, counterDuration)
+                │   └─ Renders minimized panel icons when !panels[id]
+                ├─ FloatingControls → FloatingPanel
+                │   (reads: all adjustments, canUndo, canRedo, panels.controls)
+                │   (writes: setBlur, setThreshold, setValues, resetControls, applyPreset, undo, redo)
+                ├─ FloatingImage → FloatingPanel
+                │   (reads: originalImage, showOriginal, panels.original)
+                │   (writes: toggleShowOriginal, setPanel)
+                ├─ FloatingCounter → FloatingPanel
+                │   (reads: counter, counterRunning, counterDuration, panels.timer)
+                │   (writes: startCounter, stopCounter, setPanel)
+                └── [setters]
+                    ├─ setBlur          (+ history push)
+                    ├─ setThreshold     (+ history push)
+                    ├─ setValues        (+ history push)
+                    ├─ applyPreset      (+ history push, single entry)
+                    ├─ toggleShowOriginal
+                    ├─ loadImage        (clears history)
+                    ├─ resetImage       (clears history)
+                    ├─ resetControls    (clears history)
+                    ├─ undo / redo
+                    ├─ togglePanel / setPanel
+                    ├─ startCounter
+                    └─ stopCounter
 ```
 
 ---
 
 ## Component Responsibilities
+
+### App.tsx (Root)
+- **Provider:** Wraps with `ImageProvider`
+- **AppContent pattern:** Inner component calls `useKeyboardShortcuts()` inside the provider context
+- **Composition:** Assembles all components (Canvas, FloatingImage, FloatingControls, FloatingCounter, BottomPanel)
 
 ### Canvas.tsx (Main Preview)
 - **Input:** currentImage, blur, threshold, values, showOriginal from context
@@ -198,32 +232,60 @@ App.tsx
 - **2-value mode:** grey → blur → threshold (binary)
 - **3-value mode:** grey (always) → blur → threeZones (black/gray/white, boundaries from `UI.FILTER.THREE_ZONE_BOUNDARY`)
 
+### FloatingPanel.tsx (Reusable Panel Shell)
+- **Props:** `title`, `storageKey`, `defaultPosition`, `isOpen`, `onClose`, `titleBarActions?`, `panelStyle?`, `zClass?`, `children`
+- **Title bar:** Drag handle (`⋮⋮`), title text, optional action buttons, close button
+- **Drag:** Uses `useDraggablePanel` internally — consumers don't set up refs or drag handling
+- **Closed state:** Returns `null` (minimized icon rendered by BottomPanel, not by this component)
+- **No default padding:** Consumers control their own padding via children
+
 ### FloatingControls.tsx (Adjustment Panel)
-- **Drag:** Position persistence via localStorage (uses `useDraggablePanel` hook)
-- **UI:** Blur slider (0-10, step 0.5), Threshold slider (0-255), 2/3 value toggle, Reset button
-- **Constants:** Uses `UI.FILTER.*` from `constants/ui.ts` for slider ranges and zone boundaries
+- **Uses:** FloatingPanel wrapper
+- **Sections:** Presets, Adjustments, History (visually separated with dividers and section headers)
+- **Presets:** 3 presets from `UI.PRESETS` (Sketch, High Contrast, 3-Tone) — active preset highlighted
+- **Adjustments:** Blur slider (0-10, step 0.5), Threshold slider (0-255), 2/3 value toggle, Reset button
+- **History:** Undo/Redo buttons with `Ctrl+Z`/`Ctrl+Shift+Z` tooltips
+- **Debounced sliders:** Local state + `useDebouncedCallback` (150ms) for blur/threshold
+- **Constants:** Uses `UI.FILTER.*` and `UI.PRESETS` from `constants/ui.ts`
+- **Auto-open:** Opens panel when `hasImage` becomes true
 
 ### FloatingImage.tsx (Original Preview)
-- **Display:** Unfiltered image thumbnail
-- **Drag:** Position persistence via localStorage (uses `useDraggablePanel` hook)
-- **Toggle:** Show original/processed button in header with tooltip
+- **Uses:** FloatingPanel wrapper
+- **Display:** Unfiltered image thumbnail via canvas
+- **Toggle:** Show original/processed eye button as `titleBarActions`
+- **Auto-open:** Opens panel when `originalImage` changes
+- **Re-render:** Re-renders canvas when panel reopens (unmounted while closed)
 
 ### FloatingCounter.tsx (Countdown Timer)
-- **Presets:** 1m, 5m, 10m, 15m buttons
+- **Uses:** FloatingPanel wrapper
+- **Presets:** 1m, 5m, 10m, 15m buttons (local `PRESETS` constant, not `UI.PRESETS`)
 - **Display:** Countdown timer (MM:SS or SS format)
 - **Controls:** Start/Stop toggle, Reset button
-- **Badge:** When minimized, shows remaining time as badge on icon
 - **Behavior:** Auto-stops when counter reaches 0
-- **Drag:** Position persistence via localStorage (uses `useDraggablePanel` hook)
 
-### BottomPanel.tsx (File Operations)
-- **Open:** File dialog → image loading
-- **Save:** Canvas → file system (async write)
+### BottomPanel.tsx (Status Bar + File Operations)
+- **Open:** File dialog → image loading (Ctrl+O)
+- **Save:** Canvas → file system, async write (Ctrl+S)
 - **Display:** File info (name, dimensions), status (ready/loading/loaded/saving/saved/error)
+- **Minimized panel icons:** Right side, left of status indicator. Only shown when a panel is closed. Clicking reopens the panel.
+  - Controls icon: sliders SVG
+  - Original icon: image/photo SVG
+  - Timer icon: clock SVG + badge showing remaining time when timer is running
 
-### App.tsx (Root)
-- **Provider:** Wraps with ImageProvider
-- **Composition:** Assembles all components (Canvas, FloatingImage, FloatingControls, FloatingCounter, BottomPanel)
+---
+
+## Keyboard Shortcuts Architecture
+
+### useKeyboardShortcuts.ts (Global Hook)
+
+Registered once in `AppContent` (inside `ImageProvider`). Handles:
+- **Vim-style adjustments:** `h`/`l` (blur ±0.5), `j`/`k` (threshold ±1) — only when `hasImage`, no modifiers, not focused on input
+- **Undo/Redo:** `Ctrl+Z` / `Ctrl+Shift+Z`
+- **Panel toggles:** `Alt+1`/`Alt+2`/`Alt+3`
+
+### BottomPanel inline shortcuts
+
+`Ctrl+O` (open) and `Ctrl+S` (save) remain in BottomPanel's own `useEffect` because they depend on local state (`status`, `previewCanvasRef`).
 
 ---
 
@@ -248,6 +310,11 @@ Example (10MP photo):
   ├─ File: ~8 MB
   ├─ Memory usage: 80 MB baseline + 16-24 MB image
   = ~96-104 MB total
+
+Undo/Redo:
+  ├─ Each AdjustmentSnapshot: ~24 bytes (3 numbers)
+  ├─ Max depth: 50
+  = ~1.2 KB max (negligible)
 ```
 
 ### CPU Usage During Interaction
@@ -258,7 +325,8 @@ Idle:
 
 Dragging Blur Slider:
   ├─ onChange events: 60/sec (60 fps)
-  ├─ Filter passes: 60 × 4 filters = 240/sec
+  ├─ Debounced to setBlur: ~6/sec (150ms debounce)
+  ├─ Filter passes per setBlur: 2-3 filters
   ├─ gaussianBlur(): Most expensive
   ├─ Canvas update: ~16ms per frame
   └─ CPU: ~30-50% (noticeable on large images)
@@ -293,30 +361,39 @@ Bundle Composition:
 App.tsx
 ├── ImageContext.tsx
 │   └── useImage.ts
+│       └── constants/ui.ts (UI.FILTER.*, UI.PRESETS, UI.HISTORY.*)
+├── useKeyboardShortcuts.ts (called in AppContent)
+│   ├── useImageContext
+│   └── constants/ui.ts
 ├── Canvas.tsx
 │   ├── useImageContext
 │   ├── writeCanvas (from image-js)
 │   └── useMemo
 ├── FloatingControls.tsx
 │   ├── useImageContext
-│   ├── useDraggablePanel
-│   └── constants/ui.ts (UI.FILTER.*)
+│   ├── FloatingPanel.tsx
+│   │   └── useDraggablePanel.ts
+│   ├── useDebouncedCallback.ts
+│   └── constants/ui.ts (UI.FILTER.*, UI.PRESETS)
 ├── FloatingImage.tsx
 │   ├── useImageContext
-│   ├── writeCanvas (from image-js)
-│   └── useDraggablePanel
+│   ├── FloatingPanel.tsx
+│   │   └── useDraggablePanel.ts
+│   └── writeCanvas (from image-js)
 ├── FloatingCounter.tsx
 │   ├── useImageContext
-│   └── useDraggablePanel
+│   └── FloatingPanel.tsx
+│       └── useDraggablePanel.ts
 └── BottomPanel.tsx
-    ├── useImageContext
+    ├── useImageContext (panels, setPanel, counter, counterRunning, counterDuration)
     ├── readImg (from image-js)
     └── window.electronAPI
         ├── openImage (IPC)
         └── saveImage (IPC)
 
 Shared Hooks:
-└── useDraggablePanel.ts (used by FloatingControls, FloatingImage, FloatingCounter)
+├── useDraggablePanel.ts (used internally by FloatingPanel)
+└── useDebouncedCallback.ts (used by FloatingControls)
 
 External Dependencies:
 ├── react@19.2.4
@@ -341,7 +418,7 @@ Dev Dependencies:
 
 ### Path 1: Image Loading (User Perspective)
 ```
-Click Open → Dialog (user interaction) → IPC → File read → 
+Click Open → Dialog (user interaction) → IPC → File read →
 window.Image creation → readImg() → Canvas redraw
 Total Time: ~500-1000ms (mostly user interaction + file I/O)
 Bottleneck: File I/O and image decoding
@@ -349,8 +426,8 @@ Bottleneck: File I/O and image decoding
 
 ### Path 2: Filter Application (User Perspective)
 ```
-Drag Slider → onChange (60x/sec) → setBlur() → useEffect triggered →
-gaussianBlur() → writeCanvas() → Canvas render
+Drag Slider → onChange (60x/sec) → debounce (150ms) → setBlur() →
+useMemo triggered → gaussianBlur() → writeCanvas() → Canvas render
 Total Time: ~16-30ms per frame
 Bottleneck: gaussianBlur() calculation (most expensive filter)
 ```
@@ -432,12 +509,12 @@ window.electronAPI = {
 ```
 
 ### Security Features
-- ✅ Context isolation: true
-- ✅ Node integration: false
-- ⚠️ Sandbox: false (noted as intentional)
-- ✅ Preload bridge pattern used
-- ✅ No eval() in app code
-- ✅ CSP headers configured
+- Context isolation: true
+- Node integration: false
+- Sandbox: false (noted as intentional)
+- Preload bridge pattern used
+- No eval() in app code
+- CSP headers configured
 
 ---
 
@@ -479,15 +556,20 @@ yarn start                      # Uses electron-forge
 ## Future Optimization Opportunities
 
 ### Short Term
-1. ~~Extract `useDraggablePanel()` hook~~ ✅ Done
-2. ~~Replace fs.writeFileSync() with async~~ ✅ Done
-3. ~~Extract magic numbers to constants~~ ✅ Done (`UI.FILTER.THREE_ZONE_BOUNDARY`)
-4. ~~Remove unused debounce utility~~ ✅ Done
-5. ~~Remove unused toast system~~ ✅ Done
-6. ~~Fix `resetControls` not clearing interval~~ ✅ Done
-7. ~~Add debounce to sliders (performance)~~ ✅ Done (`useDebouncedCallback`)
-8. ~~Add panel bounds checking~~ ✅ Done (`useDraggablePanel`)
-9. ~~Add keyboard shortcuts (Ctrl+O, Ctrl+S)~~ ✅ Done
+1. ~~Extract `useDraggablePanel()` hook~~ Done
+2. ~~Replace fs.writeFileSync() with async~~ Done
+3. ~~Extract magic numbers to constants~~ Done (`UI.FILTER.THREE_ZONE_BOUNDARY`)
+4. ~~Remove unused debounce utility~~ Done
+5. ~~Remove unused toast system~~ Done
+6. ~~Fix `resetControls` not clearing interval~~ Done
+7. ~~Add debounce to sliders (performance)~~ Done (`useDebouncedCallback`)
+8. ~~Add panel bounds checking~~ Done (`useDraggablePanel`)
+9. ~~Add keyboard shortcuts (Ctrl+O, Ctrl+S)~~ Done
+10. ~~Reusable FloatingPanel component~~ Done
+11. ~~Remove FABs, minimize to bottom bar~~ Done
+12. ~~Presets system (Sketch, High Contrast, 3-Tone)~~ Done
+13. ~~Undo/redo for adjustments~~ Done
+14. ~~Vim-style keybinds (h/j/k/l) + panel toggles (Alt+1/2/3)~~ Done
 
 ### Medium Term (1 month)
 1. Add component-level test coverage (Canvas, FloatingImage, FloatingCounter, BottomPanel)

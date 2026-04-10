@@ -18,23 +18,40 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone or 3-ton
 
 - Open images (PNG, JPG, JPEG, BMP)
 - Save images as PNG
-- Adjustable blur (0-10)
-- Adjustable threshold (0-255)
+- Adjustable blur (0-10) and threshold (0-255)
 - 2-value / 3-value mode toggle (binary or three-zone threshold)
+- 3 adjustment presets: Sketch, High Contrast, 3-Tone
+- Undo/redo for adjustments (up to 50 history depth)
 - Countdown timer with presets (1m, 5m, 10m, 15m)
-- Drag-and-drop panel positioning (persisted per panel)
+- Reusable floating panels with drag-and-drop positioning (persisted per panel)
+- Minimized panel icons in the bottom status bar (with timer badge)
 - View original vs filtered side-by-side
 - Real-time filter preview
-- Keyboard shortcuts: Ctrl+O (open), Ctrl+S (save)
+
+### Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+O` | Open image |
+| `Ctrl+S` | Save image |
+| `h` | Decrease blur (-0.5) |
+| `l` | Increase blur (+0.5) |
+| `j` | Decrease threshold (-1) |
+| `k` | Increase threshold (+1) |
+| `Ctrl+Z` | Undo |
+| `Ctrl+Shift+Z` | Redo |
+| `Alt+1` | Toggle Adjustments panel |
+| `Alt+2` | Toggle Original panel |
+| `Alt+3` | Toggle Timer panel |
 
 ## Architecture
 
 - `src/main/` - Electron main process (Node.js)
 - `src/preload/` - IPC bridge (exposes `electronAPI.openImage`, `electronAPI.saveImage`)
 - `src/renderer/` - React frontend
-  - `components/` - App, Canvas, BottomPanel, FloatingControls, FloatingImage, FloatingCounter
-  - `hooks/` - useImage, ImageContext, useDraggablePanel, useDebouncedCallback
-  - `constants/` - UI constants (filter ranges)
+  - `components/` - App (AppContent pattern), Canvas, BottomPanel, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
+  - `hooks/` - useImage, ImageContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
+  - `constants/` - UI constants (filter ranges, presets, history config)
 
 ## Tech Stack
 

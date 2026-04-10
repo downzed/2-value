@@ -1,6 +1,5 @@
-import { useRef, useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
-import { useDraggablePanel } from '../hooks/useDraggablePanel';
+import FloatingPanel from './FloatingPanel';
 
 const STORAGE_KEY = 'image-editor-counter-position';
 const DEFAULT_POSITION = { x: 20, y: 280 };
@@ -13,22 +12,10 @@ const PRESETS = [
 ];
 
 const FloatingCounter: React.FC = () => {
-	const { counter, counterRunning, counterDuration, startCounter, stopCounter } = useImageContext();
-	const [isClosed, setIsClosed] = useState(false);
-	const panelRef = useRef<HTMLDivElement>(null);
-
-	const { isDragging, position, handleMouseDown } = useDraggablePanel({
-		storageKey: STORAGE_KEY,
-		defaultPosition: DEFAULT_POSITION,
-		panelRef,
-	});
+	const { counter, counterRunning, counterDuration, startCounter, stopCounter, panels, setPanel } = useImageContext();
 
 	const handleClose = () => {
-		setIsClosed(true);
-	};
-
-	const handleToggle = () => {
-		setIsClosed(false);
+		setPanel('timer', false);
 	};
 
 	const formatTime = (seconds: number): string => {
@@ -37,62 +24,15 @@ const FloatingCounter: React.FC = () => {
 		return mins > 0 ? `${mins}:${secs.toString().padStart(2, '0')}` : `${secs}`;
 	};
 
-	if (isClosed) {
-		return (
-			<button
-				type='button'
-				onClick={handleToggle}
-				className='fixed bottom-24 left-28 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-slate-50 transition-colors z-50'
-				title={counterRunning ? `Timer: ${formatTime(counter)} remaining` : 'Show Timer'}
-			>
-				<div className='relative'>
-					<svg className='w-5 h-5 text-slate-600' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-						<title>timer</title>
-						<path
-							strokeLinecap='round'
-							strokeLinejoin='round'
-							strokeWidth={2}
-							d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
-						/>
-					</svg>
-					{counterRunning && counterDuration && (
-						<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold rounded-full w-4 h-4 flex items-center justify-center'>
-							{counter < 60 ? counter : Math.floor(counter / 60)}
-						</span>
-					)}
-				</div>
-			</button>
-		);
-	}
-
 	return (
-		<div
-			ref={panelRef}
-			className='fixed bg-white rounded-lg shadow-xl border border-slate-200 z-50 select-none'
-			style={{
-				left: position.x,
-				top: position.y,
-				cursor: isDragging ? 'grabbing' : 'grab',
-				minWidth: '160px',
-			}}
+		<FloatingPanel
+			title='Timer'
+			storageKey={STORAGE_KEY}
+			defaultPosition={DEFAULT_POSITION}
+			isOpen={panels.timer}
+			onClose={handleClose}
+			panelStyle={{ minWidth: '160px' }}
 		>
-			<div
-				role='toolbar'
-				onMouseDown={handleMouseDown}
-				className='flex items-center justify-between px-3 py-2 border-b border-slate-100 cursor-grab active:cursor-grabbing'
-			>
-				<div className='flex items-center gap-2'>
-					<span className='text-slate-400'>⋮⋮</span>
-					<span className='text-xs font-semibold text-slate-700'>Timer</span>
-				</div>
-				<button type='button' onClick={handleClose} className='text-slate-400 hover:text-slate-600 transition-colors'>
-					<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-						<title>close</title>
-						<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
-					</svg>
-				</button>
-			</div>
-
 			<div className='p-3 space-y-3'>
 				<div className='flex items-center justify-center gap-1'>
 					{PRESETS.map((preset) => (
@@ -142,7 +82,7 @@ const FloatingCounter: React.FC = () => {
 					</button>
 				</div>
 			</div>
-		</div>
+		</FloatingPanel>
 	);
 };
 
