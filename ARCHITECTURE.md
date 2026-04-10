@@ -87,7 +87,7 @@ User drags blur/threshold slider
     ↓
 FloatingControls onChange
     ↓
-setBlur(value) / setThreshold(value) [NO DEBOUNCE - problematic]
+setBlur(value) / setThreshold(value) [debounce utility exists but not yet wired in]
     ↓
 useImage updates state
     ↓
@@ -100,9 +100,12 @@ Filter chain (2-value mode):
     3. if (threshold > 0) → threshold({ threshold: value/255 })
     ↓
 Filter chain (3-value mode):
-    1. Always → grey({ algorithm: 'luma709' })
+    1. if (threshold > 0 || values === 3) → grey({ algorithm: 'luma709' })
     2. if (blur > 0) → gaussianBlur({ sigma: blur })
-    3. if (threshold > 0) → applyThreeZones() (black/gray/white)
+    3. if (threshold > 0) → applyThreeZones(image, threshold)
+       └─ lowerThreshold = max(0, threshold - 40)
+       └─ upperThreshold = min(255, threshold + 40)
+       └─ < lower → black (0), > upper → white (255), else → gray (128)
     ↓
 writeCanvas(processed, ref)
     ↓
@@ -126,7 +129,7 @@ Main Process: ipcMain.handle("save-image")
     ├─ dialog.showSaveDialog() [UI blocks here]
     ├─ nativeImage.createFromDataURL(dataUrl)
     ├─ image.toPNG()
-    └─ fs.writeFileSync() [BLOCKS MAIN THREAD]
+    └─ fs.promises.writeFile() [async, non-blocking]
     ↓
 [IPC Return: filePath]
     ↓
@@ -196,16 +199,15 @@ App.tsx
 - **3-value mode:** grey (always) → blur → threeZones (black/gray/white)
 
 ### FloatingControls.tsx (Adjustment Panel)
-- **Drag:** Position persistence via localStorage
-- **UI:** Blur slider, Threshold slider, 2/3 value toggle, Reset button
-- **Issue:** No debouncing on slider changes
-- **Duplication:** Identical drag logic as FloatingImage
+- **Drag:** Position persistence via localStorage (uses `useDraggablePanel` hook)
+- **UI:** Blur slider (0-10, step 0.5), Threshold slider (0-255), 2/3 value toggle, Reset button
+- **Constants:** Uses `UI.FILTER.*` from `constants/ui.ts` for slider ranges
+- **Note:** Debounce utility exists (`utils/debounce.ts`) but is not yet wired into slider onChange
 
 ### FloatingImage.tsx (Original Preview)
 - **Display:** Unfiltered image thumbnail
-- **Drag:** Position persistence via localStorage
+- **Drag:** Position persistence via localStorage (uses `useDraggablePanel` hook)
 - **Toggle:** Show original/processed button in header with tooltip
-- **Duplication:** Identical drag logic as FloatingControls
 
 ### FloatingCounter.tsx (Countdown Timer)
 - **Presets:** 1m, 5m, 10m, 15m buttons
@@ -213,17 +215,16 @@ App.tsx
 - **Controls:** Start/Stop toggle, Reset button
 - **Badge:** When minimized, shows remaining time as badge on icon
 - **Behavior:** Auto-stops when counter reaches 0
+- **Drag:** Position persistence via localStorage (uses `useDraggablePanel` hook)
 
 ### BottomPanel.tsx (File Operations)
 - **Open:** File dialog → image loading
-- **Save:** Canvas → file system
+- **Save:** Canvas → file system (async write)
 - **Display:** File info (name, dimensions), status (ready/loading/loaded/saving/saved/error)
-- **Issue:** No debouncing on file operations, verbose code
 
 ### App.tsx (Root)
 - **Provider:** Wraps with ImageProvider
 - **Composition:** Assembles all components (Canvas, FloatingImage, FloatingControls, FloatingCounter, BottomPanel)
-- **Issue:** Creates previewCanvasRef but doesn't use it directly
 
 ---
 
@@ -305,7 +306,8 @@ App.tsx
 │   └── useMemo
 ├── FloatingControls.tsx
 │   ├── useImageContext
-│   └── useDraggablePanel
+│   ├── useDraggablePanel
+│   └── constants/ui.ts (UI.FILTER.*)
 ├── FloatingImage.tsx
 │   ├── useImageContext
 │   ├── writeCanvas (from image-js)
@@ -320,6 +322,14 @@ App.tsx
         ├── openImage (IPC)
         └── saveImage (IPC)
 
+Shared Hooks:
+├── useDraggablePanel.ts (used by FloatingControls, FloatingImage, FloatingCounter)
+└── useToast.tsx (implemented but not yet integrated)
+
+Utilities:
+├── utils/debounce.ts (implemented but not yet wired into sliders)
+└── constants/ui.ts (filter ranges, debounce delay, drag threshold)
+
 External Dependencies:
 ├── react@19.2.4
 ├── react-dom@19.2.4
@@ -332,7 +342,9 @@ Dev Dependencies:
 ├── electron-vite@5.0.0
 ├── vite@8.0.7
 ├── typescript@6.0.2
-└── biome (formatter)
+├── vitest (test runner)
+├── @testing-library/react (test utilities)
+└── biome (linter + formatter)
 ```
 
 ---
@@ -359,9 +371,8 @@ Bottleneck: gaussianBlur() calculation (most expensive filter)
 ```
 Click Save → Dialog (user interaction) → canvas.toDataURL() →
 IPC → nativeImage creation → PNG encoding →
-fs.writeFileSync() [BLOCKS] → Return
+fs.promises.writeFile() [async] → Return
 Total Time: ~1-5s (depends on image size and disk)
-Bottleneck: fs.writeFileSync() blocks main thread
 ```
 
 ---
@@ -377,12 +388,6 @@ defineConfig({
 })
 ```
 
-### vite.config.ts (Legacy/Unused)
-```typescript
-// Overlaps with electron.vite.config.ts
-// Can be deleted
-```
-
 ### tsconfig.json
 ```typescript
 {
@@ -396,8 +401,19 @@ defineConfig({
 ### biome.json
 ```json
 {
-  formatter: { jsxQuoteStyle: "single", lineWidth: 120 },
-  linter: { NOT ENABLED } // Gap
+  formatter: { jsxQuoteStyle: "single", quoteStyle: "single", lineWidth: 120 },
+  linter: { enabled: true, rules: { recommended: true } }
+}
+```
+
+### vitest.config.ts
+```typescript
+{
+  test: {
+    environment: "jsdom",
+    include: ["tests/**/*.test.{ts,tsx}"],
+    setupFiles: ["tests/setup.ts"]
+  }
 }
 ```
 
@@ -467,36 +483,30 @@ yarn start                      # Uses electron-forge
 
 ## Known Issues & Tech Debt
 
-### Critical
-- **No debouncing:** Filter processing runs 60x/sec during slider drag
-- **Blocking I/O:** fs.writeFileSync() freezes main thread during save
-- **Code duplication:** 40+ lines of identical drag logic (useDraggablePanel helps but not extracted)
-
 ### Important
-- **No error UI:** Errors only in console
-- **Inefficient cloning:** Two image clones per load
-- **No tests:** Zero test coverage (partially addressed - useImage tests exist)
+- **Slider debounce not wired:** `utils/debounce.ts` and `UI.DEBOUNCE_DELAY_MS` constant exist but are not yet connected to slider onChange handlers in FloatingControls
+- **Toast not integrated:** `useToast.tsx` (ToastProvider + useToast hook) is implemented but not wrapped in App.tsx — errors still go to console only
+- **No error UI:** Until ToastProvider is integrated, errors only appear in console
 
 ### Minor
-- **Magic numbers:** Hardcoded filter ranges and zone boundaries (40px for 3-value)
-- **Incomplete linting:** biome.json only has formatter
-- **Unused config:** vite.config.ts shadows electron.vite.config.ts
+- **Magic numbers:** Zone boundary offset (±40) in `applyThreeZones()` is hardcoded in Canvas.tsx
+- **Unused constants:** `DRAG_THRESHOLD`, `ZOOM_STEP`, `RESIZE_HANDLE_SIZE` in `constants/ui.ts` are not referenced
 
 ---
 
 ## Future Optimization Opportunities
 
 ### Short Term (1-2 weeks)
-1. Extract `useDraggablePanel()` hook (removes duplicated drag logic)
-2. Add debounce to sliders (90% CPU reduction)
-3. Replace fs.writeFileSync() with async
-4. Extract magic numbers to constants (zone boundaries)
+1. ~~Extract `useDraggablePanel()` hook~~ ✅ Done
+2. Wire debounce into slider onChange handlers (utility + constant already exist)
+3. ~~Replace fs.writeFileSync() with async~~ ✅ Done
+4. Extract magic numbers to constants (zone boundary ±40 in Canvas.tsx)
+5. Integrate ToastProvider into App.tsx for user-facing error/success messages
 
 ### Medium Term (1 month)
-1. Add comprehensive test suite (canvas, floating components)
-2. Create error UI (inline error display in BottomPanel)
-3. Profile with large images
-4. Consider web worker for filters
+1. Add component-level test coverage (Canvas, FloatingImage, FloatingCounter, BottomPanel)
+2. Profile with large images
+3. Consider web worker for filters
 
 ### Long Term (1+ quarter)
 1. Implement incremental filter updates

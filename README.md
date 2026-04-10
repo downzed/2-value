@@ -1,6 +1,6 @@
 # 2-value
 
-A 2-value image editor for drawing studies. Converts images to a 2-tone palette using blur and threshold adjustments.
+A 2-value image editor for drawing studies. Converts images to a 2-tone or 3-tone palette using blur and threshold adjustments.
 
 ## Commands
 
@@ -8,6 +8,9 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone palette 
 - `yarn build` - Build for production
 - `yarn start` - Run built app in production mode
 - `yarn typecheck` - Run TypeScript type checking
+- `yarn test` - Run vitest tests
+- `yarn lint` - Run Biome linter
+- `yarn format:check` - Check formatting with Biome
 - `yarn package` - Package the app
 - `yarn make` - Create distributable
 
@@ -17,8 +20,9 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone palette 
 - Save images as PNG
 - Adjustable blur (0-10)
 - Adjustable threshold (0-255)
-- Invert toggle
-- Drag-and-drop panel positioning (persisted)
+- 2-value / 3-value mode toggle (binary or three-zone threshold)
+- Countdown timer with presets (1m, 5m, 10m, 15m)
+- Drag-and-drop panel positioning (persisted per panel)
 - View original vs filtered side-by-side
 - Real-time filter preview
 
@@ -26,7 +30,11 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone palette 
 
 - `src/main/` - Electron main process (Node.js)
 - `src/preload/` - IPC bridge (exposes `electronAPI.openImage`, `electronAPI.saveImage`)
-- `src/renderer/` - React frontend with Canvas, BottomPanel, FloatingControls, FloatingImage
+- `src/renderer/` - React frontend
+  - `components/` - App, Canvas, BottomPanel, FloatingControls, FloatingImage, FloatingCounter
+  - `hooks/` - useImage, ImageContext, useDraggablePanel, useToast
+  - `utils/` - debounce
+  - `constants/` - UI constants (filter ranges, debounce delay)
 
 ## Tech Stack
 
@@ -40,3 +48,4 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone palette 
 | Language | TypeScript 6.0.2 |
 | Packaging | Electron Forge 7.11.1 |
 | Linting/Formatting | Biome |
+| Testing | Vitest + Testing Library |
