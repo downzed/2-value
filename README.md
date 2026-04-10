@@ -33,7 +33,7 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone or 3-ton
 - `src/preload/` - IPC bridge (exposes `electronAPI.openImage`, `electronAPI.saveImage`)
 - `src/renderer/` - React frontend
   - `components/` - App, Canvas, BottomPanel, FloatingControls, FloatingImage, FloatingCounter
-  - `hooks/` - useImage, ImageContext, useDraggablePanel
+  - `hooks/` - useImage, ImageContext, useDraggablePanel, useDebouncedCallback
   - `constants/` - UI constants (filter ranges)
 
 ## Tech Stack
