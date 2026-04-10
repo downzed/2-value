@@ -16,6 +16,7 @@ export function useDraggablePanel({ storageKey, defaultPosition, panelRef }: Use
 	const [position, setPosition] = useState(defaultPosition);
 	const dragOffset = useRef({ x: 0, y: 0 });
 	const positionRef = useRef(defaultPosition);
+	const panelDimsRef = useRef({ width: 0, height: 0 });
 
 	useEffect(() => {
 		try {
@@ -44,6 +45,10 @@ export function useDraggablePanel({ storageKey, defaultPosition, panelRef }: Use
 		(e: React.MouseEvent) => {
 			if (!panelRef.current) return;
 			const rect = panelRef.current.getBoundingClientRect();
+			panelDimsRef.current = {
+				width: panelRef.current.offsetWidth,
+				height: panelRef.current.offsetHeight,
+			};
 			dragOffset.current = {
 				x: e.clientX - rect.left,
 				y: e.clientY - rect.top,
@@ -57,9 +62,10 @@ export function useDraggablePanel({ storageKey, defaultPosition, panelRef }: Use
 		if (!isDragging) return;
 
 		const handleMouseMove = (e: MouseEvent) => {
+			const { width: panelWidth, height: panelHeight } = panelDimsRef.current;
 			const newPos = {
-				x: e.clientX - dragOffset.current.x,
-				y: e.clientY - dragOffset.current.y,
+				x: Math.max(0, Math.min(window.innerWidth - panelWidth, e.clientX - dragOffset.current.x)),
+				y: Math.max(0, Math.min(window.innerHeight - panelHeight, e.clientY - dragOffset.current.y)),
 			};
 			positionRef.current = newPos;
 			setPosition(newPos);

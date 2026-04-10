@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { useImage } from '../../../src/renderer/hooks/useImage';
 
 vi.mock('image-js', () => ({
@@ -7,6 +7,13 @@ vi.mock('image-js', () => ({
 }));
 
 describe('useImage', () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 	it('should initialize with default state', () => {
 		const { result } = renderHook(() => useImage());
 
@@ -101,5 +108,53 @@ describe('useImage', () => {
 		});
 
 		expect(result.current.showOriginal).toBe(false);
+	});
+
+	it('should stop running timer when resetControls is called', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.startCounter(10);
+		});
+
+		expect(result.current.counterRunning).toBe(true);
+		expect(result.current.counter).toBe(10);
+
+		act(() => {
+			result.current.resetControls();
+		});
+
+		expect(result.current.counterRunning).toBe(false);
+		expect(result.current.counter).toBe(0);
+
+		// Advance time and confirm interval is cleared (counter should not tick)
+		act(() => {
+			vi.advanceTimersByTime(3000);
+		});
+
+		expect(result.current.counter).toBe(0);
+		expect(result.current.counterRunning).toBe(false);
+	});
+
+	it('should count down timer and stop at zero', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.startCounter(3);
+		});
+
+		expect(result.current.counter).toBe(3);
+		expect(result.current.counterRunning).toBe(true);
+
+		act(() => {
+			vi.advanceTimersByTime(1000);
+		});
+		expect(result.current.counter).toBe(2);
+
+		act(() => {
+			vi.advanceTimersByTime(3000);
+		});
+		expect(result.current.counter).toBe(0);
+		expect(result.current.counterRunning).toBe(false);
 	});
 });

@@ -45,9 +45,14 @@ export const useImage = () => {
 		counterDuration,
 	} = imageState;
 
+	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
 	// Load image (already decoded)
 	const loadImage = useCallback(async (image: Image, fileName: string = '') => {
-		if (timerRef.current) clearInterval(timerRef.current);
+		if (timerRef.current) {
+			clearInterval(timerRef.current);
+			timerRef.current = null;
+		}
 		setImageState({
 			currentImage: image.clone(),
 			originalImage: image.clone(),
@@ -64,7 +69,10 @@ export const useImage = () => {
 
 	// Reset image (clear all)
 	const resetImage = useCallback(() => {
-		if (timerRef.current) clearInterval(timerRef.current);
+		if (timerRef.current) {
+			clearInterval(timerRef.current);
+			timerRef.current = null;
+		}
 		setImageState({
 			currentImage: null,
 			originalImage: null,
@@ -81,6 +89,10 @@ export const useImage = () => {
 
 	// Reset controls only (keep image)
 	const resetControls = useCallback(() => {
+		if (timerRef.current) {
+			clearInterval(timerRef.current);
+			timerRef.current = null;
+		}
 		setImageState((prev) => ({
 			...prev,
 			blur: 0,
@@ -109,8 +121,6 @@ export const useImage = () => {
 	const toggleShowOriginal = useCallback(() => {
 		setImageState((prev) => ({ ...prev, showOriginal: !prev.showOriginal }));
 	}, []);
-
-	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	const startCounter = useCallback((duration: number) => {
 		if (timerRef.current) clearInterval(timerRef.current);

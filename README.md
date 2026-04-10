@@ -25,6 +25,7 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone or 3-ton
 - Drag-and-drop panel positioning (persisted per panel)
 - View original vs filtered side-by-side
 - Real-time filter preview
+- Keyboard shortcuts: Ctrl+O (open), Ctrl+S (save)
 
 ## Architecture
 
@@ -32,9 +33,8 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone or 3-ton
 - `src/preload/` - IPC bridge (exposes `electronAPI.openImage`, `electronAPI.saveImage`)
 - `src/renderer/` - React frontend
   - `components/` - App, Canvas, BottomPanel, FloatingControls, FloatingImage, FloatingCounter
-  - `hooks/` - useImage, ImageContext, useDraggablePanel, useToast
-  - `utils/` - debounce
-  - `constants/` - UI constants (filter ranges, debounce delay)
+  - `hooks/` - useImage, ImageContext, useDraggablePanel, useDebouncedCallback
+  - `constants/` - UI constants (filter ranges)
 
 ## Tech Stack
 
