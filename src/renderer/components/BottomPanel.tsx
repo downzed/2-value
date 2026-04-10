@@ -1,5 +1,5 @@
 import { readImg } from 'image-js';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
 
 type Status = 'ready' | 'loading' | 'loaded' | 'saving' | 'saved' | 'error';
@@ -15,7 +15,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	const width = currentImage?.width ?? '--';
 	const height = currentImage?.height ?? '--';
 
-	const handleOpen = async () => {
+	const handleOpen = useCallback(async () => {
 		try {
 			setStatus('loading');
 			const result = await window.electronAPI.openImage();
@@ -39,9 +39,9 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			setStatus('error');
 			console.error('Failed to open image:', error);
 		}
-	};
+	}, [loadImage]);
 
-	const handleSave = async () => {
+	const handleSave = useCallback(async () => {
 		if (!previewCanvasRef.current) return;
 
 		try {
@@ -60,7 +60,21 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			setStatus('error');
 			console.error('Failed to save image:', error);
 		}
-	};
+	}, [previewCanvasRef]);
+
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+				e.preventDefault();
+				handleOpen();
+			} else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+				e.preventDefault();
+				if (hasImage) handleSave();
+			}
+		};
+		window.addEventListener('keydown', handleKeyDown);
+		return () => window.removeEventListener('keydown', handleKeyDown);
+	}, [hasImage, handleOpen, handleSave]);
 
 	const statusStyles: Record<Status, { text: string; className: string }> = {
 		ready: { text: 'Ready', className: 'text-emerald-400' },

@@ -1,34 +1,8 @@
-import type { Image } from 'image-js';
 import type React from 'react';
 import { createContext, useContext } from 'react';
 import { useImage } from './useImage';
 
-interface ImageContextValue {
-	currentImage: Image | null;
-	originalImage: Image | null;
-	fileName: string;
-	loadImage: (image: Image, fileName?: string) => Promise<void>;
-	resetImage: () => void;
-	resetControls: () => void;
-	hasImage: boolean;
-
-	// Core adjustments
-	blur: number;
-	threshold: number;
-	values: 2 | 3;
-	showOriginal: boolean;
-	setBlur: (value: number) => void;
-	setThreshold: (value: number) => void;
-	setValues: (value: 2 | 3) => void;
-	toggleShowOriginal: () => void;
-
-	// Counter
-	counter: number;
-	counterRunning: boolean;
-	counterDuration: number | null;
-	startCounter: (duration: number) => void;
-	stopCounter: () => void;
-}
+type ImageContextValue = ReturnType<typeof useImage>;
 
 const ImageContext = createContext<ImageContextValue | null>(null);
 

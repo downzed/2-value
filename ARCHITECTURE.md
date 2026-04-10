@@ -484,6 +484,10 @@ yarn start                      # Uses electron-forge
 3. ~~Extract magic numbers to constants~~ ✅ Done (`UI.FILTER.THREE_ZONE_BOUNDARY`)
 4. ~~Remove unused debounce utility~~ ✅ Done
 5. ~~Remove unused toast system~~ ✅ Done
+6. ~~Fix `resetControls` not clearing interval~~ ✅ Done
+7. ~~Add debounce to sliders (performance)~~ ✅ Done (`useDebouncedCallback`)
+8. ~~Add panel bounds checking~~ ✅ Done (`useDraggablePanel`)
+9. ~~Add keyboard shortcuts (Ctrl+O, Ctrl+S)~~ ✅ Done
 
 ### Medium Term (1 month)
 1. Add component-level test coverage (Canvas, FloatingImage, FloatingCounter, BottomPanel)

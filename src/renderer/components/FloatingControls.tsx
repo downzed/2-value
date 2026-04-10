@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useDraggablePanel } from '../hooks/useDraggablePanel';
 import { UI } from '../constants/ui';
 
@@ -10,6 +11,8 @@ const FloatingControls: React.FC = () => {
 	const { hasImage, blur, threshold, values, setBlur, setThreshold, setValues, resetControls } = useImageContext();
 
 	const [isClosed, setIsClosed] = useState(false);
+	const [localBlur, setLocalBlur] = useState(blur);
+	const [localThreshold, setLocalThreshold] = useState(threshold);
 	const panelRef = useRef<HTMLDivElement>(null);
 
 	const { isDragging, position, handleMouseDown } = useDraggablePanel({
@@ -18,11 +21,32 @@ const FloatingControls: React.FC = () => {
 		panelRef,
 	});
 
+	const debouncedSetBlur = useDebouncedCallback(setBlur, 150);
+	const debouncedSetThreshold = useDebouncedCallback(setThreshold, 150);
+
+	useEffect(() => {
+		setLocalBlur(blur);
+	}, [blur]);
+
+	useEffect(() => {
+		setLocalThreshold(threshold);
+	}, [threshold]);
+
 	useEffect(() => {
 		if (hasImage) {
 			setIsClosed(false);
 		}
 	}, [hasImage]);
+
+	const handleBlurChange = (value: number) => {
+		setLocalBlur(value);
+		debouncedSetBlur(value);
+	};
+
+	const handleThresholdChange = (value: number) => {
+		setLocalThreshold(value);
+		debouncedSetThreshold(value);
+	};
 
 	const handleClose = () => {
 		setIsClosed(true);
@@ -92,12 +116,12 @@ const FloatingControls: React.FC = () => {
 						min={UI.FILTER.BLUR_MIN}
 						max={UI.FILTER.BLUR_MAX}
 						step={UI.FILTER.BLUR_STEP}
-						value={blur}
-						onChange={(e) => setBlur(parseFloat(e.target.value))}
+						value={localBlur}
+						onChange={(e) => handleBlurChange(parseFloat(e.target.value))}
 						disabled={!hasImage}
 						className='flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50'
 					/>
-					<span className='text-xs text-slate-500 w-6 text-right'>{blur}</span>
+					<span className='text-xs text-slate-500 w-6 text-right'>{localBlur}</span>
 				</div>
 
 				<div className='flex items-center gap-2'>
@@ -109,12 +133,12 @@ const FloatingControls: React.FC = () => {
 						id='thresh-range'
 						min={UI.FILTER.THRESHOLD_MIN}
 						max={UI.FILTER.THRESHOLD_MAX}
-						value={threshold}
-						onChange={(e) => setThreshold(parseInt(e.target.value, 10))}
+						value={localThreshold}
+						onChange={(e) => handleThresholdChange(parseInt(e.target.value, 10))}
 						disabled={!hasImage}
 						className='flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50'
 					/>
-					<span className='text-xs text-slate-500 w-8 text-right'>{threshold}</span>
+					<span className='text-xs text-slate-500 w-8 text-right'>{localThreshold}</span>
 				</div>
 
 				<div className='flex items-center justify-between'>
