@@ -82,19 +82,34 @@ describe('useDraggablePanel', () => {
 		}
 
 		beforeEach(() => {
-			Object.defineProperty(window, 'innerWidth', { value: VIEWPORT_W, writable: true, configurable: true });
-			Object.defineProperty(window, 'innerHeight', { value: VIEWPORT_H, writable: true, configurable: true });
+			Object.defineProperty(window, 'innerWidth', {
+				value: VIEWPORT_W,
+				writable: true,
+				configurable: true,
+			});
+			Object.defineProperty(window, 'innerHeight', {
+				value: VIEWPORT_H,
+				writable: true,
+				configurable: true,
+			});
 		});
 
 		it('clamps position to the right viewport edge', () => {
 			const panelRef = makePanel(500, 300);
 			const { result } = renderHook(() =>
-				useDraggablePanel({ storageKey: 'clamp-right', defaultPosition: { x: 500, y: 300 }, panelRef }),
+				useDraggablePanel({
+					storageKey: 'clamp-right',
+					defaultPosition: { x: 500, y: 300 },
+					panelRef,
+				}),
 			);
 
 			// Drag offset: clientX(510) - rect.left(500) = 10
 			act(() => {
-				result.current.handleMouseDown({ clientX: 510, clientY: 310 } as React.MouseEvent);
+				result.current.handleMouseDown({
+					clientX: 510,
+					clientY: 310,
+				} as React.MouseEvent);
 			});
 
 			// Mouse far to the right: x = 1200 - 10 = 1190, clamped to 1024 - 200 = 824
@@ -108,12 +123,19 @@ describe('useDraggablePanel', () => {
 		it('clamps position to the bottom viewport edge', () => {
 			const panelRef = makePanel(100, 300);
 			const { result } = renderHook(() =>
-				useDraggablePanel({ storageKey: 'clamp-bottom', defaultPosition: { x: 100, y: 300 }, panelRef }),
+				useDraggablePanel({
+					storageKey: 'clamp-bottom',
+					defaultPosition: { x: 100, y: 300 },
+					panelRef,
+				}),
 			);
 
 			// Drag offset: clientY(310) - rect.top(300) = 10
 			act(() => {
-				result.current.handleMouseDown({ clientX: 110, clientY: 310 } as React.MouseEvent);
+				result.current.handleMouseDown({
+					clientX: 110,
+					clientY: 310,
+				} as React.MouseEvent);
 			});
 
 			// Mouse far below: y = 900 - 10 = 890, clamped to 768 - 100 = 668
@@ -127,12 +149,19 @@ describe('useDraggablePanel', () => {
 		it('clamps position to the left/top edge (never below 0)', () => {
 			const panelRef = makePanel(100, 100);
 			const { result } = renderHook(() =>
-				useDraggablePanel({ storageKey: 'clamp-origin', defaultPosition: { x: 100, y: 100 }, panelRef }),
+				useDraggablePanel({
+					storageKey: 'clamp-origin',
+					defaultPosition: { x: 100, y: 100 },
+					panelRef,
+				}),
 			);
 
 			// Drag offset: 10, 10
 			act(() => {
-				result.current.handleMouseDown({ clientX: 110, clientY: 110 } as React.MouseEvent);
+				result.current.handleMouseDown({
+					clientX: 110,
+					clientY: 110,
+				} as React.MouseEvent);
 			});
 
 			// Mouse far up-left: x = 2 - 10 = -8 → 0, y = 5 - 10 = -5 → 0
@@ -154,11 +183,18 @@ describe('useDraggablePanel', () => {
 			} as unknown as React.RefObject<HTMLDivElement>;
 
 			const { result } = renderHook(() =>
-				useDraggablePanel({ storageKey: 'clamp-large', defaultPosition: { x: 0, y: 0 }, panelRef: largePanel }),
+				useDraggablePanel({
+					storageKey: 'clamp-large',
+					defaultPosition: { x: 0, y: 0 },
+					panelRef: largePanel,
+				}),
 			);
 
 			act(() => {
-				result.current.handleMouseDown({ clientX: 0, clientY: 0 } as React.MouseEvent);
+				result.current.handleMouseDown({
+					clientX: 0,
+					clientY: 0,
+				} as React.MouseEvent);
 			});
 
 			act(() => {
@@ -170,4 +206,3 @@ describe('useDraggablePanel', () => {
 		});
 	});
 });
-
