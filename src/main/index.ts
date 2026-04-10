@@ -24,7 +24,8 @@ function getRecentsPath(): string {
 function loadRecents(): RecentEntry[] {
 	try {
 		const data = fs.readFileSync(getRecentsPath(), 'utf-8');
-		return JSON.parse(data);
+		const parsed: unknown = JSON.parse(data);
+		return Array.isArray(parsed) ? parsed : [];
 	} catch {
 		return [];
 	}
