@@ -4,6 +4,7 @@
 		"lib": ["ES2020", "DOM", "DOM.Iterable"],
 		"module": "CommonJS",
 		"moduleResolution": "bundler",
+		"allowArbitraryExtensions": true,
 		"outDir": "dist",
 		"rootDir": ".",
 		"strict": true,
