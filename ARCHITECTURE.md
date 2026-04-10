@@ -66,39 +66,43 @@ BottomPanel receives result
 useImage.ts: setImageState()
     ├─ currentImage = image.clone()
     ├─ originalImage = image.clone()
-    └─ reset blur/threshold/invert
+    └─ reset blur/threshold/values/showOriginal/counter
     ↓
 ImageContext updates
     ↓
 Canvas component receives currentImage
-    ├─ Apply filter effects
+    ├─ Apply filter effects (2-value or 3-value mode)
     ├─ writeCanvas() to ref
     └─ Re-render preview
     ↓
 FloatingImage receives originalImage
     ├─ writeCanvas() to preview
-    └─ Show toggle button
+    └─ Show toggle button in header
 ```
 
 ### Filter Pipeline Flow
 
 ```
-User drags blur slider
+User drags blur/threshold slider
     ↓
 FloatingControls onChange
     ↓
-setBlur(value) [NO DEBOUNCE - problematic]
+setBlur(value) / setThreshold(value) [NO DEBOUNCE - problematic]
     ↓
-useImage updates blur state
+useImage updates state
     ↓
-Canvas.useEffect() triggered
-    └─ Dependencies: [currentImage, blur, threshold, invert]
+Canvas.useMemo() triggered
+    └─ Dependencies: [currentImage, blur, threshold, values]
     ↓
-Filter chain:
-    1. if (threshold > 0) → grey()
+Filter chain (2-value mode):
+    1. if (threshold > 0) → grey({ algorithm: 'luma709' })
     2. if (blur > 0) → gaussianBlur({ sigma: blur })
     3. if (threshold > 0) → threshold({ threshold: value/255 })
-    4. if (invert) → invert()
+    ↓
+Filter chain (3-value mode):
+    1. Always → grey({ algorithm: 'luma709' })
+    2. if (blur > 0) → gaussianBlur({ sigma: blur })
+    3. if (threshold > 0) → applyThreeZones() (black/gray/white)
     ↓
 writeCanvas(processed, ref)
     ↓
@@ -141,11 +145,17 @@ ImageState = {
   currentImage: Image | null,      // After filters
   originalImage: Image | null,     // Unmodified
   fileName: string,
-  
+
   // Filter values
   blur: number,                    // 0-10
   threshold: number,               // 0-255
-  invert: boolean
+  values: 2 | 3,                  // 2-value or 3-value mode
+  showOriginal: boolean,           // Toggle processed/original preview
+
+  // Counter (countdown timer)
+  counter: number,                 // Seconds remaining
+  counterRunning: boolean,         // Timer active
+  counterDuration: number | null,  // Selected duration
 }
 ```
 
@@ -156,17 +166,21 @@ App.tsx
 └── ImageProvider (Context)
     └── useImage hook
         └── [ImageState] ← Central state
-            ├─ Canvas (reads: currentImage, blur, threshold, invert)
-            ├─ BottomPanel (reads: fileName, currentImage props, all filters)
-            ├─ FloatingControls (reads: all; writes: setBlur, setThreshold, setInvert)
-            ├─ FloatingImage (reads: originalImage)
+            ├─ Canvas (reads: currentImage, blur, threshold, values, showOriginal)
+            ├─ BottomPanel (reads: fileName, currentImage, hasImage)
+            ├─ FloatingControls (reads: all; writes: setBlur, setThreshold, setValues, resetControls)
+            ├─ FloatingImage (reads: originalImage, showOriginal, toggleShowOriginal)
+            ├─ FloatingCounter (reads: counter, counterRunning, counterDuration; writes: startCounter, stopCounter)
             └── [setters]
                 ├─ setBlur
                 ├─ setThreshold
-                ├─ setInvert
+                ├─ setValues
+                ├─ toggleShowOriginal
                 ├─ loadImage
                 ├─ resetImage
-                └─ resetControls
+                ├─ resetControls
+                ├─ startCounter
+                └─ stopCounter
 ```
 
 ---
@@ -174,32 +188,41 @@ App.tsx
 ## Component Responsibilities
 
 ### Canvas.tsx (Main Preview)
-- **Input:** currentImage, blur, threshold, invert from context
+- **Input:** currentImage, blur, threshold, values, showOriginal from context
 - **Output:** Canvas element with filtered preview
-- **Effect:** Recalculates filters on prop changes (problematic - no debounce)
+- **Effect:** Recalculates filters on prop changes using useMemo (problematic - no debounce)
 - **Performance:** Full reprocessing on every change
+- **2-value mode:** grey → blur → threshold (binary)
+- **3-value mode:** grey (always) → blur → threeZones (black/gray/white)
 
 ### FloatingControls.tsx (Adjustment Panel)
 - **Drag:** Position persistence via localStorage
-- **UI:** Three sliders + reset button
+- **UI:** Blur slider, Threshold slider, 2/3 value toggle, Reset button
 - **Issue:** No debouncing on slider changes
 - **Duplication:** Identical drag logic as FloatingImage
 
 ### FloatingImage.tsx (Original Preview)
 - **Display:** Unfiltered image thumbnail
 - **Drag:** Position persistence via localStorage
-- **Hack:** Uses `showKey` state to force canvas redraw
+- **Toggle:** Show original/processed button in header with tooltip
 - **Duplication:** Identical drag logic as FloatingControls
+
+### FloatingCounter.tsx (Countdown Timer)
+- **Presets:** 1m, 5m, 10m, 15m buttons
+- **Display:** Countdown timer (MM:SS or SS format)
+- **Controls:** Start/Stop toggle, Reset button
+- **Badge:** When minimized, shows remaining time as badge on icon
+- **Behavior:** Auto-stops when counter reaches 0
 
 ### BottomPanel.tsx (File Operations)
 - **Open:** File dialog → image loading
 - **Save:** Canvas → file system
-- **Display:** File info (name, dimensions)
+- **Display:** File info (name, dimensions), status (ready/loading/loaded/saving/saved/error)
 - **Issue:** No debouncing on file operations, verbose code
 
 ### App.tsx (Root)
 - **Provider:** Wraps with ImageProvider
-- **Composition:** Assembles all components
+- **Composition:** Assembles all components (Canvas, FloatingImage, FloatingControls, FloatingCounter, BottomPanel)
 - **Issue:** Creates previewCanvasRef but doesn't use it directly
 
 ---
@@ -279,14 +302,17 @@ App.tsx
 ├── Canvas.tsx
 │   ├── useImageContext
 │   ├── writeCanvas (from image-js)
-│   └── useEffect
+│   └── useMemo
 ├── FloatingControls.tsx
 │   ├── useImageContext
-│   └── [localStorage API]
+│   └── useDraggablePanel
 ├── FloatingImage.tsx
 │   ├── useImageContext
 │   ├── writeCanvas (from image-js)
-│   └── [localStorage API]
+│   └── useDraggablePanel
+├── FloatingCounter.tsx
+│   ├── useImageContext
+│   └── useDraggablePanel
 └── BottomPanel.tsx
     ├── useImageContext
     ├── readImg (from image-js)
@@ -444,15 +470,15 @@ yarn start                      # Uses electron-forge
 ### Critical
 - **No debouncing:** Filter processing runs 60x/sec during slider drag
 - **Blocking I/O:** fs.writeFileSync() freezes main thread during save
-- **Code duplication:** 40+ lines of identical drag logic
+- **Code duplication:** 40+ lines of identical drag logic (useDraggablePanel helps but not extracted)
 
 ### Important
 - **No error UI:** Errors only in console
 - **Inefficient cloning:** Two image clones per load
-- **No tests:** Zero test coverage
+- **No tests:** Zero test coverage (partially addressed - useImage tests exist)
 
 ### Minor
-- **Magic numbers:** Hardcoded filter ranges
+- **Magic numbers:** Hardcoded filter ranges and zone boundaries (40px for 3-value)
 - **Incomplete linting:** biome.json only has formatter
 - **Unused config:** vite.config.ts shadows electron.vite.config.ts
 
@@ -461,14 +487,14 @@ yarn start                      # Uses electron-forge
 ## Future Optimization Opportunities
 
 ### Short Term (1-2 weeks)
-1. Extract `useDraggablePanel()` hook (removes 80 lines)
+1. Extract `useDraggablePanel()` hook (removes duplicated drag logic)
 2. Add debounce to sliders (90% CPU reduction)
 3. Replace fs.writeFileSync() with async
-4. Extract magic numbers to constants
+4. Extract magic numbers to constants (zone boundaries)
 
 ### Medium Term (1 month)
-1. Add comprehensive test suite
-2. Create error UI (toast notifications)
+1. Add comprehensive test suite (canvas, floating components)
+2. Create error UI (inline error display in BottomPanel)
 3. Profile with large images
 4. Consider web worker for filters
 
@@ -480,4 +506,4 @@ yarn start                      # Uses electron-forge
 
 ---
 
-**Last Updated:** April 8, 2026
+**Last Updated:** April 10, 2026
