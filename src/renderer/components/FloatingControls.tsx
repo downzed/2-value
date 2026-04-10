@@ -21,8 +21,8 @@ const FloatingControls: React.FC = () => {
 		panelRef,
 	});
 
-	const debouncedSetBlur = useDebouncedCallback(setBlur, 150);
-	const debouncedSetThreshold = useDebouncedCallback(setThreshold, 150);
+	const { call: debouncedSetBlur, cancel: cancelBlur } = useDebouncedCallback(setBlur, 150);
+	const { call: debouncedSetThreshold, cancel: cancelThreshold } = useDebouncedCallback(setThreshold, 150);
 
 	useEffect(() => {
 		setLocalBlur(blur);
@@ -35,8 +35,11 @@ const FloatingControls: React.FC = () => {
 	useEffect(() => {
 		if (hasImage) {
 			setIsClosed(false);
+		} else {
+			cancelBlur();
+			cancelThreshold();
 		}
-	}, [hasImage]);
+	}, [hasImage, cancelBlur, cancelThreshold]);
 
 	const handleBlurChange = (value: number) => {
 		setLocalBlur(value);
@@ -46,6 +49,12 @@ const FloatingControls: React.FC = () => {
 	const handleThresholdChange = (value: number) => {
 		setLocalThreshold(value);
 		debouncedSetThreshold(value);
+	};
+
+	const handleReset = () => {
+		cancelBlur();
+		cancelThreshold();
+		resetControls();
 	};
 
 	const handleClose = () => {
@@ -166,7 +175,7 @@ const FloatingControls: React.FC = () => {
 					</div>
 					<button
 						type='button'
-						onClick={resetControls}
+						onClick={handleReset}
 						disabled={!hasImage}
 						className='text-xs text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed'
 					>
