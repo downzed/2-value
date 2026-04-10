@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react';
 
 export function useDebouncedCallback<T extends unknown[]>(
 	fn: (...args: T) => void,
@@ -7,7 +7,7 @@ export function useDebouncedCallback<T extends unknown[]>(
 	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const fnRef = useRef(fn);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		fnRef.current = fn;
 	}, [fn]);
 
