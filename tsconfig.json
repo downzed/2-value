@@ -1,24 +1,25 @@
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "CommonJS",
-    "moduleResolution": "bundler",
-    "outDir": "dist",
-    "rootDir": ".",
-    "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true,
-    "sourceMap": true,
-    "jsx": "react-jsx",
-    "resolveJsonModule": true,
-    "baseUrl": ".",
-    "ignoreDeprecations": "6.0",
-    "paths": {
-      "@/*": ["src/*"],
-    },
-  },
-  "include": ["src/**/*", "electron.vite.config.*"],
-  "exclude": ["node_modules", "dist"],
+	"compilerOptions": {
+		"target": "ES2020",
+		"lib": ["ES2020", "DOM", "DOM.Iterable"],
+		"module": "CommonJS",
+		"moduleResolution": "bundler",
+		"allowArbitraryExtensions": true,
+		"outDir": "dist",
+		"rootDir": ".",
+		"strict": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": true,
+		"sourceMap": true,
+		"jsx": "react-jsx",
+		"resolveJsonModule": true,
+		"baseUrl": ".",
+		"ignoreDeprecations": "6.0",
+		"paths": {
+			"@/*": ["src/*"]
+		}
+	},
+	"include": ["src/**/*", "electron.vite.config.*"],
+	"exclude": ["node_modules", "dist"]
 }
