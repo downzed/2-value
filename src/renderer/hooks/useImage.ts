@@ -6,10 +6,9 @@ interface ImageState {
   originalImage: Image | null;
   fileName: string;
 
-  // Values study adjustments
+  // Adjustments
   blur: number;
   threshold: number;
-  values: 2 | 3;
   showOriginal: boolean;
 }
 
@@ -20,7 +19,6 @@ export const useImage = () => {
     fileName: "",
     blur: 0,
     threshold: 0,
-    values: 2,
     showOriginal: false,
   });
 
@@ -30,7 +28,6 @@ export const useImage = () => {
     fileName,
     blur,
     threshold,
-    values,
     showOriginal,
   } = imageState;
 
@@ -42,7 +39,6 @@ export const useImage = () => {
       fileName,
       blur: 0,
       threshold: 0,
-      values: 2,
       showOriginal: false,
     });
   }, []);
@@ -55,7 +51,6 @@ export const useImage = () => {
       fileName: "",
       blur: 0,
       threshold: 0,
-      values: 2,
       showOriginal: false,
     });
   }, []);
@@ -66,7 +61,6 @@ export const useImage = () => {
       ...prev,
       blur: 0,
       threshold: 0,
-      values: 2,
       showOriginal: false,
     }));
   }, []);

@@ -6,19 +6,26 @@ interface CanvasProps {
 	previewCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
-function posterizeThreeValue(image: Image): Image {
-	const data = image.data;
-	for (let i = 0; i < data.length; i += 4) {
-		const gray = data[i];
-		if (gray < 86) {
-			data[i] = data[i + 1] = data[i + 2] = 0;
-		} else if (gray < 171) {
-			data[i] = data[i + 1] = data[i + 2] = 128;
-		} else {
-			data[i] = data[i + 1] = data[i + 2] = 255;
-		}
-	}
-	return image;
+function posterizeThreeValue(image: Image, thresholdValue: number): Image {
+  const data = image.data;
+  // Convert threshold from 0-255 range to use for zone boundaries
+  // We'll create zones: black (0-threshold), gray (threshold-range to threshold+range), white (threshold+range to 255)
+  // But we need to ensure valid ranges
+  const range = Math.min(thresholdValue, 255 - thresholdValue) * 0.4; // 40% of distance to nearest edge
+  const lowerBound = Math.max(0, thresholdValue - range);
+  const upperBound = Math.min(255, thresholdValue + range);
+  
+  for (let i = 0; i < data.length; i += 4) {
+    const gray = data[i];
+    if (gray < lowerBound) {
+      data[i] = data[i + 1] = data[i + 2] = 0; // black
+    } else if (gray > upperBound) {
+      data[i] = data[i + 1] = data[i + 2] = 255; // white
+    } else {
+      data[i] = data[i + 1] = data[i + 2] = 128; // gray
+    }
+  }
+  return image;
 }
 
 const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
@@ -34,11 +41,11 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 			if (blur > 0) {
 				result = result.gaussianBlur({ sigma: blur });
 			}
-			if (values === 3) {
-				result = posterizeThreeValue(result);
-			} else if (threshold > 0) {
-				result = result.threshold({ threshold: threshold / 255 });
-			}
+if (values === 3) {
+      result = posterizeThreeValue(result, threshold);
+    } else if (threshold > 0) {
+      result = result.threshold({ threshold: threshold / 255 });
+    }
 			return result;
 		} catch {
 			return currentImage;

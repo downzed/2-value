@@ -29,23 +29,23 @@ Add 3-value (halftone) mode, image toggle on canvas click, and remove debounce f
 
 ## Issues / Needs Fix
 
-### 3-Value Implementation is Broken
-- Current implementation uses manual pixel manipulation which results in pixelated/broken output
-- **Keep Threshold slider working alongside 3-value mode** - they are complementary
-- Need to implement proper 3-value halftone:
-  - Option A: Use two thresholds (black→gray at lower threshold, gray→white at upper threshold)
-  - Option B: Use blur + threshold to create smooth halftone transitions
-  - Option C: Apply threshold first, then create a mid-tone band around the threshold boundary
+### 3-Value Implementation Fixed ✅
+- Implemented proper 3-value halftone that works with threshold slider
+- Threshold slider controls the center of the 3 zones
+- Range is dynamically calculated as 40% of distance to nearest edge (0 or 255)
+- Below threshold-range: black (0)
+- Within threshold±range: gray (128)  
+- Above threshold+range: white (255)
 
 ### Implementation Note
 For 3-value halftone effect:
 1. Apply blur (as currently done)
 2. Convert to greyscale
 3. Instead of single threshold, create 3 zones:
-   - Below threshold: black (0)
-   - Within threshold ± range: gray (128)  
-   - Above threshold: white (255)
-- The "range" could be controlled by the threshold value itself (e.g., threshold = 128, range = 20)
+   - Below threshold-range: black (0)
+   - Within threshold±range: gray (128)  
+   - Above threshold+range: white (255)
+- Range = min(threshold, 255-threshold) * 0.4 (40% of distance to nearest edge)
 
 ---
 
@@ -56,7 +56,7 @@ For 3-value halftone effect:
 | `src/renderer/hooks/useImage.ts` | ✅ Done |
 | `src/renderer/hooks/ImageContext.tsx` | ✅ Done |
 | `src/renderer/components/FloatingControls.tsx` | ✅ Done |
-| `src/renderer/components/Canvas.tsx` | ⚠️ Needs fix |
+| `src/renderer/components/Canvas.tsx` | ✅ Done |
 | `src/renderer/constants/ui.ts` | Not modified |
 
 ---

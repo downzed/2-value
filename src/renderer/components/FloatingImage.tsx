@@ -42,9 +42,7 @@ const FloatingImage: React.FC = () => {
     setShowKey((k) => k + 1);
   };
 
-  if (!originalImage) {
-    return null;
-  }
+  if (!originalImage) return null;
 
   if (isClosed) {
     return (
