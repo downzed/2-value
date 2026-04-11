@@ -3,6 +3,10 @@ import { useImageContext } from '../hooks/ImageContext';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { UI } from '../constants/ui';
 import FloatingPanel from './FloatingPanel';
+import { Icon } from './shared/Icon';
+import { PillButton } from './shared/PillButton';
+import { SectionHeader } from './shared/SectionHeader';
+import { SliderRow } from './shared/SliderRow';
 
 const STORAGE_KEY = 'image-editor-controls-position';
 const DEFAULT_POSITION = { x: 20, y: 100 };
@@ -84,20 +88,17 @@ const FloatingControls: React.FC = () => {
 			<div className='p-3 space-y-3'>
 				{/* PRESETS section */}
 				<div className='space-y-1.5'>
-					<span className='text-[10px] uppercase tracking-wider text-slate-400 font-semibold'>Presets</span>
+					<SectionHeader>Presets</SectionHeader>
 					<div className='flex items-center gap-1'>
 						{UI.PRESETS.map((preset) => (
-							<button
+							<PillButton
 								key={preset.name}
-								type='button'
 								onClick={() => applyPreset(preset)}
 								disabled={!hasImage}
-								className={`px-2 py-1 text-xs font-medium rounded ${
-									isPresetActive(preset) ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-								} disabled:opacity-40 disabled:cursor-not-allowed`}
+								active={isPresetActive(preset)}
 							>
 								{preset.name}
-							</button>
+							</PillButton>
 						))}
 					</div>
 				</div>
@@ -106,42 +107,31 @@ const FloatingControls: React.FC = () => {
 
 				{/* ADJUSTMENTS section */}
 				<div className='space-y-2'>
-					<span className='text-[10px] uppercase tracking-wider text-slate-400 font-semibold'>Adjustments</span>
+					<SectionHeader>Adjustments</SectionHeader>
 
-					<div className='flex items-center gap-2'>
-						<label htmlFor='blur-range' className='text-xs font-medium text-slate-600 w-14'>
-							Blur
-						</label>
-						<input
-							id='blur-range'
-							type='range'
-							min={UI.FILTER.BLUR_MIN}
-							max={UI.FILTER.BLUR_MAX}
-							step={UI.FILTER.BLUR_STEP}
-							value={localBlur}
-							onChange={(e) => handleBlurChange(Number.parseFloat(e.target.value))}
-							disabled={!hasImage}
-							className='flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50'
-						/>
-						<span className='text-xs text-slate-500 w-6 text-right'>{localBlur}</span>
-					</div>
+					<SliderRow
+						label='Blur'
+						id='blur-range'
+						min={UI.FILTER.BLUR_MIN}
+						max={UI.FILTER.BLUR_MAX}
+						step={UI.FILTER.BLUR_STEP}
+						value={localBlur}
+						onChange={handleBlurChange}
+						disabled={!hasImage}
+						valueWidth='w-6'
+					/>
 
-					<div className='flex items-center gap-2'>
-						<label htmlFor='thresh-range' className='text-xs font-medium text-slate-600 w-14'>
-							Thresh
-						</label>
-						<input
-							type='range'
-							id='thresh-range'
-							min={UI.FILTER.THRESHOLD_MIN}
-							max={UI.FILTER.THRESHOLD_MAX}
-							value={localThreshold}
-							onChange={(e) => handleThresholdChange(Number.parseInt(e.target.value, 10))}
-							disabled={!hasImage}
-							className='flex-1 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50'
-						/>
-						<span className='text-xs text-slate-500 w-8 text-right'>{localThreshold}</span>
-					</div>
+					<SliderRow
+						label='Thresh'
+						id='thresh-range'
+						min={UI.FILTER.THRESHOLD_MIN}
+						max={UI.FILTER.THRESHOLD_MAX}
+						step={UI.FILTER.THRESHOLD_STEP}
+						value={localThreshold}
+						onChange={handleThresholdChange}
+						disabled={!hasImage}
+						parseValue={(v) => Number.parseInt(v, 10)}
+					/>
 
 					<div className='flex items-center justify-between'>
 						<div className='flex items-center gap-1 bg-slate-100 rounded p-0.5'>
@@ -181,44 +171,16 @@ const FloatingControls: React.FC = () => {
 
 				{/* HISTORY section */}
 				<div className='space-y-1.5'>
-					<span className='text-[10px] uppercase tracking-wider text-slate-400 font-semibold'>History</span>
+					<SectionHeader>History</SectionHeader>
 					<div className='flex items-center gap-2'>
-						<button
-							type='button'
-							onClick={undo}
-							disabled={!canUndo}
-							title='Undo (Ctrl+Z)'
-							className='flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed'
-						>
-							<svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-								<title>undo</title>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									strokeWidth={2}
-									d='M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4'
-								/>
-							</svg>
+						<PillButton onClick={undo} disabled={!canUndo} className='flex items-center gap-1'>
+							<Icon name='undo' size='sm' />
 							Undo
-						</button>
-						<button
-							type='button'
-							onClick={redo}
-							disabled={!canRedo}
-							title='Redo (Ctrl+Shift+Z)'
-							className='flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed'
-						>
+						</PillButton>
+						<PillButton onClick={redo} disabled={!canRedo} className='flex items-center gap-1'>
 							Redo
-							<svg className='w-3 h-3' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-								<title>redo</title>
-								<path
-									strokeLinecap='round'
-									strokeLinejoin='round'
-									strokeWidth={2}
-									d='M21 10H11a5 5 0 00-5 5v2M21 10l-4-4M21 10l-4 4'
-								/>
-							</svg>
-						</button>
+							<Icon name='redo' size='sm' />
+						</PillButton>
 					</div>
 				</div>
 			</div>
