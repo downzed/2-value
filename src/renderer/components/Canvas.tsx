@@ -1,5 +1,5 @@
 import { type Image, writeCanvas } from 'image-js';
-import { useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UI } from '../constants/ui';
 import { useImageContext } from '../hooks/ImageContext';
 import { Icon } from './shared/Icon';
@@ -9,7 +9,10 @@ interface CanvasProps {
 }
 
 const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
-	const { currentImage, blur, threshold, values, showOriginal } = useImageContext();
+	const { currentImage, blur, threshold, values, showOriginal, zoom, fitMode, setZoom } = useImageContext();
+
+	const containerRef = useRef<HTMLDivElement>(null);
+	const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
 	const processed = useMemo(() => {
 		if (!currentImage) return null;
@@ -41,6 +44,49 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 		writeCanvas(displayImage, previewCanvasRef.current);
 	}, [displayImage, previewCanvasRef]);
 
+	// Track container size with ResizeObserver
+	useEffect(() => {
+		if (!containerRef.current) return;
+		const observer = new ResizeObserver(([entry]) => {
+			setContainerSize({
+				width: entry.contentRect.width,
+				height: entry.contentRect.height,
+			});
+		});
+		observer.observe(containerRef.current);
+		return () => observer.disconnect();
+	}, []);
+
+	// Compute fit scale (never upscale beyond 100%)
+	const fitScale = useMemo(() => {
+		if (!currentImage || containerSize.width === 0 || containerSize.height === 0) return 1;
+		const padding = 48;
+		const availW = containerSize.width - padding;
+		const availH = containerSize.height - padding;
+		return Math.min(availW / currentImage.width, availH / currentImage.height, UI.ZOOM.FIT_MAX);
+	}, [currentImage, containerSize]);
+
+	const effectiveZoom = fitMode === 'fit' ? fitScale : zoom;
+
+	// Ctrl+wheel handler
+	const handleWheel = useCallback(
+		(e: WheelEvent) => {
+			if (!e.ctrlKey && !e.metaKey) return;
+			e.preventDefault();
+			const delta = e.deltaY > 0 ? -UI.ZOOM.WHEEL_STEP : UI.ZOOM.WHEEL_STEP;
+			const currentEffective = fitMode === 'fit' ? fitScale : zoom;
+			setZoom(Math.round((currentEffective + delta) * 100) / 100);
+		},
+		[fitMode, fitScale, zoom, setZoom],
+	);
+
+	useEffect(() => {
+		const el = containerRef.current;
+		if (!el) return;
+		el.addEventListener('wheel', handleWheel, { passive: false });
+		return () => el.removeEventListener('wheel', handleWheel);
+	}, [handleWheel]);
+
 	if (!currentImage) {
 		return (
 			<div className='flex-1 flex items-center justify-center'>
@@ -55,10 +101,31 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 		);
 	}
 
+	const canvasWidth = currentImage.width;
+	const canvasHeight = currentImage.height;
+	const scaledWidth = canvasWidth * effectiveZoom;
+	const scaledHeight = canvasHeight * effectiveZoom;
+
 	return (
-		<div className='flex-1 flex items-center justify-center p-8'>
-			<div className='bg-white rounded-lg shadow-lg p-4'>
-				<canvas ref={previewCanvasRef} className='max-w-full max-h-full border border-slate-200 rounded' />
+		<div ref={containerRef} className='flex-1 overflow-auto relative'>
+			<div
+				className='bg-white rounded-lg shadow-lg'
+				style={{
+					width: scaledWidth,
+					height: scaledHeight,
+					margin: fitMode === 'fit' ? 'auto' : undefined,
+					marginTop: fitMode === 'fit' ? Math.max(0, (containerSize.height - scaledHeight) / 2) : undefined,
+				}}
+			>
+				<canvas
+					ref={previewCanvasRef}
+					className='border border-slate-200 rounded'
+					style={{
+						transform: `scale(${effectiveZoom})`,
+						transformOrigin: '0 0',
+						imageRendering: 'pixelated',
+					}}
+				/>
 			</div>
 		</div>
 	);

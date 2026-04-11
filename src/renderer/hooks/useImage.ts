@@ -10,6 +10,8 @@ interface AdjustmentSnapshot {
 	values: 2 | 3;
 }
 
+type FitMode = 'fit' | 'manual';
+
 interface ImageState {
 	currentImage: Image | null;
 	originalImage: Image | null;
@@ -21,6 +23,10 @@ interface ImageState {
 	threshold: number;
 	values: 2 | 3;
 	showOriginal: boolean;
+
+	// Zoom
+	zoom: number;
+	fitMode: FitMode;
 
 	// Counter
 	counter: number;
@@ -63,6 +69,8 @@ export const useImage = () => {
 		threshold: 0,
 		values: 2,
 		showOriginal: false,
+		zoom: 1,
+		fitMode: 'fit',
 		counter: 0,
 		counterRunning: false,
 		counterDuration: null,
@@ -80,6 +88,8 @@ export const useImage = () => {
 		threshold,
 		values,
 		showOriginal,
+		zoom,
+		fitMode,
 		counter,
 		counterRunning,
 		counterDuration,
@@ -105,6 +115,8 @@ export const useImage = () => {
 			threshold: 0,
 			values: 2,
 			showOriginal: false,
+			zoom: 1,
+			fitMode: 'fit',
 			counter: 0,
 			counterRunning: false,
 			counterDuration: null,
@@ -129,6 +141,8 @@ export const useImage = () => {
 			threshold: 0,
 			values: 2,
 			showOriginal: false,
+			zoom: 1,
+			fitMode: 'fit',
 			counter: 0,
 			counterRunning: false,
 			counterDuration: null,
@@ -252,6 +266,37 @@ export const useImage = () => {
 		}));
 	}, []);
 
+	// Zoom
+	const setZoom = useCallback((value: number) => {
+		const clamped = Math.min(UI.ZOOM.MAX, Math.max(UI.ZOOM.MIN, value));
+		setImageState((prev) => ({
+			...prev,
+			zoom: clamped,
+			fitMode: 'manual' as FitMode,
+		}));
+	}, []);
+
+	const setFitMode = useCallback((mode: FitMode) => {
+		setImageState((prev) => ({
+			...prev,
+			fitMode: mode,
+		}));
+	}, []);
+
+	const zoomIn = useCallback(() => {
+		setImageState((prev) => {
+			const next = Math.min(UI.ZOOM.MAX, prev.zoom + UI.ZOOM.STEP);
+			return { ...prev, zoom: next, fitMode: 'manual' as FitMode };
+		});
+	}, []);
+
+	const zoomOut = useCallback(() => {
+		setImageState((prev) => {
+			const next = Math.max(UI.ZOOM.MIN, prev.zoom - UI.ZOOM.STEP);
+			return { ...prev, zoom: next, fitMode: 'manual' as FitMode };
+		});
+	}, []);
+
 	// Counter
 	const startCounter = useCallback((duration: number) => {
 		if (timerRef.current) clearInterval(timerRef.current);
@@ -320,6 +365,14 @@ export const useImage = () => {
 		panels,
 		togglePanel,
 		setPanel,
+
+		// Zoom
+		zoom,
+		fitMode,
+		setZoom,
+		setFitMode,
+		zoomIn,
+		zoomOut,
 
 		// Counter
 		counter,

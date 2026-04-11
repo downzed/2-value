@@ -10,8 +10,22 @@ interface BottomPanelProps {
 }
 
 const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
-	const { hasImage, currentImage, fileName, filePath, panels, setPanel, counter, counterRunning, counterDuration } =
-		useImageContext();
+	const {
+		hasImage,
+		currentImage,
+		fileName,
+		filePath,
+		panels,
+		setPanel,
+		counter,
+		counterRunning,
+		counterDuration,
+		zoom,
+		fitMode,
+		setFitMode,
+		zoomIn,
+		zoomOut,
+	} = useImageContext();
 	const [status, setStatus] = useState<Status>('ready');
 	const [openDialogVisible, setOpenDialogVisible] = useState(false);
 
@@ -110,6 +124,45 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 					<span>
 						{width} × {height}
 					</span>
+				)}
+
+				{/* Zoom controls */}
+				{hasImage && (
+					<>
+						<span className='mx-3 text-slate-500'>|</span>
+						<div className='flex items-center gap-1'>
+							<button
+								type='button'
+								onClick={zoomOut}
+								className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
+								title='Zoom Out (Ctrl+-)'
+							>
+								−
+							</button>
+
+							<button
+								type='button'
+								onClick={() => setFitMode('fit')}
+								className={`text-[10px] px-1 transition-colors ${fitMode === 'fit' ? 'text-slate-200' : 'text-slate-400 hover:text-slate-200'}`}
+								title='Fit to View (Ctrl+0)'
+							>
+								Fit
+							</button>
+
+							<span className='text-slate-400 text-[10px] w-8 text-center'>
+								{fitMode === 'fit' ? 'Fit' : `${Math.round(zoom * 100)}%`}
+							</span>
+
+							<button
+								type='button'
+								onClick={zoomIn}
+								className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
+								title='Zoom In (Ctrl+=)'
+							>
+								+
+							</button>
+						</div>
+					</>
 				)}
 
 				<span className='flex-1' />

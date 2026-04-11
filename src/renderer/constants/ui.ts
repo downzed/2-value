@@ -13,6 +13,13 @@ export const UI = {
 		{ name: 'High Contrast', blur: 0, threshold: 100, values: 2 as const },
 		{ name: '3-Tone', blur: 2.0, threshold: 128, values: 3 as const },
 	],
+	ZOOM: {
+		MIN: 0.25,
+		MAX: 4,
+		STEP: 0.25,
+		WHEEL_STEP: 0.1,
+		FIT_MAX: 1,
+	},
 	HISTORY: {
 		MAX_DEPTH: 50,
 	},
