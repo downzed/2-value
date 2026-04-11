@@ -13,8 +13,16 @@ interface AdjustmentSnapshot {
 type FitMode = 'fit' | 'manual';
 
 interface ImageState {
-	currentImage: Image | null;
-	originalImage: Image | null;
+	/**
+	 * Immutable source image loaded once.
+	 * All processing is derived from this; never mutate it.
+	 */
+	sourceImage: Image | null;
+	/**
+	 * Alias exposed externally as `originalImage` for backward compatibility
+	 * with FloatingImage which renders the un-processed view.
+	 * Points to the same object as sourceImage.
+	 */
 	fileName: string;
 	filePath: string;
 
@@ -62,8 +70,7 @@ function pushHistory(history: AdjustmentSnapshot[], snapshot: AdjustmentSnapshot
 
 export const useImage = () => {
 	const [imageState, setImageState] = useState<ImageState>({
-		currentImage: null,
-		originalImage: null,
+		sourceImage: null,
 		fileName: '',
 		filePath: '',
 		blur: 0,
@@ -81,8 +88,7 @@ export const useImage = () => {
 	});
 
 	const {
-		currentImage,
-		originalImage,
+		sourceImage,
 		fileName,
 		filePath,
 		blur,
@@ -101,15 +107,22 @@ export const useImage = () => {
 
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+	/**
+	 * Holds the most recent effective zoom (fitScale when fit, zoom when manual).
+	 * Updated by Canvas during render so zoomIn/zoomOut can use the true visual
+	 * zoom as their base when transitioning out of fit mode.
+	 */
+	const effectiveZoomRef = useRef(1);
+
 	// Load image (already decoded)
+	// Store source once — no clone needed for currentImage/originalImage duplication.
 	const loadImage = useCallback(async (image: Image, fileName = '', filePath = '') => {
 		if (timerRef.current) {
 			clearInterval(timerRef.current);
 			timerRef.current = null;
 		}
 		setImageState({
-			currentImage: image.clone(),
-			originalImage: image.clone(),
+			sourceImage: image,
 			fileName,
 			filePath,
 			blur: 0,
@@ -134,8 +147,7 @@ export const useImage = () => {
 			timerRef.current = null;
 		}
 		setImageState({
-			currentImage: null,
-			originalImage: null,
+			sourceImage: null,
 			fileName: '',
 			filePath: '',
 			blur: 0,
@@ -286,14 +298,16 @@ export const useImage = () => {
 
 	const zoomIn = useCallback(() => {
 		setImageState((prev) => {
-			const next = Math.min(UI.ZOOM.MAX, prev.zoom + UI.ZOOM.STEP);
+			const base = prev.fitMode === 'fit' ? effectiveZoomRef.current : prev.zoom;
+			const next = Math.min(UI.ZOOM.MAX, Math.round((base + UI.ZOOM.STEP) * 100) / 100);
 			return { ...prev, zoom: next, fitMode: 'manual' as FitMode };
 		});
 	}, []);
 
 	const zoomOut = useCallback(() => {
 		setImageState((prev) => {
-			const next = Math.max(UI.ZOOM.MIN, prev.zoom - UI.ZOOM.STEP);
+			const base = prev.fitMode === 'fit' ? effectiveZoomRef.current : prev.zoom;
+			const next = Math.max(UI.ZOOM.MIN, Math.round((base - UI.ZOOM.STEP) * 100) / 100);
 			return { ...prev, zoom: next, fitMode: 'manual' as FitMode };
 		});
 	}, []);
@@ -332,11 +346,13 @@ export const useImage = () => {
 
 	return {
 		// State
-		currentImage,
-		originalImage,
+		// currentImage and originalImage both point to the same sourceImage object.
+		// Canvas.tsx derives processed output without mutating it.
+		currentImage: sourceImage,
+		originalImage: sourceImage,
 		fileName,
 		filePath,
-		hasImage: !!currentImage,
+		hasImage: !!sourceImage,
 
 		// Actions
 		loadImage,
@@ -374,6 +390,7 @@ export const useImage = () => {
 		setFitMode,
 		zoomIn,
 		zoomOut,
+		effectiveZoomRef,
 
 		// Counter
 		counter,

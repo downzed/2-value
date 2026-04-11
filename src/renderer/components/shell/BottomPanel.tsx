@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useImageContext } from '../../hooks/ImageContext';
-import { useImageLoader } from '../../hooks/useImageLoader';
+import { imageLoadErrorMessage, useImageLoader } from '../../hooks/useImageLoader';
 import { Icon } from '../shared/Icon';
 
 type Status = 'ready' | 'loading' | 'loaded' | 'saving' | 'saved' | 'error';
@@ -23,11 +23,14 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		zoom,
 		fitMode,
 		setFitMode,
+		setZoom,
 		zoomIn,
 		zoomOut,
+		effectiveZoomRef,
 	} = useImageContext();
-	const { loadFromDataUrl } = useImageLoader();
+	const { loadFromPath } = useImageLoader();
 	const [status, setStatus] = useState<Status>('ready');
+	const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
 	const width = currentImage?.width ?? '--';
 	const height = currentImage?.height ?? '--';
@@ -35,10 +38,18 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	const handleOpen = useCallback(async () => {
 		try {
 			setStatus('loading');
+			setErrorMsg(null);
 			const result = await window.electronAPI.openImage();
-			if (result?.dataUrl) {
-				await loadFromDataUrl(result.dataUrl, result.path);
-				setStatus('loaded');
+			if (result) {
+				const outcome = await loadFromPath(result.path, result.fileSize);
+				if (outcome.ok) {
+					setStatus('loaded');
+				} else {
+					const msg = imageLoadErrorMessage(outcome.error);
+					setErrorMsg(msg);
+					setStatus('error');
+					console.error('Image load rejected:', outcome.error);
+				}
 			} else {
 				setStatus(hasImage ? 'loaded' : 'ready');
 			}
@@ -46,7 +57,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			setStatus('error');
 			console.error('Failed to open image:', err);
 		}
-	}, [loadFromDataUrl, hasImage]);
+	}, [loadFromPath, hasImage]);
 
 	const handleSave = useCallback(async () => {
 		if (!previewCanvasRef.current) return;
@@ -54,9 +65,12 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		try {
 			setStatus('saving');
 			const canvas = previewCanvasRef.current;
-			const dataUrl = canvas.toDataURL('image/png');
-
-			const savedPath = await window.electronAPI.saveImage(dataUrl, filePath || undefined);
+			// Use binary transport: canvas.toBlob -> ArrayBuffer -> IPC (avoids base64 inflation)
+			const blob = await new Promise<Blob>((resolve, reject) => {
+				canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob returned null'))), 'image/png');
+			});
+			const buffer = await blob.arrayBuffer();
+			const savedPath = await window.electronAPI.saveImage(buffer, filePath || undefined);
 			if (savedPath) {
 				setStatus('saved');
 				setTimeout(() => setStatus('loaded'), 2000);
@@ -89,7 +103,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		loaded: { text: 'Image ready', className: 'text-emerald-400' },
 		saving: { text: 'Saving...', className: 'text-yellow-400' },
 		saved: { text: 'Saved!', className: 'text-blue-400' },
-		error: { text: 'Error', className: 'text-red-400' },
+		error: { text: errorMsg ?? 'Error', className: 'text-red-400' },
 	};
 
 	const formatBadge = (seconds: number): string => {
@@ -181,7 +195,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 			{/* Zoom controls */}
 			{hasImage && (
-				<div className='flex items-center gap-1 mr-3'>
+				<div className='flex items-center gap-1.5 mr-3'>
 					<button
 						type='button'
 						onClick={zoomOut}
@@ -191,17 +205,45 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 						−
 					</button>
 
-					<button
-						type='button'
-						onClick={() => setFitMode('fit')}
-						className={`text-[10px] px-1 transition-colors ${fitMode === 'fit' ? 'text-slate-200' : 'text-slate-400 hover:text-slate-200'}`}
-						title='Fit to View (Ctrl+0)'
-					>
-						Fit
-					</button>
+					<div className='flex items-center bg-slate-700/50 rounded p-0.5'>
+						<button
+							type='button'
+							onClick={() => setFitMode('fit')}
+							className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+								fitMode === 'fit' ? 'bg-slate-500 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'
+							}`}
+							title='Fit to View (Ctrl+0)'
+						>
+							Fit
+						</button>
+						<button
+							type='button'
+							onClick={() => setZoom(1)}
+							className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+								fitMode === 'manual' && Math.abs(zoom - 1) < 0.01
+									? 'bg-slate-500 text-slate-100 shadow-sm'
+									: 'text-slate-400 hover:text-slate-200'
+							}`}
+							title='Actual Size (1:1)'
+						>
+							1:1
+						</button>
+						<button
+							type='button'
+							onClick={() => setZoom(2)}
+							className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+								fitMode === 'manual' && Math.abs(zoom - 2) < 0.01
+									? 'bg-slate-500 text-slate-100 shadow-sm'
+									: 'text-slate-400 hover:text-slate-200'
+							}`}
+							title='Double Size (2×)'
+						>
+							2×
+						</button>
+					</div>
 
 					<span className='text-slate-400 text-[10px] w-8 text-center'>
-						{fitMode === 'fit' ? 'Fit' : `${Math.round(zoom * 100)}%`}
+						{Math.round(effectiveZoomRef.current * 100)}%
 					</span>
 
 					<button
