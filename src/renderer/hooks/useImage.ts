@@ -2,7 +2,7 @@ import type { Image } from 'image-js';
 import { useCallback, useState, useRef } from 'react';
 import { UI } from '../constants/ui';
 
-type PanelId = 'controls' | 'original' | 'timer';
+type PanelId = 'controls' | 'original' | 'timer' | 'gallery';
 
 interface AdjustmentSnapshot {
 	blur: number;
@@ -45,6 +45,7 @@ const DEFAULT_PANELS: Record<PanelId, boolean> = {
 	controls: true,
 	original: true,
 	timer: true,
+	gallery: false,
 };
 
 function getSnapshot(state: ImageState): AdjustmentSnapshot {
@@ -120,7 +121,7 @@ export const useImage = () => {
 			counter: 0,
 			counterRunning: false,
 			counterDuration: null,
-			panels: { controls: true, original: true, timer: true },
+			panels: { controls: true, original: true, timer: true, gallery: false },
 			adjustmentHistory: [],
 			adjustmentFuture: [],
 		});

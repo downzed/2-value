@@ -1,5 +1,5 @@
 import { useImageContext } from '../hooks/ImageContext';
-import FloatingPanel from './FloatingPanel';
+import FloatingWidget from './shared/FloatingWidget';
 import { PillButton } from './shared/PillButton';
 
 const STORAGE_KEY = 'image-editor-counter-position';
@@ -26,7 +26,7 @@ const FloatingCounter: React.FC = () => {
 	};
 
 	return (
-		<FloatingPanel
+		<FloatingWidget
 			title='Timer'
 			storageKey={STORAGE_KEY}
 			defaultPosition={DEFAULT_POSITION}
@@ -73,7 +73,7 @@ const FloatingCounter: React.FC = () => {
 					</PillButton>
 				</div>
 			</div>
-		</FloatingPanel>
+		</FloatingWidget>
 	);
 };
 

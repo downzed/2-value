@@ -56,6 +56,11 @@ export function useKeyboardShortcuts() {
 				togglePanel('timer');
 				return;
 			}
+			if (e.altKey && e.key === '4') {
+				e.preventDefault();
+				togglePanel('gallery');
+				return;
+			}
 
 			// Ctrl+0 = Fit to view
 			if ((e.ctrlKey || e.metaKey) && e.key === '0') {

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useImageContext } from '../../hooks/ImageContext';
+import { useImageLoader } from '../../hooks/useImageLoader';
 import { Icon } from '../shared/Icon';
-import OpenDialog from './OpenDialog';
 
 type Status = 'ready' | 'loading' | 'loaded' | 'saving' | 'saved' | 'error';
 
@@ -26,20 +26,27 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		zoomIn,
 		zoomOut,
 	} = useImageContext();
+	const { loadFromDataUrl } = useImageLoader();
 	const [status, setStatus] = useState<Status>('ready');
-	const [openDialogVisible, setOpenDialogVisible] = useState(false);
 
 	const width = currentImage?.width ?? '--';
 	const height = currentImage?.height ?? '--';
 
-	const handleOpen = useCallback(() => {
-		setOpenDialogVisible(true);
-	}, []);
-
-	const handleImageLoaded = useCallback(() => {
-		setOpenDialogVisible(false);
-		setStatus('loaded');
-	}, []);
+	const handleOpen = useCallback(async () => {
+		try {
+			setStatus('loading');
+			const result = await window.electronAPI.openImage();
+			if (result?.dataUrl) {
+				await loadFromDataUrl(result.dataUrl, result.path);
+				setStatus('loaded');
+			} else {
+				setStatus(hasImage ? 'loaded' : 'ready');
+			}
+		} catch (err) {
+			setStatus('error');
+			console.error('Failed to open image:', err);
+		}
+	}, [loadFromDataUrl, hasImage]);
 
 	const handleSave = useCallback(async () => {
 		if (!previewCanvasRef.current) return;
@@ -91,130 +98,125 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	};
 
 	return (
-		<>
-			<div className='h-8 bg-slate-800 px-4 flex items-center text-xs text-slate-300'>
-				{/* File Operations */}
-				<button
-					type='button'
-					onClick={handleOpen}
-					className='text-slate-400 hover:text-slate-200 transition-colors mr-4'
-				>
-					Open
-				</button>
+		<div className='h-8 bg-slate-800 px-4 flex items-center text-xs text-slate-300'>
+			{/* File Operations */}
+			<button type='button' onClick={handleOpen} className='text-slate-400 hover:text-slate-200 transition-colors mr-4'>
+				Open
+			</button>
 
-				<button
-					type='button'
-					onClick={handleSave}
-					disabled={!hasImage}
-					className='text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mr-4'
-				>
-					Save
-				</button>
+			<button
+				type='button'
+				onClick={handleSave}
+				disabled={!hasImage}
+				className='text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mr-4'
+			>
+				Save
+			</button>
 
-				<span className='w-px h-4 bg-slate-600 mr-4' />
+			<span className='w-px h-4 bg-slate-600 mr-4' />
 
-				{/* File Info */}
-				{fileName && (
-					<>
-						<span className='text-slate-100 font-medium'>{fileName}</span>
-						<span className='mx-3 text-slate-500'>|</span>
-					</>
+			{/* File Info */}
+			{fileName && (
+				<>
+					<span className='text-slate-100 font-medium'>{fileName}</span>
+					<span className='mx-3 text-slate-500'>|</span>
+				</>
+			)}
+			{width && height && (
+				<span>
+					{width} × {height}
+				</span>
+			)}
+
+			<span className='flex-1' />
+
+			{/* Minimized panel icons */}
+			<div className='flex items-center gap-1 mr-3'>
+				{!panels.controls && (
+					<button
+						type='button'
+						onClick={() => setPanel('controls', true)}
+						className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
+						title='Show Adjustments (Alt+1)'
+					>
+						<Icon name='sliders' size='sm' />
+					</button>
 				)}
-				{width && height && (
-					<span>
-						{width} × {height}
-					</span>
+				{!panels.original && (
+					<button
+						type='button'
+						onClick={() => setPanel('original', true)}
+						className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
+						title='Show Original (Alt+2)'
+					>
+						<Icon name='image' size='sm' />
+					</button>
 				)}
-
-				{/* Zoom controls */}
-				{hasImage && (
-					<>
-						<span className='mx-3 text-slate-500'>|</span>
-						<div className='flex items-center gap-1'>
-							<button
-								type='button'
-								onClick={zoomOut}
-								className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
-								title='Zoom Out (Ctrl+-)'
-							>
-								−
-							</button>
-
-							<button
-								type='button'
-								onClick={() => setFitMode('fit')}
-								className={`text-[10px] px-1 transition-colors ${fitMode === 'fit' ? 'text-slate-200' : 'text-slate-400 hover:text-slate-200'}`}
-								title='Fit to View (Ctrl+0)'
-							>
-								Fit
-							</button>
-
-							<span className='text-slate-400 text-[10px] w-8 text-center'>
-								{fitMode === 'fit' ? 'Fit' : `${Math.round(zoom * 100)}%`}
+				{!panels.timer && (
+					<button
+						type='button'
+						onClick={() => setPanel('timer', true)}
+						className='relative w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
+						title={counterRunning ? `Timer: ${counter}s remaining (Alt+3)` : 'Show Timer (Alt+3)'}
+					>
+						<Icon name='clock' size='sm' />
+						{counterRunning && counterDuration && (
+							<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5'>
+								{formatBadge(counter)}
 							</span>
-
-							<button
-								type='button'
-								onClick={zoomIn}
-								className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
-								title='Zoom In (Ctrl+=)'
-							>
-								+
-							</button>
-						</div>
-					</>
+						)}
+					</button>
 				)}
-
-				<span className='flex-1' />
-
-				{/* Minimized panel icons */}
-				<div className='flex items-center gap-1 mr-3'>
-					{!panels.controls && (
-						<button
-							type='button'
-							onClick={() => setPanel('controls', true)}
-							className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
-							title='Show Adjustments (Alt+1)'
-						>
-							<Icon name='sliders' size='sm' />
-						</button>
-					)}
-					{!panels.original && (
-						<button
-							type='button'
-							onClick={() => setPanel('original', true)}
-							className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
-							title='Show Original (Alt+2)'
-						>
-							<Icon name='image' size='sm' />
-						</button>
-					)}
-					{!panels.timer && (
-						<button
-							type='button'
-							onClick={() => setPanel('timer', true)}
-							className='relative w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
-							title={counterRunning ? `Timer: ${counter}s remaining (Alt+3)` : 'Show Timer (Alt+3)'}
-						>
-							<Icon name='clock' size='sm' />
-							{counterRunning && counterDuration && (
-								<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5'>
-									{formatBadge(counter)}
-								</span>
-							)}
-						</button>
-					)}
-				</div>
-
-				<span className={statusStyles[status].className}>{statusStyles[status].text}</span>
+				{!panels.gallery && (
+					<button
+						type='button'
+						onClick={() => setPanel('gallery', true)}
+						className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
+						title='Show Gallery (Alt+4)'
+					>
+						<Icon name='gallery' size='sm' />
+					</button>
+				)}
 			</div>
 
-			<OpenDialog
-				isOpen={openDialogVisible}
-				onClose={() => setOpenDialogVisible(false)}
-				onImageLoaded={handleImageLoaded}
-			/>
-		</>
+			{/* Zoom controls */}
+			{hasImage && (
+				<div className='flex items-center gap-1 mr-3'>
+					<button
+						type='button'
+						onClick={zoomOut}
+						className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
+						title='Zoom Out (Ctrl+-)'
+					>
+						−
+					</button>
+
+					<button
+						type='button'
+						onClick={() => setFitMode('fit')}
+						className={`text-[10px] px-1 transition-colors ${fitMode === 'fit' ? 'text-slate-200' : 'text-slate-400 hover:text-slate-200'}`}
+						title='Fit to View (Ctrl+0)'
+					>
+						Fit
+					</button>
+
+					<span className='text-slate-400 text-[10px] w-8 text-center'>
+						{fitMode === 'fit' ? 'Fit' : `${Math.round(zoom * 100)}%`}
+					</span>
+
+					<button
+						type='button'
+						onClick={zoomIn}
+						className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
+						title='Zoom In (Ctrl+=)'
+					>
+						+
+					</button>
+				</div>
+			)}
+
+			<span className={statusStyles[status].className}>{statusStyles[status].text}</span>
+		</div>
 	);
 };
 

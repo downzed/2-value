@@ -1,7 +1,7 @@
 import { writeCanvas } from 'image-js';
 import { useEffect, useRef, useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
-import FloatingPanel from './FloatingPanel';
+import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
 
 const STORAGE_KEY = 'image-editor-original-position';
@@ -51,7 +51,7 @@ const FloatingImage: React.FC = () => {
 	);
 
 	return (
-		<FloatingPanel
+		<FloatingWidget
 			title='Original'
 			storageKey={STORAGE_KEY}
 			defaultPosition={DEFAULT_POSITION}
@@ -65,7 +65,7 @@ const FloatingImage: React.FC = () => {
 			<div className='p-2 overflow-auto' style={{ maxHeight: 'calc(60vh - 40px)' }}>
 				<canvas ref={originalCanvasRef} key={showKey} className='w-full border border-slate-200 rounded' />
 			</div>
-		</FloatingPanel>
+		</FloatingWidget>
 	);
 };
 

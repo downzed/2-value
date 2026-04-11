@@ -16,6 +16,9 @@ const ICON_PATHS = {
 	],
 	undo: ['M3 10h10a5 5 0 015 5v2M3 10l4-4M3 10l4 4'],
 	redo: ['M21 10H11a5 5 0 00-5 5v2M21 10l-4-4M21 10l-4 4'],
+	gallery: [
+		'M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z',
+	],
 } as const;
 
 export type IconName = keyof typeof ICON_PATHS;

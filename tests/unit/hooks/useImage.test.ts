@@ -35,6 +35,7 @@ describe('useImage', () => {
 			controls: true,
 			original: true,
 			timer: true,
+			gallery: false,
 		});
 		expect(result.current.canUndo).toBe(false);
 		expect(result.current.canRedo).toBe(false);
@@ -451,6 +452,76 @@ describe('useImage', () => {
 		expect(result.current.panels.original).toBe(false);
 		expect(result.current.panels.controls).toBe(true);
 		expect(result.current.panels.timer).toBe(true);
+		expect(result.current.panels.gallery).toBe(false);
+	});
+
+	// --- Gallery panel tests ---
+
+	it('should initialize gallery panel as closed', () => {
+		const { result } = renderHook(() => useImage());
+
+		expect(result.current.panels.gallery).toBe(false);
+	});
+
+	it('should toggle gallery panel visibility', () => {
+		const { result } = renderHook(() => useImage());
+
+		expect(result.current.panels.gallery).toBe(false);
+
+		act(() => {
+			result.current.togglePanel('gallery');
+		});
+		expect(result.current.panels.gallery).toBe(true);
+
+		act(() => {
+			result.current.togglePanel('gallery');
+		});
+		expect(result.current.panels.gallery).toBe(false);
+	});
+
+	it('should set gallery panel visibility directly', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setPanel('gallery', true);
+		});
+		expect(result.current.panels.gallery).toBe(true);
+
+		act(() => {
+			result.current.setPanel('gallery', false);
+		});
+		expect(result.current.panels.gallery).toBe(false);
+	});
+
+	it('should not affect gallery when toggling other panels', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setPanel('gallery', true);
+		});
+		expect(result.current.panels.gallery).toBe(true);
+
+		act(() => {
+			result.current.togglePanel('controls');
+		});
+		expect(result.current.panels.gallery).toBe(true);
+		expect(result.current.panels.controls).toBe(false);
+	});
+
+	it('should preserve gallery state across loadImage', async () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setPanel('gallery', true);
+		});
+		expect(result.current.panels.gallery).toBe(true);
+
+		await act(async () => {
+			await result.current.loadImage(createMockImage(), 'photo.jpg', '/home/user/photo.jpg');
+		});
+
+		// loadImage resets panels to defaults — gallery defaults to false
+		expect(result.current.panels.gallery).toBe(false);
 	});
 
 	// --- Zoom/FitMode tests ---
