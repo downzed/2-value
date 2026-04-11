@@ -75,6 +75,7 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 			e.preventDefault();
 			const delta = e.deltaY > 0 ? -UI.ZOOM.WHEEL_STEP : UI.ZOOM.WHEEL_STEP;
 			const currentEffective = fitMode === 'fit' ? fitScale : zoom;
+			// Round to avoid floating-point drift from repeated wheel events
 			setZoom(Math.round((currentEffective + delta) * 100) / 100);
 		},
 		[fitMode, fitScale, zoom, setZoom],
