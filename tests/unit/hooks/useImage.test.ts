@@ -523,4 +523,137 @@ describe('useImage', () => {
 		// loadImage resets panels to defaults — gallery defaults to false
 		expect(result.current.panels.gallery).toBe(false);
 	});
+
+	// --- Zoom/FitMode tests ---
+
+	it('should initialize with zoom=1 and fitMode=fit', () => {
+		const { result } = renderHook(() => useImage());
+
+		expect(result.current.zoom).toBe(1);
+		expect(result.current.fitMode).toBe('fit');
+	});
+
+	it('should set zoom and switch to manual mode', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setZoom(2);
+		});
+		expect(result.current.zoom).toBe(2);
+		expect(result.current.fitMode).toBe('manual');
+	});
+
+	it('should clamp zoom to minimum', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setZoom(0.1);
+		});
+		expect(result.current.zoom).toBe(0.25);
+		expect(result.current.fitMode).toBe('manual');
+	});
+
+	it('should clamp zoom to maximum', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setZoom(10);
+		});
+		expect(result.current.zoom).toBe(4);
+		expect(result.current.fitMode).toBe('manual');
+	});
+
+	it('should zoom in by step and switch to manual mode', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.zoomIn();
+		});
+		expect(result.current.zoom).toBe(1.25);
+		expect(result.current.fitMode).toBe('manual');
+	});
+
+	it('should zoom out by step and switch to manual mode', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.zoomOut();
+		});
+		expect(result.current.zoom).toBe(0.75);
+		expect(result.current.fitMode).toBe('manual');
+	});
+
+	it('should not zoom below minimum via zoomOut', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setZoom(0.25);
+		});
+
+		act(() => {
+			result.current.zoomOut();
+		});
+		expect(result.current.zoom).toBe(0.25);
+	});
+
+	it('should not zoom above maximum via zoomIn', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setZoom(4);
+		});
+
+		act(() => {
+			result.current.zoomIn();
+		});
+		expect(result.current.zoom).toBe(4);
+	});
+
+	it('should set fitMode to fit', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setZoom(2);
+		});
+		expect(result.current.fitMode).toBe('manual');
+
+		act(() => {
+			result.current.setFitMode('fit');
+		});
+		expect(result.current.fitMode).toBe('fit');
+	});
+
+	it('should reset zoom and fitMode on loadImage', async () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setZoom(2.5);
+		});
+		expect(result.current.zoom).toBe(2.5);
+		expect(result.current.fitMode).toBe('manual');
+
+		await act(async () => {
+			await result.current.loadImage(createMockImage(), 'test.jpg', '/test.jpg');
+		});
+
+		expect(result.current.zoom).toBe(1);
+		expect(result.current.fitMode).toBe('fit');
+	});
+
+	it('should reset zoom and fitMode on resetImage', () => {
+		const { result } = renderHook(() => useImage());
+
+		act(() => {
+			result.current.setZoom(3);
+		});
+		expect(result.current.zoom).toBe(3);
+		expect(result.current.fitMode).toBe('manual');
+
+		act(() => {
+			result.current.resetImage();
+		});
+
+		expect(result.current.zoom).toBe(1);
+		expect(result.current.fitMode).toBe('fit');
+	});
 });
