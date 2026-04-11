@@ -43,6 +43,11 @@ export function useKeyboardShortcuts() {
 				togglePanel('timer');
 				return;
 			}
+			if (e.altKey && e.key === '4') {
+				e.preventDefault();
+				togglePanel('gallery');
+				return;
+			}
 
 			// h/j/k/l vim-style adjustment keybinds
 			// Only when no modifier keys and not focused on an input

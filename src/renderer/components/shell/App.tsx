@@ -3,6 +3,7 @@ import { useRef } from 'react';
 import { ImageProvider } from '../../hooks/ImageContext';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import BottomPanel from './BottomPanel';
+import GalleryPanel from './GalleryPanel';
 import Canvas from '../Canvas';
 import FloatingControls from '../FloatingControls';
 import FloatingCounter from '../FloatingCounter';
@@ -19,6 +20,7 @@ const AppContent: React.FC = () => {
 				<FloatingImage />
 				<FloatingControls />
 				<FloatingCounter />
+				<GalleryPanel />
 				<BottomPanel previewCanvasRef={previewCanvasRef} />
 			</div>
 		</div>

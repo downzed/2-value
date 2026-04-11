@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { UI } from '../constants/ui';
-import FloatingPanel from './FloatingPanel';
+import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
 import { PillButton } from './shared/PillButton';
 import { SectionHeader } from './shared/SectionHeader';
@@ -77,7 +77,7 @@ const FloatingControls: React.FC = () => {
 		blur === preset.blur && threshold === preset.threshold && values === preset.values;
 
 	return (
-		<FloatingPanel
+		<FloatingWidget
 			title='Adjustments'
 			storageKey={STORAGE_KEY}
 			defaultPosition={DEFAULT_POSITION}
@@ -184,7 +184,7 @@ const FloatingControls: React.FC = () => {
 					</div>
 				</div>
 			</div>
-		</FloatingPanel>
+		</FloatingWidget>
 	);
 };
 
