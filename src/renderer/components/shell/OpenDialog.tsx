@@ -134,7 +134,6 @@ const OpenDialog: React.FC<OpenDialogProps> = ({ isOpen, onClose, onImageLoaded 
 			role='dialog'
 			className='fixed inset-0 z-[60] flex items-center justify-center bg-black/50'
 			onClick={handleBackdropClick}
-			onKeyDown={undefined}
 		>
 			<div className='bg-white rounded-xl shadow-2xl border border-slate-200 w-[480px] max-h-[80vh] flex flex-col'>
 				{/* Header */}
