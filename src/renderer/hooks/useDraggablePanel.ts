@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type RefObject } from 'react';
 
 interface Position {
 	x: number;
@@ -42,7 +42,7 @@ export function useDraggablePanel({ storageKey, defaultPosition, panelRef }: Use
 	);
 
 	const handleMouseDown = useCallback(
-		(e: React.MouseEvent) => {
+		(e: MouseEvent<HTMLDivElement>) => {
 			if (!panelRef.current) return;
 			const rect = panelRef.current.getBoundingClientRect();
 			panelDimsRef.current = {

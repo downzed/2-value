@@ -1,6 +1,7 @@
 import type { Image } from 'image-js';
 import { useCallback, useEffect, useRef } from 'react';
 import { UI } from '../constants/ui';
+import { imageToUint8Clamped } from '../utils/imageConversion';
 import type { ProcessRequest, ProcessResponse } from '../workers/imageProcessor.worker';
 
 export interface ProcessParams {
@@ -10,19 +11,6 @@ export interface ProcessParams {
 }
 
 export type ProcessResult = { ok: true; imageData: ImageData } | { ok: false };
-
-/**
- * Extract a concrete Uint8ClampedArray from an image-js Image using getRawImage().
- * Ensures we have an ArrayBuffer (not SharedArrayBuffer) for transfer.
- */
-function imageToUint8Clamped(source: Image): { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number } {
-	const raw = source.getRawImage();
-	// Ensure concrete ArrayBuffer for structured clone / transfer
-	const srcData = raw.data;
-	const clamped = new Uint8ClampedArray(srcData.byteLength) as Uint8ClampedArray<ArrayBuffer>;
-	for (let i = 0; i < srcData.length; i++) clamped[i] = srcData[i];
-	return { data: clamped, width: raw.width, height: raw.height };
-}
 
 /**
  * Create a scaled-down preview from a source image.

@@ -3,6 +3,7 @@ import { UI } from '../constants/ui';
 import { useImageContext } from '../hooks/ImageContext';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useImageProcessingWorker } from '../hooks/useImageProcessingWorker';
+import { imageToImageData } from '../utils/imageConversion';
 import { Icon } from './shared/Icon';
 
 interface CanvasProps {
@@ -10,7 +11,7 @@ interface CanvasProps {
 }
 
 const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
-	const { currentImage, blur, threshold, values, showOriginal, zoom, fitMode, setZoom, effectiveZoomRef } =
+	const { currentImage, blur, threshold, values, showOriginal, zoom, fitMode, setZoom, setFitScale } =
 		useImageContext();
 
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -95,12 +96,7 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 			settleFullRes.cancel();
 			cancelProcessRef.current?.();
 			cancelProcessRef.current = null;
-			// Display source image unchanged using getRawImage() (no private .data access)
-			const raw = currentImage.getRawImage();
-			const clamped = new Uint8ClampedArray(raw.data.byteLength);
-			for (let i = 0; i < raw.data.length; i++) clamped[i] = raw.data[i];
-			const id = new ImageData(clamped as Uint8ClampedArray<ArrayBuffer>, raw.width, raw.height);
-			setDisplayImageData(id);
+			setDisplayImageData(imageToImageData(currentImage));
 		}
 	}, [currentImage, showOriginal, settleFullRes]);
 
@@ -149,9 +145,10 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 
 	const effectiveZoom = fitMode === 'fit' ? fitScale : zoom;
 
-	// Keep the shared ref in sync so zoomIn/zoomOut and BottomPanel
-	// always know the true visual zoom level.
-	effectiveZoomRef.current = effectiveZoom;
+	// Report fitScale to context so it can be used as reactive effectiveZoom
+	useEffect(() => {
+		setFitScale(fitScale);
+	}, [fitScale, setFitScale]);
 
 	// Ctrl+wheel handler
 	const handleWheel = useCallback(

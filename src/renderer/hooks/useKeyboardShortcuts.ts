@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useImageContext } from './ImageContext';
 import { UI } from '../constants/ui';
 
@@ -24,19 +24,28 @@ export function useKeyboardShortcuts() {
 		zoomOut,
 	} = useImageContext();
 
+	const canUndoRef = useRef(canUndo);
+	const canRedoRef = useRef(canRedo);
+	useEffect(() => {
+		canUndoRef.current = canUndo;
+	}, [canUndo]);
+	useEffect(() => {
+		canRedoRef.current = canRedo;
+	}, [canRedo]);
+
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			// Ctrl+Z = Undo
 			if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
 				e.preventDefault();
-				if (canUndo) undo();
+				if (canUndoRef.current) undo();
 				return;
 			}
 
 			// Ctrl+Shift+Z = Redo
 			if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'Z') {
 				e.preventDefault();
-				if (canRedo) redo();
+				if (canRedoRef.current) redo();
 				return;
 			}
 
@@ -127,8 +136,6 @@ export function useKeyboardShortcuts() {
 		setThreshold,
 		undo,
 		redo,
-		canUndo,
-		canRedo,
 		togglePanel,
 		setFitMode,
 		zoomIn,

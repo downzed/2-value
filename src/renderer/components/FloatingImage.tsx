@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
+import { imageToImageData } from '../utils/imageConversion';
 import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
 
@@ -41,11 +42,7 @@ const FloatingImage: React.FC = () => {
 		canvas.height = originalImage.height;
 		const ctx = canvas.getContext('2d');
 		if (ctx) {
-			const raw = originalImage.getRawImage();
-			const clamped = new Uint8ClampedArray(raw.data.byteLength);
-			for (let i = 0; i < raw.data.length; i++) clamped[i] = raw.data[i];
-			const imageData = new ImageData(clamped as Uint8ClampedArray<ArrayBuffer>, raw.width, raw.height);
-			ctx.putImageData(imageData, 0, 0);
+			ctx.putImageData(imageToImageData(originalImage), 0, 0);
 		}
 	}, [originalImage, showKey, panels.original]);
 
