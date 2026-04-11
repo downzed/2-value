@@ -1,5 +1,6 @@
 import { useRef } from 'react';
 import { useDraggablePanel } from '../hooks/useDraggablePanel';
+import { Icon } from './shared/Icon';
 
 interface FloatingPanelProps {
 	/** Panel title displayed in the drag handle */
@@ -66,10 +67,7 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
 				<div className='flex items-center gap-2'>
 					{titleBarActions}
 					<button type='button' onClick={onClose} className='text-slate-400 hover:text-slate-600 transition-colors'>
-						<svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-							<title>close</title>
-							<path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
-						</svg>
+						<Icon name='close' />
 					</button>
 				</div>
 			</div>

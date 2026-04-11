@@ -1,6 +1,7 @@
 import { readImg } from 'image-js';
 import { useCallback, useEffect, useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
+import { Icon } from './shared/Icon';
 
 type Status = 'ready' | 'loading' | 'loaded' | 'saving' | 'saved' | 'error';
 
@@ -143,15 +144,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 						className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
 						title='Show Adjustments (Alt+1)'
 					>
-						<svg className='w-3.5 h-3.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-							<title>controls</title>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								strokeWidth={2}
-								d='M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4'
-							/>
-						</svg>
+						<Icon name='sliders' size='sm' />
 					</button>
 				)}
 				{!panels.original && (
@@ -161,15 +154,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 						className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
 						title='Show Original (Alt+2)'
 					>
-						<svg className='w-3.5 h-3.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-							<title>preview</title>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								strokeWidth={2}
-								d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z'
-							/>
-						</svg>
+						<Icon name='image' size='sm' />
 					</button>
 				)}
 				{!panels.timer && (
@@ -179,15 +164,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 						className='relative w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
 						title={counterRunning ? `Timer: ${counter}s remaining (Alt+3)` : 'Show Timer (Alt+3)'}
 					>
-						<svg className='w-3.5 h-3.5' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-							<title>timer</title>
-							<path
-								strokeLinecap='round'
-								strokeLinejoin='round'
-								strokeWidth={2}
-								d='M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z'
-							/>
-						</svg>
+						<Icon name='clock' size='sm' />
 						{counterRunning && counterDuration && (
 							<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5'>
 								{formatBadge(counter)}

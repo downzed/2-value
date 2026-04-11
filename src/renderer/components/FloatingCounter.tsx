@@ -1,5 +1,6 @@
 import { useImageContext } from '../hooks/ImageContext';
 import FloatingPanel from './FloatingPanel';
+import { PillButton } from './shared/PillButton';
 
 const STORAGE_KEY = 'image-editor-counter-position';
 const DEFAULT_POSITION = { x: 20, y: 280 };
@@ -36,19 +37,14 @@ const FloatingCounter: React.FC = () => {
 			<div className='p-3 space-y-3'>
 				<div className='flex items-center justify-center gap-1'>
 					{PRESETS.map((preset) => (
-						<button
+						<PillButton
 							key={preset.seconds}
-							type='button'
 							onClick={() => startCounter(preset.seconds)}
 							disabled={counterRunning}
-							className={`px-2 py-1 text-xs font-medium rounded ${
-								counterDuration === preset.seconds && !counterRunning
-									? 'bg-slate-700 text-white'
-									: 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-							} disabled:opacity-40 disabled:cursor-not-allowed`}
+							active={counterDuration === preset.seconds && !counterRunning}
 						>
 							{preset.label}
-						</button>
+						</PillButton>
 					))}
 				</div>
 
@@ -72,14 +68,9 @@ const FloatingCounter: React.FC = () => {
 					>
 						{counterRunning ? 'Stop' : 'Start'}
 					</button>
-					<button
-						type='button'
-						onClick={stopCounter}
-						disabled={!counterRunning && counter === 0}
-						className='px-3 py-1 text-xs font-medium rounded bg-slate-100 text-slate-600 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed'
-					>
+					<PillButton onClick={stopCounter} disabled={!counterRunning && counter === 0} size='md'>
 						Reset
-					</button>
+					</PillButton>
 				</div>
 			</div>
 		</FloatingPanel>
