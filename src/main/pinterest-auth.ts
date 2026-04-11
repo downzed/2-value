@@ -86,7 +86,11 @@ function validateAndConsumeState(state: string): boolean {
 		pendingState = null;
 		return false;
 	}
-	const valid = crypto.timingSafeEqual(Buffer.from(state), Buffer.from(pendingState.value));
+	const providedState = Buffer.from(state);
+	const expectedState = Buffer.from(pendingState.value);
+	const valid =
+		providedState.length === expectedState.length &&
+		crypto.timingSafeEqual(providedState, expectedState);
 	pendingState = null;
 	return valid;
 }
