@@ -58,7 +58,8 @@ function loadPersistedToken(): PinterestTokenData | null {
 		tokenCache = JSON.parse(json) as PinterestTokenData;
 		return tokenCache;
 	} catch {
-		// Corrupted or unreadable — treat as unauthenticated
+		// Corrupted or unreadable — clear persisted state and treat as unauthenticated
+		clearPersistedToken();
 		return null;
 	}
 }
