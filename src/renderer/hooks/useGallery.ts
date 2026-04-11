@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import type { GalleryFolder, GalleryImage } from '../../shared/types';
+import type { GalleryFolder, GalleryImage, SourceSplashImage, SourceSplashSearchResult } from '../../shared/types';
 
 export type GalleryTab = 'folders' | 'explore';
 
@@ -11,6 +11,10 @@ interface GalleryState {
 	activeTab: GalleryTab;
 	loading: boolean;
 	error: string | null;
+	suggestions: SourceSplashImage[];
+	suggestionsLoading: boolean;
+	searchResults: SourceSplashSearchResult | null;
+	searchResultsLoading: boolean;
 }
 
 export const useGallery = () => {
@@ -22,6 +26,10 @@ export const useGallery = () => {
 		activeTab: 'folders',
 		loading: false,
 		error: null,
+		suggestions: [],
+		suggestionsLoading: false,
+		searchResults: null,
+		searchResultsLoading: false,
 	});
 
 	const { folders, images, selectedFolderId, gallerySearchQuery, activeTab, loading, error } = state;
@@ -125,6 +133,77 @@ export const useGallery = () => {
 		setState((prev) => ({ ...prev, error: null }));
 	}, []);
 
+	// --- Image operations ---
+
+	const importImage = useCallback(
+		async (sourcePath: string, folderId: string) => {
+			try {
+				setState((prev) => ({ ...prev, error: null }));
+				const img = await window.electronAPI.galleryImportImage(sourcePath, folderId);
+				await loadGallery();
+				return img;
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : 'Failed to import image.';
+				setState((prev) => ({ ...prev, error: msg }));
+				throw err;
+			}
+		},
+		[loadGallery],
+	);
+
+	const moveImage = useCallback(
+		async (imageId: string, targetFolderId: string) => {
+			try {
+				setState((prev) => ({ ...prev, error: null }));
+				await window.electronAPI.galleryMoveImage(imageId, targetFolderId);
+				await loadGallery();
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : 'Failed to move image.';
+				setState((prev) => ({ ...prev, error: msg }));
+				throw err;
+			}
+		},
+		[loadGallery],
+	);
+
+	const copyImage = useCallback(
+		async (imageId: string, targetFolderId: string) => {
+			try {
+				setState((prev) => ({ ...prev, error: null }));
+				await window.electronAPI.galleryCopyImage(imageId, targetFolderId);
+				await loadGallery();
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : 'Failed to copy image.';
+				setState((prev) => ({ ...prev, error: msg }));
+				throw err;
+			}
+		},
+		[loadGallery],
+	);
+
+	const deleteImage = useCallback(
+		async (imageId: string) => {
+			try {
+				setState((prev) => ({ ...prev, error: null }));
+				await window.electronAPI.galleryDeleteImage(imageId);
+				await loadGallery();
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : 'Failed to delete image.';
+				setState((prev) => ({ ...prev, error: msg }));
+				throw err;
+			}
+		},
+		[loadGallery],
+	);
+
+	const openGalleryImage = useCallback(
+		async (imageId: string): Promise<{ path: string; fileName: string; fileSize: number }> => {
+			setState((prev) => ({ ...prev, error: null }));
+			return window.electronAPI.galleryOpenImage(imageId);
+		},
+		[],
+	);
+
 	// Client-side filter: search images by fileName (case-insensitive substring).
 	// Memoised to avoid re-filtering on every render (e.g. when dialog state changes).
 	const filteredImages = useMemo(() => {
@@ -147,6 +226,11 @@ export const useGallery = () => {
 		renameFolder,
 		deleteFolder,
 		updateFolderTags,
+		importImage,
+		moveImage,
+		copyImage,
+		deleteImage,
+		openGalleryImage,
 		setSelectedFolder,
 		setGallerySearchQuery,
 		setActiveTab,
