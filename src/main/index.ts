@@ -1,11 +1,28 @@
 // Modules to control application life and create native browser window
 import electron from 'electron';
 
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } = electron;
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, protocol, net } = electron;
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { RecentEntry } from '../shared/types';
+import {
+	initGallery,
+	loadGallery,
+	getImagePath,
+	importImage,
+	moveImage,
+	copyImage,
+	deleteImage,
+	createFolder,
+	renameFolder,
+	deleteFolder,
+	updateFolderTags,
+	reorderFolders,
+	downloadExternalImage,
+	getThumbnailsDir,
+} from './gallery';
 
 // --- Recents storage ---
 
@@ -107,7 +124,21 @@ function createWindow() {
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
-app.whenReady().then(createWindow);
+app.whenReady().then(async () => {
+	// Register gallery thumbnail protocol before window creation
+	protocol.handle('gallery-thumb', (request) => {
+		const imageId = new URL(request.url).hostname;
+		// Validate that imageId is a UUID (no path separators or other components)
+		if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(imageId)) {
+			return new Response('Not Found', { status: 404 });
+		}
+		const thumbPath = path.join(getThumbnailsDir(), `${imageId}_thumb.png`);
+		return net.fetch(pathToFileURL(thumbPath).toString());
+	});
+
+	await initGallery();
+	createWindow();
+});
 
 // Quit when all windows are closed.
 app.on('window-all-closed', () => {
@@ -224,6 +255,91 @@ ipcMain.handle('open-image-from-path', async (_event, { path: filePath }) => {
 		fileSize: stat.size,
 	};
 });
+
+// --- Gallery IPC handlers ---
+
+ipcMain.handle('gallery:get-data', () => loadGallery());
+
+ipcMain.handle('gallery:create-folder', (_event, { name, tags }: { name: string; tags?: string[] }) =>
+	createFolder(name, tags),
+);
+
+ipcMain.handle('gallery:rename-folder', (_event, { folderId, newName }: { folderId: string; newName: string }) =>
+	renameFolder(folderId, newName),
+);
+
+ipcMain.handle(
+	'gallery:delete-folder',
+	(_event, { folderId, deleteImages }: { folderId: string; deleteImages: boolean }) =>
+		deleteFolder(folderId, deleteImages),
+);
+
+ipcMain.handle('gallery:update-folder-tags', (_event, { folderId, tags }: { folderId: string; tags: string[] }) =>
+	updateFolderTags(folderId, tags),
+);
+
+ipcMain.handle('gallery:reorder-folders', (_event, { orderedIds }: { orderedIds: string[] }) =>
+	reorderFolders(orderedIds),
+);
+
+ipcMain.handle(
+	'gallery:import-image',
+	(_event, { sourcePath, folderId }: { sourcePath: string; folderId: string }) => importImage(sourcePath, folderId),
+);
+
+ipcMain.handle('gallery:move-image', (_event, { imageId, targetFolderId }: { imageId: string; targetFolderId: string }) =>
+	moveImage(imageId, targetFolderId),
+);
+
+ipcMain.handle(
+	'gallery:copy-image',
+	(_event, { imageId, targetFolderId }: { imageId: string; targetFolderId: string }) =>
+		copyImage(imageId, targetFolderId),
+);
+
+ipcMain.handle('gallery:delete-image', (_event, { imageId }: { imageId: string }) => deleteImage(imageId));
+
+ipcMain.handle('gallery:open-image', async (_event, { imageId }: { imageId: string }) => {
+	const storedPath = getImagePath(imageId);
+	if (!fs.existsSync(storedPath)) throw new Error('Gallery image file not found');
+	const stat = await fs.promises.stat(storedPath);
+	allowedPaths.add(storedPath);
+	return {
+		path: storedPath,
+		fileName: path.basename(storedPath),
+		fileSize: stat.size,
+	};
+});
+
+ipcMain.handle(
+	'gallery:download-external',
+	(
+		_event,
+		{
+			url,
+			folderId,
+			metadata,
+		}: {
+			url: string;
+			folderId: string;
+			metadata: { sourceId: string; author: string; authorUrl: string; description: string };
+		},
+	) => downloadExternalImage(url, folderId, metadata),
+);
+
+ipcMain.handle(
+	'gallery:search-images',
+	(_event, _args: { query: string; page?: number }) => {
+		throw new Error('SourceSplash not configured');
+	},
+);
+
+ipcMain.handle(
+	'gallery:random-images',
+	(_event, _args: { query?: string; count?: number }) => {
+		throw new Error('SourceSplash not configured');
+	},
+);
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and require them here.
