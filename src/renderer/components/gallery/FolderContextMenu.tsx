@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { GalleryFolder } from '../../../shared/types';
+import { UNSORTED_FOLDER_NAME } from '../../../shared/types';
 
 interface FolderContextMenuProps {
 	folder: GalleryFolder;
@@ -40,7 +41,7 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
 		};
 	}, [onClose]);
 
-	const isUnsorted = folder.name === 'Unsorted';
+	const isUnsorted = folder.name === UNSORTED_FOLDER_NAME;
 
 	return (
 		<div

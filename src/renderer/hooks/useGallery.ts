@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { GalleryFolder, GalleryImage } from '../../shared/types';
 
 export type GalleryTab = 'folders' | 'explore';
@@ -26,12 +26,21 @@ export const useGallery = () => {
 
 	const { folders, images, selectedFolderId, gallerySearchQuery, activeTab, loading, error } = state;
 
+	// Monotonically-increasing generation counter; each load increments it and
+	// only applies results if the counter hasn't advanced since the call started.
+	const loadGenRef = useRef(0);
+
 	const loadGallery = useCallback(async () => {
+		loadGenRef.current += 1;
+		const gen = loadGenRef.current;
 		try {
 			setState((prev) => ({ ...prev, loading: true, error: null }));
 			const data = await window.electronAPI.galleryGetData();
+			// Discard stale responses from earlier concurrent calls
+			if (gen !== loadGenRef.current) return;
 			setState((prev) => ({ ...prev, folders: data.folders, images: data.images, loading: false }));
 		} catch {
+			if (gen !== loadGenRef.current) return;
 			setState((prev) => ({ ...prev, error: 'Failed to load gallery.', loading: false }));
 		}
 	}, []);
@@ -116,10 +125,13 @@ export const useGallery = () => {
 		setState((prev) => ({ ...prev, error: null }));
 	}, []);
 
-	// Client-side filter: search images by fileName (case-insensitive substring)
-	const filteredImages = gallerySearchQuery.trim()
-		? images.filter((img) => img.fileName.toLowerCase().includes(gallerySearchQuery.toLowerCase()))
-		: images;
+	// Client-side filter: search images by fileName (case-insensitive substring).
+	// Memoised to avoid re-filtering on every render (e.g. when dialog state changes).
+	const filteredImages = useMemo(() => {
+		const q = gallerySearchQuery.trim().toLowerCase();
+		if (!q) return images;
+		return images.filter((img) => img.fileName.toLowerCase().includes(q));
+	}, [images, gallerySearchQuery]);
 
 	return {
 		folders,

@@ -1,8 +1,10 @@
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useImageContext } from '../../hooks/ImageContext';
 import { useGalleryContext } from '../../hooks/GalleryContext';
 import type { GalleryFolder } from '../../../shared/types';
+import { UNSORTED_FOLDER_NAME } from '../../../shared/types';
+import { UI } from '../../constants/ui';
 import { Icon } from '../shared/Icon';
 import {
 	DeleteFolderDialog,
@@ -115,24 +117,35 @@ const GalleryPanel: React.FC = () => {
 		}
 	};
 
+	// Memoised derived structures to avoid O(n) work on every render.
+	// Must be called before any early return to satisfy the Rules of Hooks.
+	const sortedFolders = useMemo(() => [...folders].sort((a, b) => a.sortOrder - b.sortOrder), [folders]);
+	const folderNameMap = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
+	const folderImageCount = useMemo(
+		() =>
+			images.reduce<Map<string, number>>((acc, img) => {
+				acc.set(img.folderId, (acc.get(img.folderId) ?? 0) + 1);
+				return acc;
+			}, new Map()),
+		[images],
+	);
+
 	if (!panels.gallery) return null;
 
 	const isSearching = gallerySearchQuery.trim().length > 0;
-	const sortedFolders = [...folders].sort((a, b) => a.sortOrder - b.sortOrder);
-	const folderNameMap = new Map(folders.map((f) => [f.id, f.name]));
-	const folderImageCount = images.reduce<Map<string, number>>((acc, img) => {
-		acc.set(img.folderId, (acc.get(img.folderId) ?? 0) + 1);
-		return acc;
-	}, new Map());
 
 	return (
 		<>
-			<div className='fixed top-0 right-0 bottom-8 w-[380px] bg-white border-l border-slate-200 shadow-xl z-50 flex flex-col'>
+			<div
+				className='fixed top-0 right-0 bottom-8 bg-white border-l border-slate-200 shadow-xl z-50 flex flex-col'
+				style={{ width: UI.GALLERY.PANEL_WIDTH }}
+			>
 				{/* Header */}
 				<div className='flex items-center justify-between px-4 py-2.5 border-b border-slate-100'>
 					<span className='text-xs font-semibold text-slate-700'>Gallery</span>
 					<button
 						type='button'
+						aria-label='Close gallery'
 						onClick={() => setPanel('gallery', false)}
 						className='text-slate-400 hover:text-slate-600 transition-colors'
 					>
@@ -186,6 +199,7 @@ const GalleryPanel: React.FC = () => {
 								{isSearching && (
 									<button
 										type='button'
+										aria-label='Clear search'
 										onClick={() => setGallerySearchQuery('')}
 										className='absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600'
 									>
@@ -201,7 +215,10 @@ const GalleryPanel: React.FC = () => {
 										{filteredImages.length} result{filteredImages.length !== 1 ? 's' : ''}
 									</p>
 									{filteredImages.length > 0 ? (
-										<div className='grid grid-cols-3 gap-1.5'>
+										<div
+											className='grid gap-1.5'
+											style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
+										>
 											{filteredImages.map((img) => {
 												const folderName = folderNameMap.get(img.folderId) ?? '';
 												return (
@@ -245,9 +262,10 @@ const GalleryPanel: React.FC = () => {
 														<p className='text-[10px] text-slate-400 mt-0.5'>
 															{count} image{count !== 1 ? 's' : ''}
 														</p>
-														{folder.name !== 'Unsorted' && (
+														{folder.name !== UNSORTED_FOLDER_NAME && (
 															<button
 																type='button'
+																aria-label='Folder actions'
 																onClick={(e) => {
 																	e.stopPropagation();
 																	handleFolderContextMenu(e, folder);
