@@ -129,7 +129,7 @@ export const useImage = () => {
 			fileName,
 			filePath,
 			...createDefaultImageState(),
-			panels: { controls: true, original: true, timer: true, gallery: false, pinterest: false },
+			panels: { ...DEFAULT_PANELS },
 		});
 	}, []);
 
