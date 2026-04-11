@@ -57,20 +57,22 @@ const DEFAULT_PANELS: Record<PanelId, boolean> = {
 	gallery: false,
 };
 
-const DEFAULT_IMAGE_STATE = {
-	blur: 0,
-	threshold: 0,
-	values: 2 as const,
-	showOriginal: false,
-	zoom: 1,
-	fitMode: 'fit' as FitMode,
-	fitScale: 1,
-	counter: 0,
-	counterRunning: false,
-	counterDuration: null as number | null,
-	adjustmentHistory: [] as AdjustmentSnapshot[],
-	adjustmentFuture: [] as AdjustmentSnapshot[],
-};
+function createDefaultImageState() {
+	return {
+		blur: 0,
+		threshold: 0,
+		values: 2 as const,
+		showOriginal: false,
+		zoom: 1,
+		fitMode: 'fit' as FitMode,
+		fitScale: 1,
+		counter: 0,
+		counterRunning: false,
+		counterDuration: null as number | null,
+		adjustmentHistory: [] as AdjustmentSnapshot[],
+		adjustmentFuture: [] as AdjustmentSnapshot[],
+	};
+}
 
 function getSnapshot(state: ImageState): AdjustmentSnapshot {
 	return { blur: state.blur, threshold: state.threshold, values: state.values };
@@ -89,7 +91,7 @@ export const useImage = () => {
 		sourceImage: null,
 		fileName: '',
 		filePath: '',
-		...DEFAULT_IMAGE_STATE,
+		...createDefaultImageState(),
 		panels: { ...DEFAULT_PANELS },
 	});
 
@@ -125,7 +127,7 @@ export const useImage = () => {
 			sourceImage: image,
 			fileName,
 			filePath,
-			...DEFAULT_IMAGE_STATE,
+			...createDefaultImageState(),
 			panels: { controls: true, original: true, timer: true, gallery: false },
 		});
 	}, []);
@@ -140,7 +142,7 @@ export const useImage = () => {
 			sourceImage: null,
 			fileName: '',
 			filePath: '',
-			...DEFAULT_IMAGE_STATE,
+			...createDefaultImageState(),
 			panels: { ...DEFAULT_PANELS },
 		});
 	}, []);
