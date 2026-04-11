@@ -31,6 +31,27 @@ The `copilot/add-pinterest-integration-scaffolding` branch already has:
 
 ---
 
+## Bug Fix — Canvas.tsx "Maximum update depth exceeded" infinite loop ✓ DONE
+
+**File:** `src/renderer/components/Canvas.tsx`
+**Commit:** `99a6935`
+
+### Symptom
+
+Toggling "show original" caused a React "Maximum update depth exceeded" error (infinite re-render loop).
+
+### Root Cause
+
+The `showOriginal` effect (lines 93–101) called `setDisplayImageData(imageToImageData(currentImage))` every time it ran. `imageToImageData()` creates a **new `ImageData` object** on every call, so `setDisplayImageData` always received a fresh reference → state change → re-render → the effect fires again → infinite loop.
+
+### What Was Done
+
+1. Added `originalImageData` via `useMemo` keyed on `currentImage` — produces a stable `ImageData` reference instead of allocating a new one every render
+2. Updated the `showOriginal` effect to use `originalImageData` instead of calling `imageToImageData(currentImage)` directly
+3. Removed `settleFullRes` from the effect's dependency array (provably stable; only used for fire-and-forget `.cancel()`)
+
+---
+
 ## Phase 0 — Privacy Policy (GitHub Pages)
 
 **Files:** `docs/privacy.html` (new)

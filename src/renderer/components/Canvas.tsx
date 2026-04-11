@@ -21,6 +21,10 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 
 	const { process } = useImageProcessingWorker();
 
+	// Memoize the original (unprocessed) ImageData so toggling showOriginal
+	// doesn't create a new object every render and cause an infinite loop.
+	const originalImageData = useMemo(() => (currentImage ? imageToImageData(currentImage) : null), [currentImage]);
+
 	// Debounced full-resolution settle
 	const settleFullRes = useDebouncedCallback(
 		useCallback(
@@ -89,16 +93,24 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 		};
 	}, [currentImage, blur, threshold, values, showOriginal, process, settleFullRes]);
 
-	// When showOriginal toggles, render the source image directly
+	// When showOriginal toggles, render the source image directly.
+	// Uses memoized originalImageData to avoid creating a new ImageData each
+	// render, which previously caused an infinite re-render loop.
+	// settleFullRes.cancel is intentionally omitted from deps — it is
+	// referentially stable (useCallback with [] deps) and only used as a
+	// fire-and-forget side effect.
 	useEffect(() => {
 		if (!currentImage) return;
 		if (showOriginal) {
 			settleFullRes.cancel();
 			cancelProcessRef.current?.();
 			cancelProcessRef.current = null;
-			setDisplayImageData(imageToImageData(currentImage));
+			if (originalImageData) {
+				setDisplayImageData(originalImageData);
+			}
 		}
-	}, [currentImage, showOriginal, settleFullRes]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [currentImage, showOriginal, originalImageData]);
 
 	// When image changes: clear canvas backing store first (memory hygiene)
 	useEffect(() => {
