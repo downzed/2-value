@@ -609,37 +609,6 @@ yarn start                      # Uses electron-forge
 
 ## Future Optimization Opportunities
 
-### Short Term
-1. ~~Extract `useDraggablePanel()` hook~~ Done
-2. ~~Replace fs.writeFileSync() with async~~ Done
-3. ~~Extract magic numbers to constants~~ Done (`UI.FILTER.THREE_ZONE_BOUNDARY`)
-4. ~~Remove unused debounce utility~~ Done
-5. ~~Remove unused toast system~~ Done
-6. ~~Fix `resetControls` not clearing interval~~ Done
-7. ~~Add debounce to sliders (performance)~~ Done (`useDebouncedCallback`)
-8. ~~Add panel bounds checking~~ Done (`useDraggablePanel`)
-9. ~~Add keyboard shortcuts (Ctrl+O, Ctrl+S)~~ Done
-10. ~~Reusable FloatingPanel component~~ Done
-11. ~~Remove FABs, minimize to bottom bar~~ Done
-12. ~~Presets system (Sketch, High Contrast, 3-Tone)~~ Done
-13. ~~Undo/redo for adjustments~~ Done
-14. ~~Vim-style keybinds (h/j/k/l) + panel toggles (Alt+1/2/3)~~ Done
-15. ~~Shared UI primitives (Icon, PillButton, SectionHeader, SliderRow)~~ Done
-16. ~~OpenDialog with gallery/recents~~ Done
-17. ~~Multi-format save (JPEG/PNG)~~ Done
-18. ~~Shell directory restructure (App, BottomPanel → shell/)~~ Done
-19. ~~Recents cache with JSON persistence~~ Done
-20. ~~Code review cleanup (bugs, smells, security)~~ Done (counter off-by-one, save-image null guard, blank thumbnails guard, worker error transfer list, stale zoom display, unused constants/CSS, isInRecents guard, sandbox comment, `React.MouseEvent` explicit import)
-21. ~~Unify `RecentEntry` type into `src/shared/types.ts`~~ Done
-22. ~~Extract shared `imageToImageData` utility~~ Done (`src/renderer/utils/imageConversion.ts`)
-23. ~~Path validation on `read-image-buffer` IPC (allowedPaths set)~~ Done
-24. ~~Reduce `useKeyboardShortcuts` re-registrations (canUndo/canRedo refs)~~ Done
-
-### Medium Term (1 month)
-1. ~~Add component-level test coverage (Canvas, FloatingImage, FloatingCounter, BottomPanel)~~ Done
-2. Profile with large images
-3. Consider web worker for filters
-
 ### Long Term (1+ quarter)
 1. Implement incremental filter updates
 2. Optimize bundle size (tree-shake image-js)
