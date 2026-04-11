@@ -96,9 +96,6 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 	// When showOriginal toggles, render the source image directly.
 	// Uses memoized originalImageData to avoid creating a new ImageData each
 	// render, which previously caused an infinite re-render loop.
-	// settleFullRes.cancel is intentionally omitted from deps — it is
-	// referentially stable (useCallback with [] deps) and only used as a
-	// fire-and-forget side effect.
 	useEffect(() => {
 		if (!currentImage) return;
 		if (showOriginal) {
@@ -109,8 +106,7 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 				setDisplayImageData(originalImageData);
 			}
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [currentImage, showOriginal, originalImageData]);
+	}, [currentImage, showOriginal, originalImageData, settleFullRes]);
 
 	// When image changes: clear canvas backing store first (memory hygiene)
 	useEffect(() => {
