@@ -7,31 +7,36 @@
 │                    Electron Application                      │
 ├─────────────────────────────────────────────────────────────┤
 │                                                               │
-│  ┌────────────────┐  ┌────────────────┐  ┌──────────────┐   │
-│  │ Main Process   │  │  Preload Bridge│  │ Renderer     │   │
-│  │ (Node.js)      │  │ (Context IPC)  │  │ (React App)  │   │
-│  ├────────────────┤  ├────────────────┤  ├──────────────┤   │
-│  │ App Lifecycle  │  │ electronAPI    │  │ UI Components│   │
-│  │ IPC Handlers   │  │ ├─ openImage   │  │ ├─ Canvas    │   │
-│  │ ├─ open-image  │  │ └─ saveImage   │  │ ├─ Controls  │   │
-│  │ └─ save-image  │  │                │  │ └─ Floating  │   │
-│  │ File System    │  │ Security      │  │   Panels     │   │
-│  │ nativeImage    │  │ ├─ contextIsolation          │   │
-│  │ Conversion     │  │ ├─ sandboxed: false          │   │
-│  └────────────────┘  │ └─ nodeIntegration: false    │   │
-│         │             └────────────────┘  │
-│         │                    ▲            │
-│         └────────────────────┼────────────┘
-│                              │ IPC Bridge
-│  ┌──────────────────────────┴─────────────────────┐
-│  │         Native Electron APIs                   │
-│  ├────────────────────────────────────────────────┤
-│  │ • dialog.showOpenDialog()                      │
-│  │ • dialog.showSaveDialog()                      │
-│  │ • nativeImage                                  │
-│  │ • shell.openExternal()                         │
-│  │ • fs (Node.js filesystem)                      │
-│  └────────────────────────────────────────────────┘
+│  ┌────────────────┐  ┌─────────────────────┐  ┌──────────────┐  │
+│  │ Main Process   │  │  Preload Bridge     │  │ Renderer     │  │
+│  │ (Node.js)      │  │ (Context IPC)       │  │ (React App)  │  │
+│  ├────────────────┤  ├─────────────────────┤  ├──────────────┤  │
+│  │ App Lifecycle  │  │ electronAPI         │  │ shell/       │  │
+│  │ IPC Handlers   │  │ ├─ openImage        │  │ ├─ App       │  │
+│  │ ├─ open-image  │  │ ├─ saveImage        │  │ ├─ BottomPanel│ │
+│  │ ├─ save-image  │  │ ├─ getRecents       │  │ └─ OpenDialog│  │
+│  │ ├─ get-recents │  │ ├─ removeRecent     │  │ shared/      │  │
+│  │ ├─ remove-     │  │ └─ openImageFromPath│  │ ├─ Icon      │  │
+│  │ │   recent     │  │                     │  │ ├─ PillButton│  │
+│  │ └─ open-image- │  │ Security            │  │ ├─ Section   │  │
+│  │     from-path  │  │ ├─ contextIsolation │  │ │   Header   │  │
+│  │ Recents Cache  │  │ ├─ sandboxed: false │  │ └─ SliderRow │  │
+│  │ File System    │  │ └─ nodeIntegration: │  │ Components   │  │
+│  │ nativeImage    │  │     false           │  │ ├─ Canvas    │  │
+│  │ Conversion     │  │                     │  │ ├─ Controls  │  │
+│  └────────────────┘  └─────────────────────┘  │ └─ Floating  │  │
+│         │                    ▲                 │   Panels     │  │
+│         └────────────────────┼─────────────────┘              │  │
+│                              │ IPC Bridge                     │  │
+│  ┌──────────────────────────┴────────────────────────────┐   │
+│  │         Native Electron APIs                          │   │
+│  ├───────────────────────────────────────────────────────┤   │
+│  │ • dialog.showOpenDialog()                             │   │
+│  │ • dialog.showSaveDialog()                             │   │
+│  │ • nativeImage                                         │   │
+│  │ • app.getPath('userData') (recents.json persistence)  │   │
+│  │ • fs (Node.js filesystem)                             │   │
+│  └───────────────────────────────────────────────────────┘   │
 │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -43,30 +48,40 @@
 ### Image Loading Flow
 
 ```
-User clicks "Open"
+User clicks "Open" (or Ctrl+O)
     ↓
-BottomPanel.handleOpen()
+BottomPanel.handleOpen() → opens OpenDialog
     ↓
-window.electronAPI.openImage()
+OpenDialog renders:
+    ├─ Fetches recents via window.electronAPI.getRecents()
+    └─ Shows thumbnail grid + "Browse Files..." button
+    ↓
+User clicks recent thumbnail OR "Browse Files..."
+    ↓
+┌─ Recent: window.electronAPI.openImageFromPath(path)
+└─ Browse: window.electronAPI.openImage()
     ↓
 [IPC Boundary]
     ↓
-Main Process: ipcMain.handle("open-image")
-    ├─ dialog.showOpenDialog()
+Main Process: ipcMain.handle("open-image" / "open-image-from-path")
+    ├─ dialog.showOpenDialog() (browse only)
     ├─ nativeImage.createFromPath()
-    └─ image.toDataURL()
+    ├─ image.toDataURL()
+    └─ Updates recents cache (in-memory + recents.json)
     ↓
 [IPC Return]
     ↓
-BottomPanel receives result
+OpenDialog receives result
     ├─ Create window.Image from dataURL
     ├─ readImg() → image-js Image instance
-    └─ loadImage(imageInstance, fileName)
+    └─ loadImage(imageInstance, fileName, filePath)
     ↓
 useImage.ts: setImageState()
     ├─ currentImage = image.clone()
     ├─ originalImage = image.clone()
     └─ reset blur/threshold/values/showOriginal/counter/panels/history
+    ↓
+OpenDialog calls onImageLoaded() → closes dialog
     ↓
 ImageContext updates
     ↓
@@ -117,20 +132,21 @@ Canvas re-renders
 ### File Save Flow
 
 ```
-User clicks "Save"
+User clicks "Save" (or Ctrl+S)
     ↓
 BottomPanel.handleSave()
     ├─ Get canvas from previewCanvasRef
     └─ toDataURL("image/png")
     ↓
-window.electronAPI.saveImage(dataUrl)
+window.electronAPI.saveImage(dataUrl, filePath)
     ↓
 [IPC Boundary]
     ↓
 Main Process: ipcMain.handle("save-image")
-    ├─ dialog.showSaveDialog() [UI blocks here]
+    ├─ dialog.showSaveDialog() [filters: PNG, JPEG]
+    ├─ Determine format from chosen extension
     ├─ nativeImage.createFromDataURL(dataUrl)
-    ├─ image.toPNG()
+    ├─ .toPNG() or .toJPEG(90)
     └─ fs.promises.writeFile() [async, non-blocking]
     ↓
 [IPC Return: filePath]
@@ -158,6 +174,7 @@ ImageState = {
   currentImage: Image | null,      // After filters
   originalImage: Image | null,     // Unmodified
   fileName: string,
+  filePath: string,                // Full path for save dialog default
 
   // Filter values
   blur: number,                    // 0-10
@@ -182,15 +199,19 @@ ImageState = {
 ### State Flow
 
 ```
-App.tsx
+shell/App.tsx
 └── ImageProvider (Context)
     └── AppContent
         ├── useKeyboardShortcuts() — global keybinds (h/j/k/l, Ctrl+Z/Shift+Z, Alt+1/2/3)
         └── useImage hook
             └── [ImageState] ← Central state
                 ├─ Canvas (reads: currentImage, blur, threshold, values, showOriginal)
-                ├─ BottomPanel (reads: fileName, hasImage, panels, counter, counterRunning, counterDuration)
-                │   └─ Renders minimized panel icons when !panels[id]
+                ├─ shell/BottomPanel (reads: fileName, filePath, hasImage, panels, counter, counterRunning, counterDuration)
+                │   ├─ Renders minimized panel icons when !panels[id]
+                │   └─ shell/OpenDialog (reads: loadImage via context)
+                │       ├─ Fetches recents via electronAPI.getRecents()
+                │       ├─ Opens files via electronAPI.openImage() / openImageFromPath()
+                │       └─ Loads image via readImg() + loadImage()
                 ├─ FloatingControls → FloatingPanel
                 │   (reads: all adjustments, canUndo, canRedo, panels.controls)
                 │   (writes: setBlur, setThreshold, setValues, resetControls, applyPreset, undo, redo)
@@ -206,7 +227,7 @@ App.tsx
                     ├─ setValues        (+ history push)
                     ├─ applyPreset      (+ history push, single entry)
                     ├─ toggleShowOriginal
-                    ├─ loadImage        (clears history)
+                    ├─ loadImage(image, fileName, filePath) (clears history)
                     ├─ resetImage       (clears history)
                     ├─ resetControls    (clears history)
                     ├─ undo / redo
@@ -219,10 +240,11 @@ App.tsx
 
 ## Component Responsibilities
 
-### App.tsx (Root)
+### App.tsx (`shell/App.tsx`, Root)
 - **Provider:** Wraps with `ImageProvider`
 - **AppContent pattern:** Inner component calls `useKeyboardShortcuts()` inside the provider context
 - **Composition:** Assembles all components (Canvas, FloatingImage, FloatingControls, FloatingCounter, BottomPanel)
+- **Entry point:** `src/renderer/index.tsx` imports from `components/shell/App`
 
 ### Canvas.tsx (Main Preview)
 - **Input:** currentImage, blur, threshold, values, showOriginal from context
@@ -231,46 +253,58 @@ App.tsx
 - **Performance:** Full reprocessing on every change
 - **2-value mode:** grey → blur → threshold (binary)
 - **3-value mode:** grey (always) → blur → threeZones (black/gray/white, boundaries from `UI.FILTER.THREE_ZONE_BOUNDARY`)
+- **Empty state:** Shows placeholder icon (`<Icon name='image' size='lg' />`) and "No image loaded" text
 
 ### FloatingPanel.tsx (Reusable Panel Shell)
 - **Props:** `title`, `storageKey`, `defaultPosition`, `isOpen`, `onClose`, `titleBarActions?`, `panelStyle?`, `zClass?`, `children`
-- **Title bar:** Drag handle (`⋮⋮`), title text, optional action buttons, close button
+- **Title bar:** Drag handle (`⋮⋮`), title text, optional action buttons, close button (`<Icon name='close' />`)
 - **Drag:** Uses `useDraggablePanel` internally — consumers don't set up refs or drag handling
 - **Closed state:** Returns `null` (minimized icon rendered by BottomPanel, not by this component)
 - **No default padding:** Consumers control their own padding via children
 
 ### FloatingControls.tsx (Adjustment Panel)
-- **Uses:** FloatingPanel wrapper
-- **Sections:** Presets, Adjustments, History (visually separated with dividers and section headers)
-- **Presets:** 3 presets from `UI.PRESETS` (Sketch, High Contrast, 3-Tone) — active preset highlighted
-- **Adjustments:** Blur slider (0-10, step 0.5), Threshold slider (0-255), 2/3 value toggle, Reset button
-- **History:** Undo/Redo buttons with `Ctrl+Z`/`Ctrl+Shift+Z` tooltips
+- **Uses:** FloatingPanel wrapper, shared primitives (Icon, PillButton, SectionHeader, SliderRow)
+- **Sections:** Presets, Adjustments, History (visually separated with dividers and `<SectionHeader>`)
+- **Presets:** 3 presets from `UI.PRESETS` (Sketch, High Contrast, 3-Tone) — active preset highlighted via `<PillButton active>`
+- **Adjustments:** Blur `<SliderRow>` (0-10, step 0.5), Threshold `<SliderRow>` (0-255), 2/3 value toggle, Reset button
+- **History:** Undo/Redo `<PillButton>` with `<Icon name='undo'/>` / `<Icon name='redo'/>` icons
 - **Debounced sliders:** Local state + `useDebouncedCallback` (150ms) for blur/threshold
 - **Constants:** Uses `UI.FILTER.*` and `UI.PRESETS` from `constants/ui.ts`
 - **Auto-open:** Opens panel when `hasImage` becomes true
 
 ### FloatingImage.tsx (Original Preview)
-- **Uses:** FloatingPanel wrapper
+- **Uses:** FloatingPanel wrapper, `<Icon name='eye-open' />` / `<Icon name='eye-closed' />`
 - **Display:** Unfiltered image thumbnail via canvas
 - **Toggle:** Show original/processed eye button as `titleBarActions`
 - **Auto-open:** Opens panel when `originalImage` changes
 - **Re-render:** Re-renders canvas when panel reopens (unmounted while closed)
 
 ### FloatingCounter.tsx (Countdown Timer)
-- **Uses:** FloatingPanel wrapper
-- **Presets:** 1m, 5m, 10m, 15m buttons (local `PRESETS` constant, not `UI.PRESETS`)
+- **Uses:** FloatingPanel wrapper, `<PillButton>` for presets and Reset
+- **Presets:** 1m, 5m, 10m, 15m `<PillButton>` buttons (local `PRESETS` constant, not `UI.PRESETS`)
 - **Display:** Countdown timer (MM:SS or SS format)
-- **Controls:** Start/Stop toggle, Reset button
+- **Controls:** Start/Stop toggle (custom styled, not PillButton), Reset `<PillButton>`
 - **Behavior:** Auto-stops when counter reaches 0
 
-### BottomPanel.tsx (Status Bar + File Operations)
-- **Open:** File dialog → image loading (Ctrl+O)
-- **Save:** Canvas → file system, async write (Ctrl+S)
+### BottomPanel.tsx (`shell/BottomPanel.tsx`, Status Bar + File Operations)
+- **Open:** Opens OpenDialog modal (Ctrl+O)
+- **Save:** Canvas → file system, async write with JPEG/PNG format detection (Ctrl+S)
 - **Display:** File info (name, dimensions), status (ready/loading/loaded/saving/saved/error)
 - **Minimized panel icons:** Right side, left of status indicator. Only shown when a panel is closed. Clicking reopens the panel.
-  - Controls icon: sliders SVG
-  - Original icon: image/photo SVG
-  - Timer icon: clock SVG + badge showing remaining time when timer is running
+  - Controls icon: `<Icon name='sliders' />`
+  - Original icon: `<Icon name='image' />`
+  - Timer icon: `<Icon name='clock' />` + badge showing remaining time when timer is running
+- **OpenDialog wiring:** Controls `openDialogVisible` state, passes `onImageLoaded` callback
+
+### OpenDialog.tsx (`shell/OpenDialog.tsx`, Gallery/Recents Modal)
+- **Purpose:** Modal dialog for opening images from recents or filesystem browse
+- **Recents grid:** 4-column thumbnail grid fetched via `electronAPI.getRecents()`
+- **Browse:** "Browse Files..." button triggers `electronAPI.openImage()`
+- **Image loading:** Uses `readImg()` from `image-js` to convert dataURL → Image instance
+- **Error handling:** Missing files auto-removed from recents with user-facing error message
+- **Remove recent:** X button on thumbnail hover, calls `electronAPI.removeRecent()`
+- **Keyboard:** Escape closes the dialog
+- **Accessibility:** `role='dialog'` on backdrop
 
 ---
 
@@ -285,7 +319,7 @@ Registered once in `AppContent` (inside `ImageProvider`). Handles:
 
 ### BottomPanel inline shortcuts
 
-`Ctrl+O` (open) and `Ctrl+S` (save) remain in BottomPanel's own `useEffect` because they depend on local state (`status`, `previewCanvasRef`).
+`Ctrl+O` (open → shows OpenDialog) and `Ctrl+S` (save) remain in BottomPanel's own `useEffect` because they depend on local state (`status`, `previewCanvasRef`, `openDialogVisible`).
 
 ---
 
@@ -358,7 +392,7 @@ Bundle Composition:
 ## Dependency Graph
 
 ```
-App.tsx
+shell/App.tsx
 ├── ImageContext.tsx
 │   └── useImage.ts
 │       └── constants/ui.ts (UI.FILTER.*, UI.PRESETS, UI.HISTORY.*)
@@ -368,28 +402,44 @@ App.tsx
 ├── Canvas.tsx
 │   ├── useImageContext
 │   ├── writeCanvas (from image-js)
+│   ├── shared/Icon
 │   └── useMemo
 ├── FloatingControls.tsx
 │   ├── useImageContext
 │   ├── FloatingPanel.tsx
-│   │   └── useDraggablePanel.ts
+│   │   ├── useDraggablePanel.ts
+│   │   └── shared/Icon (close button)
+│   ├── shared/Icon, shared/PillButton, shared/SectionHeader, shared/SliderRow
 │   ├── useDebouncedCallback.ts
 │   └── constants/ui.ts (UI.FILTER.*, UI.PRESETS)
 ├── FloatingImage.tsx
 │   ├── useImageContext
 │   ├── FloatingPanel.tsx
 │   │   └── useDraggablePanel.ts
+│   ├── shared/Icon (eye-open, eye-closed)
 │   └── writeCanvas (from image-js)
 ├── FloatingCounter.tsx
 │   ├── useImageContext
-│   └── FloatingPanel.tsx
-│       └── useDraggablePanel.ts
-└── BottomPanel.tsx
-    ├── useImageContext (panels, setPanel, counter, counterRunning, counterDuration)
-    ├── readImg (from image-js)
+│   ├── FloatingPanel.tsx
+│   │   └── useDraggablePanel.ts
+│   └── shared/PillButton
+└── shell/BottomPanel.tsx
+    ├── useImageContext (panels, setPanel, counter, counterRunning, counterDuration, filePath)
+    ├── shared/Icon (sliders, image, clock)
+    ├── shell/OpenDialog.tsx
+    │   ├── useImageContext (loadImage)
+    │   ├── shared/Icon (close)
+    │   ├── shared/SectionHeader
+    │   ├── readImg (from image-js)
+    │   └── window.electronAPI (openImage, openImageFromPath, getRecents, removeRecent)
     └── window.electronAPI
-        ├── openImage (IPC)
         └── saveImage (IPC)
+
+Shared UI Primitives (components/shared/):
+├── Icon.tsx — SVG icon wrapper, 8-icon registry (close, sliders, image, clock, eye-open, eye-closed, undo, redo)
+├── PillButton.tsx — Rounded button with active/inactive/disabled states
+├── SectionHeader.tsx — Uppercase section label
+└── SliderRow.tsx — Label + range input + value display row
 
 Shared Hooks:
 ├── useDraggablePanel.ts (used internally by FloatingPanel)
@@ -418,8 +468,8 @@ Dev Dependencies:
 
 ### Path 1: Image Loading (User Perspective)
 ```
-Click Open → Dialog (user interaction) → IPC → File read →
-window.Image creation → readImg() → Canvas redraw
+Click Open → OpenDialog renders → Browse or click recent →
+IPC → File read → window.Image creation → readImg() → Canvas redraw
 Total Time: ~500-1000ms (mostly user interaction + file I/O)
 Bottleneck: File I/O and image decoding
 ```
@@ -435,7 +485,7 @@ Bottleneck: gaussianBlur() calculation (most expensive filter)
 ### Path 3: File Save (User Perspective)
 ```
 Click Save → Dialog (user interaction) → canvas.toDataURL() →
-IPC → nativeImage creation → PNG encoding →
+IPC → nativeImage creation → PNG/JPEG encoding (based on extension) →
 fs.promises.writeFile() [async] → Return
 Total Time: ~1-5s (depends on image size and disk)
 ```
@@ -489,10 +539,11 @@ defineConfig({
 ### Process Isolation
 ```
 ┌─ Main Process (Full Node.js Access)
-│  └─ Can access filesystem, system APIs
+│  ├─ Can access filesystem, system APIs
+│  └─ Recents cache (in-memory + recents.json at userData)
 │
 ├─ Preload Script (Limited Bridge)
-│  └─ Exposes only: openImage, saveImage
+│  └─ Exposes: openImage, saveImage, getRecents, removeRecent, openImageFromPath
 │
 └─ Renderer Process (Sandboxed - conceptually)
    ├─ No direct filesystem access
@@ -503,8 +554,11 @@ defineConfig({
 ### IPC Interface
 ```typescript
 window.electronAPI = {
-  openImage: () → Promise<{dataUrl, path}>,
-  saveImage: (dataUrl) → Promise<filePath>
+  openImage: () → Promise<{dataUrl, path} | null>,
+  saveImage: (dataUrl, filePath?) → Promise<filePath | null>,
+  getRecents: () → Promise<RecentEntry[]>,
+  removeRecent: (path) → Promise<void>,
+  openImageFromPath: (path) → Promise<{dataUrl, path} | null>,
 }
 ```
 
@@ -570,6 +624,11 @@ yarn start                      # Uses electron-forge
 12. ~~Presets system (Sketch, High Contrast, 3-Tone)~~ Done
 13. ~~Undo/redo for adjustments~~ Done
 14. ~~Vim-style keybinds (h/j/k/l) + panel toggles (Alt+1/2/3)~~ Done
+15. ~~Shared UI primitives (Icon, PillButton, SectionHeader, SliderRow)~~ Done
+16. ~~OpenDialog with gallery/recents~~ Done
+17. ~~Multi-format save (JPEG/PNG)~~ Done
+18. ~~Shell directory restructure (App, BottomPanel → shell/)~~ Done
+19. ~~Recents cache with JSON persistence~~ Done
 
 ### Medium Term (1 month)
 1. Add component-level test coverage (Canvas, FloatingImage, FloatingCounter, BottomPanel)
@@ -584,4 +643,4 @@ yarn start                      # Uses electron-forge
 
 ---
 
-**Last Updated:** April 10, 2026
+**Last Updated:** April 11, 2026

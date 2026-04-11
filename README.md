@@ -16,8 +16,9 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone or 3-ton
 
 ## Features
 
+- **Gallery/Recents**: Open images from a recent files grid or browse the filesystem
 - Open images (PNG, JPG, JPEG, BMP)
-- Save images as PNG
+- Save images as PNG or JPEG (format auto-detected from extension)
 - Adjustable blur (0-10) and threshold (0-255)
 - 2-value / 3-value mode toggle (binary or three-zone threshold)
 - 3 adjustment presets: Sketch, High Contrast, 3-Tone
@@ -46,10 +47,12 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone or 3-ton
 
 ## Architecture
 
-- `src/main/` - Electron main process (Node.js)
-- `src/preload/` - IPC bridge (exposes `electronAPI.openImage`, `electronAPI.saveImage`)
+- `src/main/` - Electron main process (Node.js) — file dialogs, IPC handlers, recents cache
+- `src/preload/` - IPC bridge (exposes `electronAPI`: openImage, saveImage, getRecents, removeRecent, openImageFromPath)
 - `src/renderer/` - React frontend
-  - `components/` - App (AppContent pattern), Canvas, BottomPanel, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
+  - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), OpenDialog (gallery/recents modal)
+  - `components/shared/` - Icon, PillButton, SectionHeader, SliderRow (reusable UI primitives)
+  - `components/` - Canvas, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
   - `hooks/` - useImage, ImageContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
   - `constants/` - UI constants (filter ranges, presets, history config)
 

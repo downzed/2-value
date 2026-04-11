@@ -14,12 +14,14 @@
 
 ## Architecture
 
-- `src/main/` - Electron main process (Node.js)
-- `src/preload/` - IPC bridge (exposes `electronAPI.openImage`, `electronAPI.saveImage`)
+- `src/main/` - Electron main process (Node.js) — file dialogs, IPC handlers, recents cache
+- `src/preload/` - IPC bridge (exposes `electronAPI`: openImage, saveImage, getRecents, removeRecent, openImageFromPath)
 - `src/renderer/` - React frontend
-  - `components/` - Canvas, BottomPanel, FloatingControls, FloatingImage, FloatingCounter
-  - `hooks/` - useImage, ImageContext, useDraggablePanel
-  - `constants/` - UI constants (filter ranges)
+  - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), OpenDialog (gallery/recents modal)
+  - `components/shared/` - Icon, PillButton, SectionHeader, SliderRow (reusable UI primitives)
+  - `components/` - Canvas, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
+  - `hooks/` - useImage, ImageContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
+  - `constants/` - UI constants (filter ranges, presets, history config)
 
 ## Key Implementation Details
 
@@ -29,7 +31,10 @@
 - State management via React Context + custom hook (`useImage`)
 - Panel drag logic extracted into `useDraggablePanel` hook
 - Panel positions persisted to localStorage (separate key per panel)
-- File save uses async `fs.promises.writeFile` (non-blocking)
+- File save supports JPEG/PNG based on chosen extension (async `fs.promises.writeFile`)
+- OpenDialog modal for gallery/recents with thumbnail grid, browse button, error handling
+- Recents cache: in-memory + JSON persistence at `app.getPath('userData')/recents.json`
+- Shared UI primitives (Icon, PillButton, SectionHeader, SliderRow) used across all panels
 
 ## Image Processing Pipeline
 
