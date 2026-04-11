@@ -234,14 +234,19 @@ ipcMain.handle('open-image-from-path', async (_event, { path: filePath }) => {
 // ─── Pinterest IPC handlers ───────────────────────────────────────────────────
 
 /**
- * Redirect URI used for the OAuth callback.
- * Uses the custom app protocol registered at app startup.
+ * Redirect URI reserved for the OAuth callback.
+ * Phase 2 placeholder: the custom `imageapp://` protocol callback path is not
+ * registered/handled in this file yet, so the OAuth browser flow must not be
+ * started until deep-link support is implemented.
  */
 const PINTEREST_REDIRECT_URI = 'imageapp://pinterest/callback';
 
-/** Open Pinterest OAuth login in the system browser */
+/** Pinterest OAuth login is disabled until the custom protocol callback path is implemented */
 ipcMain.handle('pinterest:auth', async () => {
-	return initiateOAuthFlow(PINTEREST_REDIRECT_URI);
+	return {
+		ok: false,
+		error: 'Pinterest OAuth is not available yet: the imageapp:// callback handler has not been implemented.',
+	};
 });
 
 /** Handle OAuth callback code + state (called by protocol handler or deep link) */
