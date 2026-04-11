@@ -64,7 +64,7 @@ let mainWindow: electron.BrowserWindow | null = null;
 
 /**
  * Tracks paths the user has explicitly opened (via dialog or recents).
- * Used to validate read-image-buffer / get-image-info requests.
+ * Currently used to validate read-image-buffer requests.
  */
 const allowedPaths = new Set<string>();
 

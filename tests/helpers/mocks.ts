@@ -31,6 +31,7 @@ export function setupElectronAPIMock() {
 // ---------------------------------------------------------------------------
 
 export function setupResizeObserverMock() {
+	const original = globalThis.ResizeObserver;
 	const observe = vi.fn();
 	const disconnect = vi.fn();
 	const unobserve = vi.fn();
@@ -41,7 +42,10 @@ export function setupResizeObserverMock() {
 		this.unobserve = unobserve;
 	});
 	globalThis.ResizeObserver = mock as unknown as typeof ResizeObserver;
-	return { mock, observe, disconnect };
+	const restore = () => {
+		globalThis.ResizeObserver = original;
+	};
+	return { mock, observe, disconnect, restore };
 }
 
 // ---------------------------------------------------------------------------
@@ -49,6 +53,8 @@ export function setupResizeObserverMock() {
 // ---------------------------------------------------------------------------
 
 export function setupCanvasMock() {
+	const originalGetContext = HTMLCanvasElement.prototype.getContext;
+	const originalToBlob = HTMLCanvasElement.prototype.toBlob;
 	const putImageData = vi.fn();
 	const toBlob = vi.fn();
 	const ctx = {
@@ -58,7 +64,11 @@ export function setupCanvasMock() {
 	};
 	HTMLCanvasElement.prototype.getContext = vi.fn(() => ctx) as never;
 	HTMLCanvasElement.prototype.toBlob = toBlob;
-	return { ctx, toBlob };
+	const restore = () => {
+		HTMLCanvasElement.prototype.getContext = originalGetContext;
+		HTMLCanvasElement.prototype.toBlob = originalToBlob;
+	};
+	return { ctx, toBlob, restore };
 }
 
 // ---------------------------------------------------------------------------

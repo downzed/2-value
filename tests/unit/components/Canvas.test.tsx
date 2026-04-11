@@ -1,5 +1,5 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import Canvas from '../../../src/renderer/components/Canvas';
 import { createMockContextValue, createMockImage, setupCanvasMock, setupResizeObserverMock } from '../../helpers/mocks';
 import { useRef } from 'react';
@@ -31,10 +31,18 @@ function CanvasWrapper() {
 }
 
 describe('Canvas', () => {
+	let restoreResizeObserver: () => void;
+	let restoreCanvas: () => void;
+
 	beforeEach(() => {
-		setupResizeObserverMock();
-		setupCanvasMock();
+		restoreResizeObserver = setupResizeObserverMock().restore;
+		restoreCanvas = setupCanvasMock().restore;
 		vi.mocked(useImageContext).mockReturnValue(createMockContextValue() as ReturnType<typeof useImageContext>);
+	});
+
+	afterEach(() => {
+		restoreResizeObserver();
+		restoreCanvas();
 	});
 
 	it('renders empty state with placeholder when no image is loaded', () => {

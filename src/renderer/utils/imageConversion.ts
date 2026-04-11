@@ -6,8 +6,8 @@ import type { Image } from 'image-js';
  */
 export function imageToImageData(source: Image): ImageData {
 	const raw = source.getRawImage();
-	const clamped = new Uint8ClampedArray(raw.data.byteLength) as Uint8ClampedArray<ArrayBuffer>;
-	for (let i = 0; i < raw.data.length; i++) clamped[i] = raw.data[i];
+	const clamped = new Uint8ClampedArray(raw.data.length) as Uint8ClampedArray<ArrayBuffer>;
+	clamped.set(raw.data);
 	return new ImageData(clamped, raw.width, raw.height);
 }
 
@@ -21,7 +21,7 @@ export function imageToUint8Clamped(source: Image): {
 	height: number;
 } {
 	const raw = source.getRawImage();
-	const clamped = new Uint8ClampedArray(raw.data.byteLength) as Uint8ClampedArray<ArrayBuffer>;
-	for (let i = 0; i < raw.data.length; i++) clamped[i] = raw.data[i];
+	const clamped = new Uint8ClampedArray(raw.data.length) as Uint8ClampedArray<ArrayBuffer>;
+	clamped.set(raw.data);
 	return { data: clamped, width: raw.width, height: raw.height };
 }

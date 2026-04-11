@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import FloatingImage from '../../../src/renderer/components/FloatingImage';
 import { createMockContextValue, createMockImage, setupCanvasMock } from '../../helpers/mocks';
 
@@ -14,9 +14,15 @@ vi.mock('../../../src/renderer/utils/imageConversion', () => ({
 import { useImageContext } from '../../../src/renderer/hooks/ImageContext';
 
 describe('FloatingImage', () => {
+	let restoreCanvas: () => void;
+
 	beforeEach(() => {
-		setupCanvasMock();
+		restoreCanvas = setupCanvasMock().restore;
 		vi.mocked(useImageContext).mockReturnValue(createMockContextValue() as ReturnType<typeof useImageContext>);
+	});
+
+	afterEach(() => {
+		restoreCanvas();
 	});
 
 	it('renders nothing when originalImage is null', () => {
