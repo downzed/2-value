@@ -1,11 +1,10 @@
 // Modules to control application life and create native browser window
 import electron from 'electron';
 
-const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, protocol, net } = electron;
+const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage, protocol } = electron;
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import type { RecentEntry } from '../shared/types';
 import {
 	initGallery,
@@ -126,14 +125,19 @@ function createWindow() {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(async () => {
 	// Register gallery thumbnail protocol before window creation
-	protocol.handle('gallery-thumb', (request) => {
+	protocol.handle('gallery-thumb', async (request) => {
 		const imageId = new URL(request.url).hostname;
 		// Validate that imageId is a UUID (no path separators or other components)
 		if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(imageId)) {
 			return new Response('Not Found', { status: 404 });
 		}
 		const thumbPath = path.join(getThumbnailsDir(), `${imageId}_thumb.png`);
-		return net.fetch(pathToFileURL(thumbPath).toString());
+		try {
+			const data = await fs.promises.readFile(thumbPath);
+			return new Response(data, { headers: { 'Content-Type': 'image/png' } });
+		} catch {
+			return new Response('Not Found', { status: 404 });
+		}
 	});
 
 	await initGallery();
@@ -284,7 +288,12 @@ ipcMain.handle('gallery:reorder-folders', (_event, { orderedIds }: { orderedIds:
 
 ipcMain.handle(
 	'gallery:import-image',
-	(_event, { sourcePath, folderId }: { sourcePath: string; folderId: string }) => importImage(sourcePath, folderId),
+	(_event, { sourcePath, folderId }: { sourcePath: string; folderId: string }) => {
+		if (!allowedPaths.has(sourcePath)) {
+			throw new Error('Import path not authorized');
+		}
+		return importImage(sourcePath, folderId);
+	},
 );
 
 ipcMain.handle('gallery:move-image', (_event, { imageId, targetFolderId }: { imageId: string; targetFolderId: string }) =>

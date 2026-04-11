@@ -8,9 +8,23 @@ const { app, nativeImage, net } = electron;
 
 const UNSORTED_FOLDER_NAME = 'Unsorted';
 const THUMBNAIL_WIDTH = 200;
+const MAX_DOWNLOAD_BYTES = 50 * 1024 * 1024; // 50 MB
 
 let galleryCache: GalleryData | null = null;
 let galleryRootDir: string | null = null;
+
+// Serialise all gallery mutations to prevent lost-update races (read-modify-write)
+let mutationQueue: Promise<void> = Promise.resolve();
+
+function withMutationLock<T>(fn: () => Promise<T>): Promise<T> {
+	const result = mutationQueue.then(fn);
+	// Advance the queue regardless of whether this mutation succeeds or fails
+	mutationQueue = result.then(
+		() => {},
+		() => {},
+	);
+	return result;
+}
 
 function galleryDir(): string {
 	if (!galleryRootDir) galleryRootDir = path.join(app.getPath('userData'), 'gallery');
@@ -34,6 +48,10 @@ function sanitizeFolderName(name: string): string {
 		.replace(/[/\\:*?"<>|]/g, '')
 		.trim()
 		.slice(0, 100);
+}
+
+function isReservedFolderName(name: string): boolean {
+	return name.toLowerCase() === UNSORTED_FOLDER_NAME.toLowerCase();
 }
 
 export async function loadGallery(): Promise<GalleryData> {
@@ -132,263 +150,326 @@ export function getImagePath(imageId: string): string {
 	return path.join(imagesDir(), image.storedFileName);
 }
 
-export async function importImage(sourcePath: string, folderId: string): Promise<GalleryImage> {
-	const data = await loadGallery();
+export function importImage(sourcePath: string, folderId: string): Promise<GalleryImage> {
+	return withMutationLock(async () => {
+		const data = await loadGallery();
 
-	// Duplicate check by originalPath
-	const existing = data.images.find((i) => i.originalPath === sourcePath);
-	if (existing) {
-		const folder = data.folders.find((f) => f.id === existing.folderId);
-		throw new Error(`Image already in folder: ${folder?.name ?? 'Unknown'}`);
-	}
-
-	const id = randomUUID();
-	const ext = path.extname(sourcePath).toLowerCase() || '.png';
-	const storedFileName = `${id}${ext}`;
-	const thumbnailFileName = `${id}_thumb.png`;
-	const storedPath = path.join(imagesDir(), storedFileName);
-	const thumbnailPath = path.join(thumbnailsDir(), thumbnailFileName);
-
-	await fs.promises.copyFile(sourcePath, storedPath);
-	await generateThumbnail(storedPath, thumbnailPath);
-
-	const { width, height } = getImageDimensions(storedPath);
-	const stat = await fs.promises.stat(storedPath);
-
-	const image: GalleryImage = {
-		id,
-		folderId,
-		fileName: path.basename(sourcePath),
-		originalPath: sourcePath,
-		storedFileName,
-		thumbnailFileName,
-		width,
-		height,
-		fileSize: stat.size,
-		addedAt: Date.now(),
-		source: 'local',
-	};
-
-	const updated: GalleryData = { ...data, images: [...data.images, image] };
-	await saveGallery(updated);
-	return image;
-}
-
-export async function moveImage(imageId: string, targetFolderId: string): Promise<void> {
-	const data = await loadGallery();
-	const updated: GalleryData = {
-		...data,
-		images: data.images.map((i) => (i.id === imageId ? { ...i, folderId: targetFolderId } : i)),
-	};
-	await saveGallery(updated);
-}
-
-export async function copyImage(imageId: string, targetFolderId: string): Promise<GalleryImage> {
-	const data = await loadGallery();
-	const source = data.images.find((i) => i.id === imageId);
-	if (!source) throw new Error(`Image ${imageId} not found`);
-
-	const newId = randomUUID();
-	const ext = path.extname(source.storedFileName);
-	const newStoredFileName = `${newId}${ext}`;
-	const newThumbnailFileName = `${newId}_thumb.png`;
-
-	await fs.promises.copyFile(path.join(imagesDir(), source.storedFileName), path.join(imagesDir(), newStoredFileName));
-	await fs.promises.copyFile(
-		path.join(thumbnailsDir(), source.thumbnailFileName),
-		path.join(thumbnailsDir(), newThumbnailFileName),
-	);
-
-	const newImage: GalleryImage = {
-		...source,
-		id: newId,
-		folderId: targetFolderId,
-		storedFileName: newStoredFileName,
-		thumbnailFileName: newThumbnailFileName,
-		addedAt: Date.now(),
-	};
-
-	const updated: GalleryData = { ...data, images: [...data.images, newImage] };
-	await saveGallery(updated);
-	return newImage;
-}
-
-export async function deleteImage(imageId: string): Promise<void> {
-	const data = await loadGallery();
-	const image = data.images.find((i) => i.id === imageId);
-	if (!image) return;
-
-	try {
-		await fs.promises.unlink(path.join(imagesDir(), image.storedFileName));
-	} catch {
-		// ignore if file is missing
-	}
-	try {
-		await fs.promises.unlink(path.join(thumbnailsDir(), image.thumbnailFileName));
-	} catch {
-		// ignore if file is missing
-	}
-
-	const updated: GalleryData = { ...data, images: data.images.filter((i) => i.id !== imageId) };
-	await saveGallery(updated);
-}
-
-export async function createFolder(name: string, tags: string[] = []): Promise<GalleryFolder> {
-	const data = await loadGallery();
-	const sanitized = sanitizeFolderName(name);
-	if (!sanitized) throw new Error('Invalid folder name');
-
-	const folder: GalleryFolder = {
-		id: randomUUID(),
-		name: sanitized,
-		tags,
-		createdAt: Date.now(),
-		sortOrder: data.folders.length,
-	};
-
-	const updated: GalleryData = { ...data, folders: [...data.folders, folder] };
-	await saveGallery(updated);
-	return folder;
-}
-
-export async function renameFolder(folderId: string, newName: string): Promise<void> {
-	const data = await loadGallery();
-	const folder = data.folders.find((f) => f.id === folderId);
-	if (!folder) throw new Error(`Folder ${folderId} not found`);
-	if (folder.name === UNSORTED_FOLDER_NAME) throw new Error('Cannot rename Unsorted folder');
-
-	const sanitized = sanitizeFolderName(newName);
-	if (!sanitized) throw new Error('Invalid folder name');
-
-	const updated: GalleryData = {
-		...data,
-		folders: data.folders.map((f) => (f.id === folderId ? { ...f, name: sanitized } : f)),
-	};
-	await saveGallery(updated);
-}
-
-export async function deleteFolder(folderId: string, deleteImages: boolean): Promise<void> {
-	const data = await loadGallery();
-	const folder = data.folders.find((f) => f.id === folderId);
-	if (!folder) throw new Error(`Folder ${folderId} not found`);
-	if (folder.name === UNSORTED_FOLDER_NAME) throw new Error('Cannot delete Unsorted folder');
-
-	const folderImages = data.images.filter((i) => i.folderId === folderId);
-
-	if (deleteImages) {
-		for (const img of folderImages) {
-			try {
-				await fs.promises.unlink(path.join(imagesDir(), img.storedFileName));
-			} catch {
-				// ignore
-			}
-			try {
-				await fs.promises.unlink(path.join(thumbnailsDir(), img.thumbnailFileName));
-			} catch {
-				// ignore
-			}
+		if (!data.folders.some((f) => f.id === folderId)) {
+			throw new Error(`Folder ${folderId} not found`);
 		}
+
+		// Duplicate check by originalPath
+		const existing = data.images.find((i) => i.originalPath === sourcePath);
+		if (existing) {
+			const folder = data.folders.find((f) => f.id === existing.folderId);
+			throw new Error(`Image already in folder: ${folder?.name ?? 'Unknown'}`);
+		}
+
+		const id = randomUUID();
+		const ext = path.extname(sourcePath).toLowerCase() || '.png';
+		const storedFileName = `${id}${ext}`;
+		const thumbnailFileName = `${id}_thumb.png`;
+		const storedPath = path.join(imagesDir(), storedFileName);
+		const thumbnailPath = path.join(thumbnailsDir(), thumbnailFileName);
+
+		await fs.promises.copyFile(sourcePath, storedPath);
+		await generateThumbnail(storedPath, thumbnailPath);
+
+		const { width, height } = getImageDimensions(storedPath);
+		const stat = await fs.promises.stat(storedPath);
+
+		const image: GalleryImage = {
+			id,
+			folderId,
+			fileName: path.basename(sourcePath),
+			originalPath: sourcePath,
+			storedFileName,
+			thumbnailFileName,
+			width,
+			height,
+			fileSize: stat.size,
+			addedAt: Date.now(),
+			source: 'local',
+		};
+
+		const updated: GalleryData = { ...data, images: [...data.images, image] };
+		await saveGallery(updated);
+		return image;
+	});
+}
+
+export function moveImage(imageId: string, targetFolderId: string): Promise<void> {
+	return withMutationLock(async () => {
+		const data = await loadGallery();
+
+		if (!data.folders.some((f) => f.id === targetFolderId)) {
+			throw new Error(`Folder ${targetFolderId} not found`);
+		}
+
 		const updated: GalleryData = {
 			...data,
-			folders: data.folders.filter((f) => f.id !== folderId),
-			images: data.images.filter((i) => i.folderId !== folderId),
+			images: data.images.map((i) => (i.id === imageId ? { ...i, folderId: targetFolderId } : i)),
 		};
 		await saveGallery(updated);
-	} else {
-		const unsortedId = getUnsortedFolderId(data);
+	});
+}
+
+export function copyImage(imageId: string, targetFolderId: string): Promise<GalleryImage> {
+	return withMutationLock(async () => {
+		const data = await loadGallery();
+		const source = data.images.find((i) => i.id === imageId);
+		if (!source) throw new Error(`Image ${imageId} not found`);
+
+		if (!data.folders.some((f) => f.id === targetFolderId)) {
+			throw new Error(`Folder ${targetFolderId} not found`);
+		}
+
+		const newId = randomUUID();
+		const ext = path.extname(source.storedFileName);
+		const newStoredFileName = `${newId}${ext}`;
+		const newThumbnailFileName = `${newId}_thumb.png`;
+
+		await fs.promises.copyFile(
+			path.join(imagesDir(), source.storedFileName),
+			path.join(imagesDir(), newStoredFileName),
+		);
+		await fs.promises.copyFile(
+			path.join(thumbnailsDir(), source.thumbnailFileName),
+			path.join(thumbnailsDir(), newThumbnailFileName),
+		);
+
+		const newImage: GalleryImage = {
+			...source,
+			id: newId,
+			folderId: targetFolderId,
+			storedFileName: newStoredFileName,
+			thumbnailFileName: newThumbnailFileName,
+			addedAt: Date.now(),
+		};
+
+		const updated: GalleryData = { ...data, images: [...data.images, newImage] };
+		await saveGallery(updated);
+		return newImage;
+	});
+}
+
+export function deleteImage(imageId: string): Promise<void> {
+	return withMutationLock(async () => {
+		const data = await loadGallery();
+		const image = data.images.find((i) => i.id === imageId);
+		if (!image) return;
+
+		try {
+			await fs.promises.unlink(path.join(imagesDir(), image.storedFileName));
+		} catch {
+			// ignore if file is missing
+		}
+		try {
+			await fs.promises.unlink(path.join(thumbnailsDir(), image.thumbnailFileName));
+		} catch {
+			// ignore if file is missing
+		}
+
+		const updated: GalleryData = { ...data, images: data.images.filter((i) => i.id !== imageId) };
+		await saveGallery(updated);
+	});
+}
+
+export function createFolder(name: string, tags: string[] = []): Promise<GalleryFolder> {
+	return withMutationLock(async () => {
+		const data = await loadGallery();
+		const sanitized = sanitizeFolderName(name);
+		if (!sanitized) throw new Error('Invalid folder name');
+		if (isReservedFolderName(sanitized)) throw new Error(`"${UNSORTED_FOLDER_NAME}" is a reserved folder name`);
+
+		const folder: GalleryFolder = {
+			id: randomUUID(),
+			name: sanitized,
+			tags,
+			createdAt: Date.now(),
+			sortOrder: data.folders.length,
+		};
+
+		const updated: GalleryData = { ...data, folders: [...data.folders, folder] };
+		await saveGallery(updated);
+		return folder;
+	});
+}
+
+export function renameFolder(folderId: string, newName: string): Promise<void> {
+	return withMutationLock(async () => {
+		const data = await loadGallery();
+		const folder = data.folders.find((f) => f.id === folderId);
+		if (!folder) throw new Error(`Folder ${folderId} not found`);
+		if (folder.name === UNSORTED_FOLDER_NAME) throw new Error('Cannot rename Unsorted folder');
+
+		const sanitized = sanitizeFolderName(newName);
+		if (!sanitized) throw new Error('Invalid folder name');
+		if (isReservedFolderName(sanitized)) throw new Error(`"${UNSORTED_FOLDER_NAME}" is a reserved folder name`);
+
 		const updated: GalleryData = {
 			...data,
-			folders: data.folders.filter((f) => f.id !== folderId),
-			images: data.images.map((i) => (i.folderId === folderId ? { ...i, folderId: unsortedId } : i)),
+			folders: data.folders.map((f) => (f.id === folderId ? { ...f, name: sanitized } : f)),
 		};
 		await saveGallery(updated);
-	}
+	});
 }
 
-export async function updateFolderTags(folderId: string, tags: string[]): Promise<void> {
-	const data = await loadGallery();
-	const updated: GalleryData = {
-		...data,
-		folders: data.folders.map((f) => (f.id === folderId ? { ...f, tags } : f)),
-	};
-	await saveGallery(updated);
+export function deleteFolder(folderId: string, deleteImages: boolean): Promise<void> {
+	return withMutationLock(async () => {
+		const data = await loadGallery();
+		const folder = data.folders.find((f) => f.id === folderId);
+		if (!folder) throw new Error(`Folder ${folderId} not found`);
+		if (folder.name === UNSORTED_FOLDER_NAME) throw new Error('Cannot delete Unsorted folder');
+
+		const folderImages = data.images.filter((i) => i.folderId === folderId);
+
+		if (deleteImages) {
+			for (const img of folderImages) {
+				try {
+					await fs.promises.unlink(path.join(imagesDir(), img.storedFileName));
+				} catch {
+					// ignore
+				}
+				try {
+					await fs.promises.unlink(path.join(thumbnailsDir(), img.thumbnailFileName));
+				} catch {
+					// ignore
+				}
+			}
+			const updated: GalleryData = {
+				...data,
+				folders: data.folders.filter((f) => f.id !== folderId),
+				images: data.images.filter((i) => i.folderId !== folderId),
+			};
+			await saveGallery(updated);
+		} else {
+			const unsortedId = getUnsortedFolderId(data);
+			const updated: GalleryData = {
+				...data,
+				folders: data.folders.filter((f) => f.id !== folderId),
+				images: data.images.map((i) => (i.folderId === folderId ? { ...i, folderId: unsortedId } : i)),
+			};
+			await saveGallery(updated);
+		}
+	});
 }
 
-export async function reorderFolders(orderedIds: string[]): Promise<void> {
-	const data = await loadGallery();
-	const updated: GalleryData = {
-		...data,
-		folders: data.folders.map((f) => {
-			const idx = orderedIds.indexOf(f.id);
-			return idx >= 0 ? { ...f, sortOrder: idx } : f;
-		}),
-	};
-	await saveGallery(updated);
+export function updateFolderTags(folderId: string, tags: string[]): Promise<void> {
+	return withMutationLock(async () => {
+		const data = await loadGallery();
+		const updated: GalleryData = {
+			...data,
+			folders: data.folders.map((f) => (f.id === folderId ? { ...f, tags } : f)),
+		};
+		await saveGallery(updated);
+	});
 }
 
-export async function downloadExternalImage(
+export function reorderFolders(orderedIds: string[]): Promise<void> {
+	return withMutationLock(async () => {
+		const data = await loadGallery();
+		const updated: GalleryData = {
+			...data,
+			folders: data.folders.map((f) => {
+				const idx = orderedIds.indexOf(f.id);
+				return idx >= 0 ? { ...f, sortOrder: idx } : f;
+			}),
+		};
+		await saveGallery(updated);
+	});
+}
+
+export function downloadExternalImage(
 	url: string,
 	folderId: string,
 	metadata: { sourceId: string; author: string; authorUrl: string; description: string },
 ): Promise<GalleryImage> {
-	const data = await loadGallery();
+	return withMutationLock(async () => {
+		// Validate URL scheme (https only — prevents SSRF to local network/file system)
+		let parsedUrl: URL;
+		try {
+			parsedUrl = new URL(url);
+		} catch {
+			throw new Error('Invalid URL');
+		}
+		if (parsedUrl.protocol !== 'https:') {
+			throw new Error('Only HTTPS URLs are allowed for external image downloads');
+		}
 
-	// Duplicate check by sourceId
-	const existing = data.images.find((i) => i.sourceMetadata?.sourceId === metadata.sourceId);
-	if (existing) {
-		const folder = data.folders.find((f) => f.id === existing.folderId);
-		throw new Error(`Image already in folder: ${folder?.name ?? 'Unknown'}`);
-	}
+		const data = await loadGallery();
 
-	const response = await net.fetch(url);
-	if (!response.ok) throw new Error(`Failed to download image: ${response.status}`);
-	const arrayBuffer = await response.arrayBuffer();
-	const buffer = Buffer.from(arrayBuffer);
+		if (!data.folders.some((f) => f.id === folderId)) {
+			throw new Error(`Folder ${folderId} not found`);
+		}
 
-	// Determine extension from URL
-	let ext = '.jpg';
-	const urlPath = new URL(url).pathname;
-	const urlExt = path.extname(urlPath).toLowerCase();
-	if (['.png', '.jpg', '.jpeg', '.webp'].includes(urlExt)) ext = urlExt;
+		// Duplicate check by sourceId
+		const existing = data.images.find((i) => i.sourceMetadata?.sourceId === metadata.sourceId);
+		if (existing) {
+			const folder = data.folders.find((f) => f.id === existing.folderId);
+			throw new Error(`Image already in folder: ${folder?.name ?? 'Unknown'}`);
+		}
 
-	const id = randomUUID();
-	const storedFileName = `${id}${ext}`;
-	const thumbnailFileName = `${id}_thumb.png`;
-	const storedPath = path.join(imagesDir(), storedFileName);
-	const thumbnailPath = path.join(thumbnailsDir(), thumbnailFileName);
+		const response = await net.fetch(url);
+		if (!response.ok) throw new Error(`Failed to download image: ${response.status}`);
 
-	await fs.promises.writeFile(storedPath, buffer);
-	await generateThumbnailFromBuffer(buffer, thumbnailPath);
+		// Enforce size limit before buffering the full response
+		const contentLength = response.headers.get('content-length');
+		if (contentLength && Number(contentLength) > MAX_DOWNLOAD_BYTES) {
+			throw new Error('Image exceeds maximum download size');
+		}
 
-	const { width, height } = getImageDimensionsFromBuffer(buffer);
+		const arrayBuffer = await response.arrayBuffer();
+		const buffer = Buffer.from(arrayBuffer);
+		if (buffer.byteLength > MAX_DOWNLOAD_BYTES) {
+			throw new Error('Image exceeds maximum download size');
+		}
 
-	const fileName = metadata.description
-		? `${sanitizeFolderName(metadata.description).slice(0, 50)}${ext}`
-		: path.basename(urlPath) || `image${ext}`;
+		// Determine extension from URL
+		let ext = '.jpg';
+		const urlPath = parsedUrl.pathname;
+		const urlExt = path.extname(urlPath).toLowerCase();
+		if (['.png', '.jpg', '.jpeg', '.webp'].includes(urlExt)) ext = urlExt;
 
-	const image: GalleryImage = {
-		id,
-		folderId,
-		fileName,
-		originalPath: url,
-		storedFileName,
-		thumbnailFileName,
-		width,
-		height,
-		fileSize: buffer.byteLength,
-		addedAt: Date.now(),
-		source: 'sourcesplash',
-		sourceMetadata: {
-			sourceId: metadata.sourceId,
-			author: metadata.author,
-			authorUrl: metadata.authorUrl,
-			description: metadata.description,
-		},
-	};
+		const id = randomUUID();
+		const storedFileName = `${id}${ext}`;
+		const thumbnailFileName = `${id}_thumb.png`;
+		const storedPath = path.join(imagesDir(), storedFileName);
+		const thumbnailPath = path.join(thumbnailsDir(), thumbnailFileName);
 
-	const updated: GalleryData = { ...data, images: [...data.images, image] };
-	await saveGallery(updated);
-	return image;
+		await fs.promises.writeFile(storedPath, buffer);
+		await generateThumbnailFromBuffer(buffer, thumbnailPath);
+
+		const { width, height } = getImageDimensionsFromBuffer(buffer);
+
+		const fileName = metadata.description
+			? `${sanitizeFolderName(metadata.description).slice(0, 50)}${ext}`
+			: path.basename(urlPath) || `image${ext}`;
+
+		const image: GalleryImage = {
+			id,
+			folderId,
+			fileName,
+			originalPath: url,
+			storedFileName,
+			thumbnailFileName,
+			width,
+			height,
+			fileSize: buffer.byteLength,
+			addedAt: Date.now(),
+			source: 'sourcesplash',
+			sourceMetadata: {
+				sourceId: metadata.sourceId,
+				author: metadata.author,
+				authorUrl: metadata.authorUrl,
+				description: metadata.description,
+			},
+		};
+
+		const updated: GalleryData = { ...data, images: [...data.images, image] };
+		await saveGallery(updated);
+		return image;
+	});
 }
 
 async function migrateRecents(): Promise<void> {
