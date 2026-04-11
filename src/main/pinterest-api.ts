@@ -13,16 +13,15 @@ import type {
 	SavePinArgs,
 	SavePinResult,
 } from '../shared/pinterest-types';
-import { getValidAccessToken } from './pinterest-auth';
+import { PINTEREST_OAUTH, getValidAccessToken } from './pinterest-auth';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
-export const PINTEREST_API = {
-	AUTH_URL: 'https://www.pinterest.com/oauth/',
-	TOKEN_URL: 'https://api.pinterest.com/v5/oauth/token',
-	BASE_URL: 'https://api.pinterest.com/v5',
-	SCOPES: ['boards:read', 'pins:read', 'pins:write'],
-} as const;
+/** Pinterest API v5 base URL. Auth constants live in pinterest-auth.ts. */
+const PINTEREST_API_BASE_URL = 'https://api.pinterest.com/v5';
+
+// Re-export for consumers that need the full set of Pinterest constants
+export { PINTEREST_OAUTH as PINTEREST_API };
 
 // ─── Request helper ─────────────────────────────────────────────────────────
 
@@ -32,7 +31,7 @@ async function request<T>(method: string, endpoint: string, body?: Record<string
 		throw new Error('Not authenticated with Pinterest');
 	}
 
-	const url = `${PINTEREST_API.BASE_URL}${endpoint}`;
+	const url = `${PINTEREST_API_BASE_URL}${endpoint}`;
 	const headers: Record<string, string> = {
 		Authorization: `Bearer ${accessToken}`,
 		'Content-Type': 'application/json',
