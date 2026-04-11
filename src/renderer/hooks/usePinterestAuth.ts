@@ -40,9 +40,13 @@ export function usePinterestAuth(): UsePinterestAuthState {
 
 	const initiateAuth = useCallback(async () => {
 		setError(null);
-		const result: PinterestAuthResult = await window.electronAPI.pinterestAuth();
-		if (!result.ok) {
-			setError(result.error ?? 'Failed to start authentication');
+		try {
+			const result: PinterestAuthResult = await window.electronAPI.pinterestAuth();
+			if (!result.ok) {
+				setError(result.error ?? 'Failed to start authentication');
+			}
+		} catch (err) {
+			setError(err instanceof Error ? err.message : 'Failed to start authentication');
 		}
 		// Auth status will be updated by the callback flow (Phase 2)
 	}, []);

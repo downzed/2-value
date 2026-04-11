@@ -8,7 +8,7 @@ import path from 'node:path';
 import type { RecentEntry } from '../shared/types';
 import type { SavePinArgs } from '../shared/pinterest-types';
 import { fetchBoards, savePin } from './pinterest-api';
-import { getValidAccessToken, handleOAuthCallback, initiateOAuthFlow, isAuthenticated, logout } from './pinterest-auth';
+import { getValidAccessToken, handleOAuthCallback, isAuthenticated, logout } from './pinterest-auth';
 
 // --- Recents storage ---
 

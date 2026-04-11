@@ -74,6 +74,15 @@ export const PinterestProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 		setSelectedBoardId(boardId);
 	}, []);
 
+	// Clear board-related state whenever authentication is lost
+	useEffect(() => {
+		if (!auth.isAuthenticated) {
+			setBoards([]);
+			setSelectedBoardId(null);
+			setError(null);
+		}
+	}, [auth.isAuthenticated]);
+
 	const savePin = useCallback(async (args: SavePinArgs): Promise<SavePinResult> => {
 		setError(null);
 		try {

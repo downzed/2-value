@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PinterestBoard } from '../../shared/pinterest-types';
 import { PINTEREST_PANEL_DEFAULT_POSITION, PINTEREST_PANEL_STORAGE_KEY } from '../constants/pinterest';
 import { usePinterestContext } from '../context/PinterestContext';
@@ -51,6 +51,17 @@ const PinterestPanel: React.FC<PinterestPanelProps> = ({ previewCanvasRef, isOpe
 	} = usePinterestContext();
 
 	const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+	const resetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	// Clear the reset timer when the panel is unmounted to avoid state updates on
+	// an unmounted component.
+	useEffect(() => {
+		return () => {
+			if (resetTimerRef.current !== null) {
+				clearTimeout(resetTimerRef.current);
+			}
+		};
+	}, []);
 
 	const handleSaveToBoard = useCallback(async () => {
 		if (!previewCanvasRef.current || !selectedBoardId) return;
@@ -64,7 +75,8 @@ const PinterestPanel: React.FC<PinterestPanelProps> = ({ previewCanvasRef, isOpe
 		const result = await savePin({ boardId: selectedBoardId, imageDataUrl });
 		if (result.ok) {
 			setSaveStatus('saved');
-			setTimeout(() => setSaveStatus('idle'), 2000);
+			if (resetTimerRef.current !== null) clearTimeout(resetTimerRef.current);
+			resetTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2000);
 		} else {
 			setSaveStatus('error');
 		}
