@@ -1,5 +1,4 @@
 import type { RecentEntry } from '../shared/types';
-import type { PinterestAuthResult, PinterestBoard, SavePinArgs, SavePinResult } from '../shared/pinterest-types';
 
 interface OpenImageResult {
 	path: string;
@@ -17,14 +16,6 @@ declare global {
 			getRecents: () => Promise<RecentEntry[]>;
 			removeRecent: (path: string) => Promise<void>;
 			openImageFromPath: (path: string) => Promise<OpenImageResult | null>;
-
-			// Pinterest integration
-			pinterestAuth: () => Promise<PinterestAuthResult>;
-			pinterestAuthCallback: (code: string, state: string) => Promise<PinterestAuthResult>;
-			pinterestAuthStatus: () => Promise<{ authenticated: boolean }>;
-			pinterestLogout: () => Promise<void>;
-			pinterestGetBoards: () => Promise<PinterestBoard[]>;
-			pinterestSavePin: (args: SavePinArgs) => Promise<SavePinResult>;
 		};
 	}
 }
