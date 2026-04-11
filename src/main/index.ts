@@ -137,12 +137,13 @@ ipcMain.handle('open-image', async () => {
 	});
 	if (filePaths[0]) {
 		const filePath = filePaths[0];
-		const stat = await fs.promises.stat(filePath);
-		await addRecentEntry(filePath);
-		allowedPaths.add(filePath);
+		const resolvedPath = path.resolve(filePath);
+		const stat = await fs.promises.stat(resolvedPath);
+		await addRecentEntry(resolvedPath);
+		allowedPaths.add(resolvedPath);
 		return {
-			path: filePath,
-			fileName: path.basename(filePath),
+			path: resolvedPath,
+			fileName: path.basename(resolvedPath),
 			fileSize: stat.size,
 		};
 	}
