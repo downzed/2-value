@@ -363,7 +363,7 @@ export async function downloadExternalImage(
 	const { width, height } = getImageDimensionsFromBuffer(buffer);
 
 	const fileName = metadata.description
-		? `${metadata.description.slice(0, 50)}${ext}`
+		? `${sanitizeFolderName(metadata.description).slice(0, 50)}${ext}`
 		: path.basename(urlPath) || `image${ext}`;
 
 	const image: GalleryImage = {

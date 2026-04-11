@@ -327,19 +327,13 @@ ipcMain.handle(
 	) => downloadExternalImage(url, folderId, metadata),
 );
 
-ipcMain.handle(
-	'gallery:search-images',
-	(_event, _args: { query: string; page?: number }) => {
-		throw new Error('SourceSplash not configured');
-	},
-);
+ipcMain.handle('gallery:search-images', () => {
+	throw new Error('SourceSplash not configured');
+});
 
-ipcMain.handle(
-	'gallery:random-images',
-	(_event, _args: { query?: string; count?: number }) => {
-		throw new Error('SourceSplash not configured');
-	},
-);
+ipcMain.handle('gallery:random-images', () => {
+	throw new Error('SourceSplash not configured');
+});
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and require them here.

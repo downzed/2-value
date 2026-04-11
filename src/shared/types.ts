@@ -46,7 +46,7 @@ export interface SourceSplashImage {
 	width: number;
 	height: number;
 	author: string;
-	author_url: string;
+	authorUrl: string;
 	source: string;
 	description: string;
 }
