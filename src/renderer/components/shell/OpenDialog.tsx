@@ -157,23 +157,28 @@ const OpenDialog: React.FC<OpenDialogProps> = ({ isOpen, onClose, onImageLoaded 
 						{recents.length > 0 ? (
 							<div className='grid grid-cols-4 gap-3'>
 								{recents.map((entry) => (
-									<button
-										type='button'
+									<div
 										key={entry.path}
-										onClick={() => handleRecentClick(entry)}
-										disabled={loading}
-										className='relative group rounded-lg border border-slate-200 overflow-hidden cursor-pointer hover:border-slate-400 transition-colors disabled:opacity-50 text-left'
+										className='relative group rounded-lg border border-slate-200 overflow-hidden hover:border-slate-400 transition-colors'
 									>
-										<img src={entry.thumbnail} alt={entry.fileName} className='w-full aspect-square object-cover' />
-										<span className='text-[10px] text-slate-500 truncate block px-1 py-0.5'>{entry.fileName}</span>
+										<button
+											type='button'
+											onClick={() => handleRecentClick(entry)}
+											disabled={loading}
+											className='w-full cursor-pointer disabled:opacity-50 text-left'
+										>
+											<img src={entry.thumbnail} alt={entry.fileName} className='w-full aspect-square object-cover' />
+											<span className='text-[10px] text-slate-500 truncate block px-1 py-0.5'>{entry.fileName}</span>
+										</button>
 										<button
 											type='button'
 											onClick={(e) => handleRemoveRecent(e, entry.path)}
-											className='absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] leading-none'
+											disabled={loading}
+											className='absolute top-0.5 right-0.5 w-4 h-4 bg-black/60 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-[10px] leading-none disabled:opacity-50'
 										>
 											&times;
 										</button>
-									</button>
+									</div>
 								))}
 							</div>
 						) : (
