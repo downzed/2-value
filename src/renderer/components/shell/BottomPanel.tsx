@@ -191,16 +191,6 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 						<Icon name='gallery' size='sm' />
 					</button>
 				)}
-				{!panels.pinterest && (
-					<button
-						type='button'
-						onClick={() => setPanel('pinterest', true)}
-						className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
-						title='Show Pinterest Panel'
-					>
-						<Icon name='pinterest' size='sm' />
-					</button>
-				)}
 			</div>
 
 			{/* Zoom controls */}
