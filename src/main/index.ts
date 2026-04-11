@@ -22,6 +22,7 @@ import {
 	downloadExternalImage,
 	getThumbnailsDir,
 } from './gallery';
+import { searchImages, getRandomImages } from './sourcesplash';
 
 // --- Recents storage ---
 
@@ -335,12 +336,16 @@ ipcMain.handle(
 	) => downloadExternalImage(url, folderId, metadata),
 );
 
-ipcMain.handle('gallery:search-images', () => {
-	throw new Error('SourceSplash not configured');
+ipcMain.handle('gallery:search-images', (_event, { query, page }: { query: string; page?: number }) => {
+	const apiKey = import.meta.env.MAIN_VITE_SOURCESPLASH_API_KEY as string | undefined;
+	if (!apiKey) throw new Error('SourceSplash API key not configured. Add MAIN_VITE_SOURCESPLASH_API_KEY to .env');
+	return searchImages(apiKey, query, page);
 });
 
-ipcMain.handle('gallery:random-images', () => {
-	throw new Error('SourceSplash not configured');
+ipcMain.handle('gallery:random-images', (_event, { query, count }: { query?: string; count?: number }) => {
+	const apiKey = import.meta.env.MAIN_VITE_SOURCESPLASH_API_KEY as string | undefined;
+	if (!apiKey) throw new Error('SourceSplash API key not configured. Add MAIN_VITE_SOURCESPLASH_API_KEY to .env');
+	return getRandomImages(apiKey, query, count);
 });
 
 // In this file you can include the rest of your app's specific main process

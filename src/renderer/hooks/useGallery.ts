@@ -1,7 +1,18 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { GalleryFolder, GalleryImage, SourceSplashImage, SourceSplashSearchResult } from '../../shared/types';
+import { UI } from '../constants/ui';
 
 export type GalleryTab = 'folders' | 'explore';
+
+/** Deduplicate an array of SourceSplash images by id. */
+function dedupeById(imgs: SourceSplashImage[]): SourceSplashImage[] {
+	const seen = new Set<string>();
+	return imgs.filter((img) => {
+		if (seen.has(img.id)) return false;
+		seen.add(img.id);
+		return true;
+	});
+}
 
 interface GalleryState {
 	folders: GalleryFolder[];
@@ -32,7 +43,19 @@ export const useGallery = () => {
 		searchResultsLoading: false,
 	});
 
-	const { folders, images, selectedFolderId, gallerySearchQuery, activeTab, loading, error } = state;
+	const {
+		folders,
+		images,
+		selectedFolderId,
+		gallerySearchQuery,
+		activeTab,
+		loading,
+		error,
+		suggestions,
+		suggestionsLoading,
+		searchResults,
+		searchResultsLoading,
+	} = state;
 
 	// Monotonically-increasing generation counter; each load increments it and
 	// only applies results if the counter hasn't advanced since the call started.
@@ -204,6 +227,103 @@ export const useGallery = () => {
 		[],
 	);
 
+	// --- SourceSplash actions ---
+
+	/**
+	 * Load suggestions for a folder (uses /api/random with folder name + tags as query).
+	 * Caches results in state for `UI.GALLERY.CACHE_TTL_MS` milliseconds.
+	 */
+	const suggestionsCache = useRef<{ query: string; fetchedAt: number; images: SourceSplashImage[] } | null>(null);
+
+	const loadSuggestions = useCallback(async (folderName: string, tags: string[], force = false) => {
+		const query = [folderName, ...tags].filter(Boolean).join(' ');
+
+		// Use cache unless forced or stale
+		if (!force && suggestionsCache.current && suggestionsCache.current.query === query) {
+			const age = Date.now() - suggestionsCache.current.fetchedAt;
+			if (age < UI.GALLERY.CACHE_TTL_MS) {
+				setState((prev) => ({
+					...prev,
+					suggestions: suggestionsCache.current?.images ?? [],
+					suggestionsLoading: false,
+				}));
+				return;
+			}
+		}
+
+		setState((prev) => ({ ...prev, suggestionsLoading: true }));
+		try {
+			const raw = await window.electronAPI.galleryRandomImages(query || undefined, UI.GALLERY.SUGGESTION_COUNT);
+			const images = dedupeById(raw);
+			suggestionsCache.current = { query, fetchedAt: Date.now(), images };
+			setState((prev) => ({ ...prev, suggestions: images, suggestionsLoading: false }));
+		} catch {
+			// Silently clear loading — suggestions are best-effort
+			setState((prev) => ({ ...prev, suggestionsLoading: false }));
+		}
+	}, []);
+
+	const clearSuggestions = useCallback(() => {
+		suggestionsCache.current = null;
+		setState((prev) => ({ ...prev, suggestions: [] }));
+	}, []);
+
+	// Explore tab search — cache by page
+	const searchCache = useRef<Map<string, { result: SourceSplashSearchResult; fetchedAt: number }>>(new Map());
+	const SEARCH_CACHE_TTL_MS = 5 * 60 * 1000; // 5 min per plan
+
+	const searchExplore = useCallback(async (query: string, page = 1) => {
+		const cacheKey = `${query.trim().toLowerCase()}:${page}`;
+		const cached = searchCache.current.get(cacheKey);
+		if (cached && Date.now() - cached.fetchedAt < SEARCH_CACHE_TTL_MS) {
+			setState((prev) => ({ ...prev, searchResults: cached.result, searchResultsLoading: false }));
+			return;
+		}
+
+		setState((prev) => ({ ...prev, searchResultsLoading: true }));
+		try {
+			const result = await window.electronAPI.gallerySearchImages(query, page);
+			searchCache.current.set(cacheKey, { result, fetchedAt: Date.now() });
+			setState((prev) => ({
+				...prev,
+				searchResults:
+					page === 1
+						? result
+						: prev.searchResults
+							? { ...result, images: [...prev.searchResults.images, ...result.images] }
+							: result,
+				searchResultsLoading: false,
+			}));
+		} catch (err) {
+			const msg = err instanceof Error ? err.message : 'Search failed.';
+			setState((prev) => ({ ...prev, error: msg, searchResultsLoading: false }));
+		}
+	}, []);
+
+	const clearSearchResults = useCallback(() => {
+		searchCache.current.clear();
+		setState((prev) => ({ ...prev, searchResults: null }));
+	}, []);
+
+	const downloadExternal = useCallback(
+		async (
+			url: string,
+			folderId: string,
+			metadata: { sourceId: string; author: string; authorUrl: string; description: string },
+		) => {
+			try {
+				const img = await window.electronAPI.galleryDownloadExternal(url, folderId, metadata);
+				await loadGallery();
+				return img;
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : 'Download failed.';
+				setState((prev) => ({ ...prev, error: msg }));
+				throw err;
+			}
+		},
+		[loadGallery],
+	);
+
 	// Client-side filter: search images by fileName (case-insensitive substring).
 	// Memoised to avoid re-filtering on every render (e.g. when dialog state changes).
 	const filteredImages = useMemo(() => {
@@ -221,6 +341,10 @@ export const useGallery = () => {
 		activeTab,
 		loading,
 		error,
+		suggestions,
+		suggestionsLoading,
+		searchResults,
+		searchResultsLoading,
 		loadGallery,
 		createFolder,
 		renameFolder,
@@ -231,6 +355,11 @@ export const useGallery = () => {
 		copyImage,
 		deleteImage,
 		openGalleryImage,
+		downloadExternal,
+		loadSuggestions,
+		clearSuggestions,
+		searchExplore,
+		clearSearchResults,
 		setSelectedFolder,
 		setGallerySearchQuery,
 		setActiveTab,

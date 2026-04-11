@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useImageContext } from '../../hooks/ImageContext';
 import { useGalleryContext } from '../../hooks/GalleryContext';
 import { useImageLoader, imageLoadErrorMessage } from '../../hooks/useImageLoader';
-import type { GalleryFolder, GalleryImage } from '../../../shared/types';
+import type { GalleryFolder, GalleryImage, SourceSplashImage } from '../../../shared/types';
 import { UNSORTED_FOLDER_NAME } from '../../../shared/types';
 import { UI } from '../../constants/ui';
 import { Icon } from '../shared/Icon';
@@ -14,6 +14,7 @@ import {
 	RenameFolderDialog,
 } from '../gallery/FolderContextMenu';
 import { ImageContextMenu } from '../gallery/ImageContextMenu';
+import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
 
 type FolderContextMenuState = {
 	folder: GalleryFolder;
@@ -33,6 +34,11 @@ type DialogState =
 	| { type: 'delete'; folder: GalleryFolder }
 	| null;
 
+// Pending SourceSplash download waiting for folder selection
+type PendingDownload = {
+	image: SourceSplashImage;
+} | null;
+
 const GalleryPanel: React.FC = () => {
 	const { panels, setPanel } = useImageContext();
 	const {
@@ -44,6 +50,10 @@ const GalleryPanel: React.FC = () => {
 		activeTab,
 		loading,
 		error,
+		suggestions,
+		suggestionsLoading,
+		searchResults,
+		searchResultsLoading,
 		loadGallery,
 		createFolder,
 		renameFolder,
@@ -53,6 +63,11 @@ const GalleryPanel: React.FC = () => {
 		copyImage,
 		deleteImage,
 		openGalleryImage,
+		downloadExternal,
+		loadSuggestions,
+		clearSuggestions,
+		searchExplore,
+		clearSearchResults,
 		setSelectedFolder,
 		setGallerySearchQuery,
 		setActiveTab,
@@ -70,6 +85,14 @@ const GalleryPanel: React.FC = () => {
 	const [imageLoadingId, setImageLoadingId] = useState<string | null>(null);
 	const newFolderInputRef = useRef<HTMLInputElement>(null);
 
+	// Explore tab state
+	const [exploreQuery, setExploreQuery] = useState('');
+	const [exploreQueryInput, setExploreQueryInput] = useState('');
+	const exploreDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const [exploreError, setExploreError] = useState<string | null>(null);
+	const [downloadingId, setDownloadingId] = useState<string | null>(null);
+	const [pendingDownload, setPendingDownload] = useState<PendingDownload>(null);
+
 	useEffect(() => {
 		if (panels.gallery) {
 			loadGallery();
@@ -82,6 +105,42 @@ const GalleryPanel: React.FC = () => {
 			newFolderInputRef.current?.focus();
 		}
 	}, [newFolderMode]);
+
+	// Load suggestions when a folder is selected (Folders tab)
+	useEffect(() => {
+		if (!panels.gallery || activeTab !== 'folders' || !selectedFolderId) return;
+		const folder = folders.find((f) => f.id === selectedFolderId);
+		if (!folder) return;
+		loadSuggestions(folder.name, folder.tags);
+	}, [panels.gallery, activeTab, selectedFolderId, folders, loadSuggestions]);
+
+	// Clear suggestions when leaving a folder view
+	useEffect(() => {
+		if (!selectedFolderId) {
+			clearSuggestions();
+		}
+	}, [selectedFolderId, clearSuggestions]);
+
+	// Debounced explore search
+	useEffect(() => {
+		if (exploreDebounceRef.current) clearTimeout(exploreDebounceRef.current);
+		exploreDebounceRef.current = setTimeout(() => {
+			setExploreQuery(exploreQueryInput);
+		}, 300);
+		return () => {
+			if (exploreDebounceRef.current) clearTimeout(exploreDebounceRef.current);
+		};
+	}, [exploreQueryInput]);
+
+	// Run search when explore tab is active and query changes (or on first open)
+	useEffect(() => {
+		if (!panels.gallery || activeTab !== 'explore') return;
+		const q = exploreQuery.trim();
+		clearSearchResults();
+		searchExplore(q || 'landscape', 1).catch((err) => {
+			setExploreError(err instanceof Error ? err.message : 'Search failed.');
+		});
+	}, [panels.gallery, exploreQuery, activeTab, clearSearchResults, searchExplore]);
 
 	const handleFolderContextMenu = (e: React.MouseEvent, folder: GalleryFolder) => {
 		e.preventDefault();
@@ -193,6 +252,48 @@ const GalleryPanel: React.FC = () => {
 		[deleteImage],
 	);
 
+	// Download a SourceSplash image to gallery then open it in the editor
+	const handleDownloadAndOpen = useCallback(
+		async (ssImage: SourceSplashImage, folderId: string) => {
+			try {
+				setDownloadingId(ssImage.id);
+				const img = await downloadExternal(ssImage.url, folderId, {
+					sourceId: ssImage.id,
+					author: ssImage.author,
+					authorUrl: ssImage.authorUrl,
+					description: ssImage.description,
+				});
+				// Open the downloaded image in the editor
+				const result = await openGalleryImage(img.id);
+				const outcome = await loadFromPath(result.path, result.fileSize);
+				if (!outcome.ok) {
+					console.error('Failed to open downloaded image:', imageLoadErrorMessage(outcome.error));
+				}
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : 'Download failed.';
+				// Duplicate: image already exists — still try to open it
+				if (msg.includes('already in')) {
+					console.warn('SourceSplash duplicate:', msg);
+				} else {
+					console.error('Download failed:', err);
+				}
+			} finally {
+				setDownloadingId(null);
+				setPendingDownload(null);
+			}
+		},
+		[downloadExternal, openGalleryImage, loadFromPath],
+	);
+
+	const handleCreateFolderInPicker = useCallback(
+		async (name: string) => {
+			const folder = await window.electronAPI.galleryCreateFolder(name);
+			await loadGallery();
+			return folder;
+		},
+		[loadGallery],
+	);
+
 	// Memoised derived structures to avoid O(n) work on every render.
 	// Must be called before any early return to satisfy the Rules of Hooks.
 	const sortedFolders = useMemo(() => [...folders].sort((a, b) => a.sortOrder - b.sortOrder), [folders]);
@@ -258,6 +359,48 @@ const GalleryPanel: React.FC = () => {
 		</div>
 	);
 
+	// Render a SourceSplash image thumbnail (used in suggestions + explore)
+	const renderSourceSplashThumb = (ssImage: SourceSplashImage, onClickDownload: () => void) => {
+		const isDownloading = downloadingId === ssImage.id;
+		return (
+			<div key={ssImage.id} className='flex flex-col gap-0.5'>
+				<button
+					type='button'
+					className={`relative rounded-lg overflow-hidden border transition-colors cursor-pointer text-left p-0 bg-transparent ${
+						isDownloading ? 'border-slate-400 opacity-60' : 'border-slate-200 hover:border-slate-400'
+					}`}
+					onClick={onClickDownload}
+					disabled={isDownloading}
+					aria-label={`Download ${ssImage.description || 'image'} by ${ssImage.author}`}
+				>
+					<img
+						src={ssImage.thumbnail}
+						alt={ssImage.description || 'SourceSplash image'}
+						className='w-full aspect-square object-cover'
+						referrerPolicy='no-referrer'
+					/>
+					{isDownloading && (
+						<div className='absolute inset-0 flex items-center justify-center bg-white/40'>
+							<span className='text-[10px] text-slate-600'>Saving...</span>
+						</div>
+					)}
+				</button>
+				<p className='text-[9px] text-slate-400 truncate px-0.5'>
+					by{' '}
+					<a
+						href={ssImage.authorUrl}
+						target='_blank'
+						rel='noopener noreferrer'
+						className='hover:text-slate-600 underline'
+						onClick={(e) => e.stopPropagation()}
+					>
+						{ssImage.author}
+					</a>
+				</p>
+			</div>
+		);
+	};
+
 	// Folder detail view (when a folder is selected)
 	const renderFolderDetail = () => {
 		if (!selectedFolder) return null;
@@ -287,6 +430,131 @@ const GalleryPanel: React.FC = () => {
 				) : (
 					<p className='text-xs text-slate-400 py-4 text-center'>No images in this folder</p>
 				)}
+
+				{/* Suggestions section */}
+				<div className='pt-1'>
+					<div className='flex items-center justify-between mb-2'>
+						<p className='text-[10px] font-semibold text-slate-500 uppercase tracking-wide'>Suggestions</p>
+						<button
+							type='button'
+							aria-label='Refresh suggestions'
+							onClick={() => loadSuggestions(selectedFolder.name, selectedFolder.tags, true)}
+							disabled={suggestionsLoading}
+							className='text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-40'
+							title='Refresh suggestions'
+						>
+							<Icon name='refresh' size='sm' />
+						</button>
+					</div>
+
+					{suggestionsLoading ? (
+						// Skeleton loader
+						<div
+							className='grid gap-1.5'
+							style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
+						>
+							{Array.from({ length: UI.GALLERY.SUGGESTION_COUNT }).map((_, i) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
+								<div key={i} className='rounded-lg aspect-square bg-slate-100 animate-pulse' />
+							))}
+						</div>
+					) : suggestions.length > 0 ? (
+						<div
+							className='grid gap-1.5'
+							style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
+						>
+							{suggestions.map((ssImage) =>
+								renderSourceSplashThumb(ssImage, () => {
+									setPendingDownload({ image: ssImage });
+								}),
+							)}
+						</div>
+					) : (
+						<p className='text-xs text-slate-400 py-3 text-center'>No suggestions available</p>
+					)}
+				</div>
+			</div>
+		);
+	};
+
+	// Explore tab content
+	const renderExploreTab = () => {
+		const exploreImages = searchResults?.images ?? [];
+		const hasMore = searchResults?.hasMore ?? false;
+		const currentPage = searchResults?.page ?? 1;
+
+		return (
+			<div className='p-3 space-y-3'>
+				{/* Search input */}
+				<div className='relative'>
+					<input
+						type='text'
+						value={exploreQueryInput}
+						onChange={(e) => setExploreQueryInput(e.target.value)}
+						placeholder='Search SourceSplash...'
+						className='w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 pr-7 focus:outline-none focus:border-slate-400 bg-slate-50'
+					/>
+					{exploreQueryInput && (
+						<button
+							type='button'
+							aria-label='Clear search'
+							onClick={() => {
+								setExploreQueryInput('');
+								setExploreQuery('');
+							}}
+							className='absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600'
+						>
+							&times;
+						</button>
+					)}
+				</div>
+
+				{/* Error */}
+				{exploreError && (
+					<div className='text-xs text-red-500 bg-red-50 border border-red-200 rounded px-3 py-2'>{exploreError}</div>
+				)}
+
+				{/* Results grid */}
+				{searchResultsLoading && exploreImages.length === 0 ? (
+					<div
+						className='grid gap-1.5'
+						style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
+					>
+						{Array.from({ length: 9 }).map((_, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
+							<div key={i} className='rounded-lg aspect-square bg-slate-100 animate-pulse' />
+						))}
+					</div>
+				) : exploreImages.length > 0 ? (
+					<>
+						<div
+							className='grid gap-1.5'
+							style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
+						>
+							{exploreImages.map((ssImage) =>
+								renderSourceSplashThumb(ssImage, () => {
+									setPendingDownload({ image: ssImage });
+								}),
+							)}
+						</div>
+
+						{/* Load More */}
+						{hasMore && (
+							<div className='flex justify-center pt-1'>
+								<button
+									type='button'
+									onClick={() => searchExplore(exploreQuery || 'landscape', currentPage + 1)}
+									disabled={searchResultsLoading}
+									className='text-xs text-slate-500 hover:text-slate-700 disabled:opacity-40 transition-colors border border-slate-200 rounded-lg px-4 py-1.5 hover:border-slate-400'
+								>
+									{searchResultsLoading ? 'Loading...' : 'Load more'}
+								</button>
+							</div>
+						)}
+					</>
+				) : !searchResultsLoading ? (
+					<p className='text-xs text-slate-400 py-8 text-center'>No results found</p>
+				) : null}
 			</div>
 		);
 	};
@@ -488,11 +756,7 @@ const GalleryPanel: React.FC = () => {
 						</div>
 					)}
 
-					{activeTab === 'explore' && (
-						<div className='p-3'>
-							<p className='text-xs text-slate-400 py-8 text-center'>Explore coming soon</p>
-						</div>
-					)}
+					{activeTab === 'explore' && renderExploreTab()}
 				</div>
 			</div>
 
@@ -521,6 +785,16 @@ const GalleryPanel: React.FC = () => {
 					onMoveTo={handleMoveImage}
 					onCopyTo={handleCopyImage}
 					onDelete={handleDeleteImage}
+				/>
+			)}
+
+			{/* Folder picker for SourceSplash download */}
+			{pendingDownload && (
+				<FolderPickerDialog
+					folders={folders}
+					onSelect={(folderId) => handleDownloadAndOpen(pendingDownload.image, folderId)}
+					onSkip={() => setPendingDownload(null)}
+					onCreateFolder={handleCreateFolderInPicker}
 				/>
 			)}
 
