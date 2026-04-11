@@ -122,24 +122,61 @@ app.on('activate', () => {
 	if (mainWindow === null) createWindow();
 });
 
+// --- Image IPC handlers ---
+
+/**
+ * Open image: shows file dialog and returns path + metadata only.
+ * No data URL transport — renderer fetches bytes separately via read-image-buffer.
+ */
 ipcMain.handle('open-image', async () => {
 	const { filePaths } = await dialog.showOpenDialog({
 		properties: ['openFile'],
 		filters: [{ name: 'Images', extensions: ['png', 'jpg', 'jpeg', 'bmp'] }],
 	});
 	if (filePaths[0]) {
-		const image = nativeImage.createFromPath(filePaths[0]);
-		const dataUrl = image.toDataURL();
-		await addRecentEntry(filePaths[0]);
+		const filePath = filePaths[0];
+		const stat = await fs.promises.stat(filePath);
+		await addRecentEntry(filePath);
 		return {
-			dataUrl,
-			path: filePaths[0],
+			path: filePath,
+			fileName: path.basename(filePath),
+			fileSize: stat.size,
 		};
 	}
 	return null;
 });
 
-ipcMain.handle('save-image', async (_event, { dataUrl, defaultPath }) => {
+/**
+ * Get image info (path, fileName, fileSize) without reading pixel data.
+ */
+ipcMain.handle('get-image-info', async (_event, { path: filePath }: { path: string }) => {
+	const resolvedPath = path.resolve(filePath);
+	try {
+		const stat = await fs.promises.stat(resolvedPath);
+		return {
+			path: resolvedPath,
+			fileName: path.basename(resolvedPath),
+			fileSize: stat.size,
+		};
+	} catch {
+		return null;
+	}
+});
+
+/**
+ * Read image as raw bytes (Uint8Array). Renderer decodes with createImageBitmap.
+ */
+ipcMain.handle('read-image-buffer', async (_event, { path: filePath }: { path: string }) => {
+	const resolvedPath = path.resolve(filePath);
+	const buffer = await fs.promises.readFile(resolvedPath);
+	// Return as Uint8Array — Electron serialises Buffer as Uint8Array over IPC
+	return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+});
+
+/**
+ * Save image: accepts binary ArrayBuffer from canvas.toBlob(), avoids base64.
+ */
+ipcMain.handle('save-image', async (_event, { buffer, defaultPath }: { buffer: ArrayBuffer; defaultPath?: string }) => {
 	const { filePath, canceled } = await dialog.showSaveDialog(mainWindow as BaseWindow, {
 		title: 'Save Image',
 		defaultPath: defaultPath || 'untitled.png',
@@ -150,10 +187,7 @@ ipcMain.handle('save-image', async (_event, { dataUrl, defaultPath }) => {
 	});
 	if (canceled || !filePath) return null;
 
-	const image = nativeImage.createFromDataURL(dataUrl);
-	const ext = path.extname(filePath).toLowerCase();
-	const buffer = ext === '.jpg' || ext === '.jpeg' ? image.toJPEG(90) : image.toPNG();
-	await fs.promises.writeFile(filePath, buffer);
+	await fs.promises.writeFile(filePath, Buffer.from(buffer));
 	return filePath;
 });
 
@@ -173,11 +207,12 @@ ipcMain.handle('open-image-from-path', async (_event, { path: filePath }) => {
 		await removeRecentEntry(resolvedPath);
 		return null;
 	}
-	const image = nativeImage.createFromPath(resolvedPath);
+	const stat = await fs.promises.stat(resolvedPath);
 	await addRecentEntry(resolvedPath);
 	return {
-		dataUrl: image.toDataURL(),
 		path: resolvedPath,
+		fileName: path.basename(resolvedPath),
+		fileSize: stat.size,
 	};
 });
 

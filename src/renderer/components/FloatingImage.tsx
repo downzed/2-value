@@ -1,4 +1,3 @@
-import { writeCanvas } from 'image-js';
 import { useEffect, useRef, useState } from 'react';
 import { useImageContext } from '../hooks/ImageContext';
 import FloatingWidget from './shared/FloatingWidget';
@@ -19,19 +18,36 @@ const FloatingImage: React.FC = () => {
 		}
 	}, [originalImage, setPanel]);
 
+	// Render canvas only when panel is open (lazy render — avoids holding large backing store when hidden)
 	useEffect(() => {
-		if (!originalImage || !originalCanvasRef.current || !showKey) return;
+		if (!panels.original || !originalImage) {
+			// Clear canvas backing store to free memory when panel is not visible
+			if (originalCanvasRef.current) {
+				originalCanvasRef.current.width = 0;
+				originalCanvasRef.current.height = 0;
+			}
+			return;
+		}
+		// Trigger redraw when panel opens
+		setShowKey((k) => k + 1);
+	}, [panels.original, originalImage]);
+
+	useEffect(() => {
+		if (!originalImage || !originalCanvasRef.current || !showKey || !panels.original) return;
 
 		const canvas = originalCanvasRef.current;
-		writeCanvas(originalImage, canvas);
-	}, [originalImage, showKey]);
-
-	// Re-render canvas when panel opens (it may have been unmounted)
-	useEffect(() => {
-		if (panels.original && originalImage) {
-			setShowKey((k) => k + 1);
+		// Write source image as raw RGBA ImageData using getRawImage() (avoids private .data access)
+		canvas.width = originalImage.width;
+		canvas.height = originalImage.height;
+		const ctx = canvas.getContext('2d');
+		if (ctx) {
+			const raw = originalImage.getRawImage();
+			const clamped = new Uint8ClampedArray(raw.data.byteLength);
+			for (let i = 0; i < raw.data.length; i++) clamped[i] = raw.data[i];
+			const imageData = new ImageData(clamped as Uint8ClampedArray<ArrayBuffer>, raw.width, raw.height);
+			ctx.putImageData(imageData, 0, 0);
 		}
-	}, [panels.original, originalImage]);
+	}, [originalImage, showKey, panels.original]);
 
 	const handleClose = () => {
 		setPanel('original', false);

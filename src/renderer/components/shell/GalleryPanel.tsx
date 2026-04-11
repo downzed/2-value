@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useImageContext } from '../../hooks/ImageContext';
-import { useImageLoader } from '../../hooks/useImageLoader';
+import { imageLoadErrorMessage, useImageLoader } from '../../hooks/useImageLoader';
 import { Icon } from '../shared/Icon';
 import { SectionHeader } from '../shared/SectionHeader';
 
@@ -13,7 +13,7 @@ interface RecentEntry {
 
 const GalleryPanel: React.FC = () => {
 	const { panels, setPanel } = useImageContext();
-	const { loadFromDataUrl } = useImageLoader();
+	const { loadFromPath } = useImageLoader();
 	const [recents, setRecents] = useState<RecentEntry[]>([]);
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
@@ -47,7 +47,10 @@ const GalleryPanel: React.FC = () => {
 					setLoading(false);
 					return;
 				}
-				await loadFromDataUrl(result.dataUrl, result.path);
+				const outcome = await loadFromPath(result.path, result.fileSize);
+				if (!outcome.ok) {
+					setError(imageLoadErrorMessage(outcome.error));
+				}
 				await fetchRecents();
 			} catch (err) {
 				setError('Failed to open image.');
@@ -56,7 +59,7 @@ const GalleryPanel: React.FC = () => {
 				setLoading(false);
 			}
 		},
-		[fetchRecents, loadFromDataUrl],
+		[fetchRecents, loadFromPath],
 	);
 
 	const handleRemoveRecent = useCallback(

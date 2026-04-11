@@ -1,7 +1,8 @@
-import { type Image, writeCanvas } from 'image-js';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UI } from '../constants/ui';
 import { useImageContext } from '../hooks/ImageContext';
+import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
+import { useImageProcessingWorker } from '../hooks/useImageProcessingWorker';
 import { Icon } from './shared/Icon';
 
 interface CanvasProps {
@@ -9,40 +10,120 @@ interface CanvasProps {
 }
 
 const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
-	const { currentImage, blur, threshold, values, showOriginal, zoom, fitMode, setZoom } = useImageContext();
+	const { currentImage, blur, threshold, values, showOriginal, zoom, fitMode, setZoom, effectiveZoomRef } =
+		useImageContext();
 
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+	const [displayImageData, setDisplayImageData] = useState<ImageData | null>(null);
+	const cancelProcessRef = useRef<(() => void) | null>(null);
 
-	const processed = useMemo(() => {
-		if (!currentImage) return null;
-		let result: Image = currentImage.clone();
-		try {
-			if (threshold > 0 || values === 3) {
-				result = result.grey({ algorithm: 'luma709' }) as unknown as Image;
-			}
-			if (blur > 0) {
-				result = result.gaussianBlur({ sigma: blur }) as Image;
-			}
-			if (threshold > 0) {
-				if (values === 3) {
-					result = applyThreeZones(result, threshold);
-				} else {
-					result = result.threshold({ threshold: threshold / 255 }) as unknown as Image;
-				}
-			}
-			return result;
-		} catch {
-			return currentImage;
-		}
-	}, [currentImage, blur, threshold, values]);
+	const { process } = useImageProcessingWorker();
 
-	const displayImage = showOriginal ? currentImage : processed;
+	// Debounced full-resolution settle
+	const settleFullRes = useDebouncedCallback(
+		useCallback(
+			(b: number, t: number, v: 2 | 3) => {
+				if (!currentImage || showOriginal) return;
+				// Cancel any ongoing preview job
+				cancelProcessRef.current?.();
+				cancelProcessRef.current = process(
+					currentImage,
+					{ blur: b, threshold: t, values: v },
+					false, // full-res
+					(result) => {
+						if (result.ok) {
+							setDisplayImageData(result.imageData);
+						}
+					},
+				);
+			},
+			[currentImage, process, showOriginal],
+		),
+		UI.PERF.INTERACTIVE_DEBOUNCE_MS,
+	);
 
+	// When params change: fire interactive (preview) pass immediately,
+	// then schedule a full-res settle after debounce.
 	useEffect(() => {
-		if (!displayImage || !previewCanvasRef.current) return;
-		writeCanvas(displayImage, previewCanvasRef.current);
-	}, [displayImage, previewCanvasRef]);
+		if (!currentImage || showOriginal) return;
+
+		// Cancel any in-flight job
+		cancelProcessRef.current?.();
+
+		const pixels = currentImage.width * currentImage.height;
+		const needsPreview = pixels > UI.PERF.PREVIEW_MAX_PIXELS;
+
+		if (needsPreview) {
+			// Fast: preview pass (downscaled)
+			cancelProcessRef.current = process(
+				currentImage,
+				{ blur, threshold, values },
+				true, // preview
+				(result) => {
+					if (result.ok) {
+						setDisplayImageData(result.imageData);
+					}
+				},
+			);
+			// Slow: schedule full-res after debounce
+			settleFullRes.call(blur, threshold, values);
+		} else {
+			// Image is small enough — go straight to full-res (no preview needed)
+			cancelProcessRef.current = process(
+				currentImage,
+				{ blur, threshold, values },
+				false, // full-res
+				(result) => {
+					if (result.ok) {
+						setDisplayImageData(result.imageData);
+					}
+				},
+			);
+			settleFullRes.cancel();
+		}
+
+		return () => {
+			settleFullRes.cancel();
+		};
+	}, [currentImage, blur, threshold, values, showOriginal, process, settleFullRes]);
+
+	// When showOriginal toggles, render the source image directly
+	useEffect(() => {
+		if (!currentImage) return;
+		if (showOriginal) {
+			settleFullRes.cancel();
+			cancelProcessRef.current?.();
+			cancelProcessRef.current = null;
+			// Display source image unchanged using getRawImage() (no private .data access)
+			const raw = currentImage.getRawImage();
+			const clamped = new Uint8ClampedArray(raw.data.byteLength);
+			for (let i = 0; i < raw.data.length; i++) clamped[i] = raw.data[i];
+			const id = new ImageData(clamped as Uint8ClampedArray<ArrayBuffer>, raw.width, raw.height);
+			setDisplayImageData(id);
+		}
+	}, [currentImage, showOriginal, settleFullRes]);
+
+	// When image changes: clear canvas backing store first (memory hygiene)
+	useEffect(() => {
+		const canvas = previewCanvasRef.current;
+		if (!canvas) return;
+		if (!currentImage) {
+			// Clear canvas
+			canvas.width = 0;
+			canvas.height = 0;
+		}
+	}, [currentImage, previewCanvasRef]);
+
+	// Draw displayImageData onto the canvas
+	useEffect(() => {
+		if (!displayImageData || !previewCanvasRef.current) return;
+		const canvas = previewCanvasRef.current;
+		canvas.width = displayImageData.width;
+		canvas.height = displayImageData.height;
+		const ctx = canvas.getContext('2d');
+		ctx?.putImageData(displayImageData, 0, 0);
+	}, [displayImageData, previewCanvasRef]);
 
 	// Track container size with ResizeObserver
 	useEffect(() => {
@@ -67,6 +148,10 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 	}, [currentImage, containerSize]);
 
 	const effectiveZoom = fitMode === 'fit' ? fitScale : zoom;
+
+	// Keep the shared ref in sync so zoomIn/zoomOut and BottomPanel
+	// always know the true visual zoom level.
+	effectiveZoomRef.current = effectiveZoom;
 
 	// Ctrl+wheel handler
 	const handleWheel = useCallback(
@@ -102,57 +187,31 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 		);
 	}
 
+	// Display dimensions: use processed size if available (may be preview-scaled),
+	// but layout is always based on source dimensions.
 	const canvasWidth = currentImage.width;
 	const canvasHeight = currentImage.height;
 	const scaledWidth = canvasWidth * effectiveZoom;
 	const scaledHeight = canvasHeight * effectiveZoom;
 
 	return (
-		<div ref={containerRef} className='flex-1 overflow-auto relative'>
-			<div
-				className='bg-white rounded-lg shadow-lg'
-				style={{
-					width: scaledWidth,
-					height: scaledHeight,
-					margin: fitMode === 'fit' ? 'auto' : undefined,
-					marginTop: fitMode === 'fit' ? Math.max(0, (containerSize.height - scaledHeight) / 2) : undefined,
-				}}
-			>
-				<canvas
-					ref={previewCanvasRef}
-					className='border border-slate-200 rounded'
-					style={{
-						transform: `scale(${effectiveZoom})`,
-						transformOrigin: '0 0',
-						imageRendering: 'pixelated',
-					}}
-				/>
+		<div ref={containerRef} className='flex-1 overflow-auto'>
+			<div className='flex items-center justify-center' style={{ minWidth: '100%', minHeight: '100%', padding: 24 }}>
+				<div className='bg-white rounded-lg shadow-lg p-1 overflow-hidden'>
+					<canvas
+						ref={previewCanvasRef}
+						className='border border-slate-200 rounded'
+						style={{
+							display: 'block',
+							width: scaledWidth,
+							height: scaledHeight,
+							imageRendering: 'pixelated',
+						}}
+					/>
+				</div>
 			</div>
 		</div>
 	);
 };
-
-function applyThreeZones(image: Image, threshold: number): Image {
-	const lowerThreshold = Math.max(0, threshold - UI.FILTER.THREE_ZONE_BOUNDARY);
-	const upperThreshold = Math.min(255, threshold + UI.FILTER.THREE_ZONE_BOUNDARY);
-	const size = image.size;
-	const components = image.components;
-
-	for (let index = 0; index < size; index++) {
-		const value = image.getValueByIndex(index, 0);
-		let newValue: number;
-		if (value < lowerThreshold) {
-			newValue = 0;
-		} else if (value > upperThreshold) {
-			newValue = 255;
-		} else {
-			newValue = 128;
-		}
-		for (let channel = 0; channel < components; channel++) {
-			image.setValueByIndex(index, channel, newValue);
-		}
-	}
-	return image;
-}
 
 export default Canvas;
