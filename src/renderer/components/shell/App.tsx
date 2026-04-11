@@ -1,12 +1,12 @@
 import type React from 'react';
 import { useRef } from 'react';
-import { ImageProvider } from '../hooks/ImageContext';
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
+import { ImageProvider } from '../../hooks/ImageContext';
+import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import BottomPanel from './BottomPanel';
-import Canvas from './Canvas';
-import FloatingControls from './FloatingControls';
-import FloatingCounter from './FloatingCounter';
-import FloatingImage from './FloatingImage';
+import Canvas from '../Canvas';
+import FloatingControls from '../FloatingControls';
+import FloatingCounter from '../FloatingCounter';
+import FloatingImage from '../FloatingImage';
 
 const AppContent: React.FC = () => {
 	const previewCanvasRef = useRef<HTMLCanvasElement>(null);
