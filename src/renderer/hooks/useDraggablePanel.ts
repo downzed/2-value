@@ -61,7 +61,7 @@ export function useDraggablePanel({ storageKey, defaultPosition, panelRef }: Use
 	useEffect(() => {
 		if (!isDragging) return;
 
-		const handleMouseMove = (e: MouseEvent) => {
+		const handleMouseMove = (e: globalThis.MouseEvent) => {
 			const { width: panelWidth, height: panelHeight } = panelDimsRef.current;
 			const newPos = {
 				x: Math.max(0, Math.min(window.innerWidth - panelWidth, e.clientX - dragOffset.current.x)),
