@@ -9,8 +9,18 @@ interface BottomPanelProps {
 }
 
 const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
-	const { hasImage, currentImage, fileName, loadImage, panels, setPanel, counter, counterRunning, counterDuration } =
-		useImageContext();
+	const {
+		hasImage,
+		currentImage,
+		fileName,
+		filePath,
+		loadImage,
+		panels,
+		setPanel,
+		counter,
+		counterRunning,
+		counterDuration,
+	} = useImageContext();
 	const [status, setStatus] = useState<Status>('ready');
 
 	const width = currentImage?.width ?? '--';
@@ -31,7 +41,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 				const image = readImg(img);
 				const fileName = result.path.split(/[/\\]/).pop() || 'Untitled';
 
-				await loadImage(image, fileName);
+				await loadImage(image, fileName, result.path);
 				setStatus('loaded');
 			} else {
 				setStatus('ready');
@@ -50,7 +60,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			const canvas = previewCanvasRef.current;
 			const dataUrl = canvas.toDataURL('image/png');
 
-			const savedPath = await window.electronAPI.saveImage(dataUrl);
+			const savedPath = await window.electronAPI.saveImage(dataUrl, filePath || undefined);
 			if (savedPath) {
 				setStatus('saved');
 				setTimeout(() => setStatus('loaded'), 2000);
@@ -61,7 +71,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			setStatus('error');
 			console.error('Failed to save image:', error);
 		}
-	}, [previewCanvasRef]);
+	}, [previewCanvasRef, filePath]);
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {

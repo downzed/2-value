@@ -14,6 +14,7 @@ interface ImageState {
 	currentImage: Image | null;
 	originalImage: Image | null;
 	fileName: string;
+	filePath: string;
 
 	// Adjustments
 	blur: number;
@@ -57,6 +58,7 @@ export const useImage = () => {
 		currentImage: null,
 		originalImage: null,
 		fileName: '',
+		filePath: '',
 		blur: 0,
 		threshold: 0,
 		values: 2,
@@ -73,6 +75,7 @@ export const useImage = () => {
 		currentImage,
 		originalImage,
 		fileName,
+		filePath,
 		blur,
 		threshold,
 		values,
@@ -88,7 +91,7 @@ export const useImage = () => {
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
 	// Load image (already decoded)
-	const loadImage = useCallback(async (image: Image, fileName: string = '') => {
+	const loadImage = useCallback(async (image: Image, fileName = '', filePath = '') => {
 		if (timerRef.current) {
 			clearInterval(timerRef.current);
 			timerRef.current = null;
@@ -97,6 +100,7 @@ export const useImage = () => {
 			currentImage: image.clone(),
 			originalImage: image.clone(),
 			fileName,
+			filePath,
 			blur: 0,
 			threshold: 0,
 			values: 2,
@@ -120,6 +124,7 @@ export const useImage = () => {
 			currentImage: null,
 			originalImage: null,
 			fileName: '',
+			filePath: '',
 			blur: 0,
 			threshold: 0,
 			values: 2,
@@ -284,6 +289,7 @@ export const useImage = () => {
 		currentImage,
 		originalImage,
 		fileName,
+		filePath,
 		hasImage: !!currentImage,
 
 		// Actions

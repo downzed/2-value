@@ -5,5 +5,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 // the ipcRenderer without exposing the entire object
 contextBridge.exposeInMainWorld('electronAPI', {
 	openImage: () => ipcRenderer.invoke('open-image'),
-	saveImage: (dataUrl: string) => ipcRenderer.invoke('save-image', { dataUrl }),
+	saveImage: (dataUrl: string, defaultPath?: string) => ipcRenderer.invoke('save-image', { dataUrl, defaultPath }),
+	getRecents: () => ipcRenderer.invoke('get-recents'),
+	removeRecent: (path: string) => ipcRenderer.invoke('remove-recent', { path }),
+	openImageFromPath: (path: string) => ipcRenderer.invoke('open-image-from-path', { path }),
 });
