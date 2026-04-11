@@ -72,7 +72,7 @@ function clearPersistedToken(): void {
 	}
 }
 
-// ─── PKCE / state helpers ────────────────────────────────────────────────────
+// ─── State helpers ───────────────────────────────────────────────────────────
 
 function generateState(): string {
 	const value = crypto.randomBytes(24).toString('hex');
