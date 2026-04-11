@@ -99,12 +99,11 @@ const OpenDialog: React.FC<OpenDialogProps> = ({ isOpen, onClose, onImageLoaded 
 			if (result?.dataUrl) {
 				await loadFromDataUrl(result.dataUrl, result.path);
 				onImageLoaded();
-			} else {
-				setLoading(false);
 			}
 		} catch (err) {
 			setError('Failed to open image.');
 			console.error('Failed to browse image:', err);
+		} finally {
 			setLoading(false);
 		}
 	}, [loadFromDataUrl, onImageLoaded]);
@@ -127,19 +126,39 @@ const OpenDialog: React.FC<OpenDialogProps> = ({ isOpen, onClose, onImageLoaded 
 		[onClose],
 	);
 
+	const handleBackdropKeyDown = useCallback(
+		(e: React.KeyboardEvent) => {
+			if ((e.key === 'Enter' || e.key === ' ') && e.target === e.currentTarget) {
+				e.preventDefault();
+				onClose();
+			}
+		},
+		[onClose],
+	);
+
 	if (!isOpen) return null;
 
 	return (
 		<div
 			role='dialog'
+			aria-modal='true'
+			aria-labelledby='open-dialog-title'
 			className='fixed inset-0 z-[60] flex items-center justify-center bg-black/50'
 			onClick={handleBackdropClick}
+			onKeyDown={handleBackdropKeyDown}
 		>
 			<div className='bg-white rounded-xl shadow-2xl border border-slate-200 w-[480px] max-h-[80vh] flex flex-col'>
 				{/* Header */}
 				<div className='flex items-center justify-between px-4 py-3 border-b border-slate-100'>
-					<span className='text-sm font-semibold text-slate-700'>Open Image</span>
-					<button type='button' onClick={onClose} className='text-slate-400 hover:text-slate-600 transition-colors'>
+					<span id='open-dialog-title' className='text-sm font-semibold text-slate-700'>
+						Open Image
+					</span>
+					<button
+						type='button'
+						onClick={onClose}
+						aria-label='Close'
+						className='text-slate-400 hover:text-slate-600 transition-colors'
+					>
 						<Icon name='close' />
 					</button>
 				</div>
