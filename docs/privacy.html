@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy — 2-value Image Editor</title>
+    <style>
+      :root {
+        --bg: #0f0f0f;
+        --surface: #1a1a1a;
+        --border: #2a2a2a;
+        --text: #e5e5e5;
+        --muted: #888;
+        --accent: #e60023;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-size: 15px;
+        line-height: 1.7;
+        padding: 2rem 1rem;
+      }
+
+      .container {
+        max-width: 720px;
+        margin: 0 auto;
+      }
+
+      header {
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 1.5rem;
+        margin-bottom: 2rem;
+      }
+
+      header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+      }
+
+      header p {
+        color: var(--muted);
+        font-size: 0.875rem;
+      }
+
+      h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin: 2rem 0 0.75rem;
+        color: var(--text);
+      }
+
+      p {
+        margin-bottom: 0.75rem;
+        color: #ccc;
+      }
+
+      ul {
+        margin: 0.5rem 0 0.75rem 1.25rem;
+        color: #ccc;
+      }
+
+      ul li {
+        margin-bottom: 0.4rem;
+      }
+
+      .badge {
+        display: inline-block;
+        background: var(--accent);
+        color: #fff;
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+        padding: 0.15rem 0.5rem;
+        border-radius: 4px;
+        margin-right: 0.4rem;
+        vertical-align: middle;
+      }
+
+      footer {
+        border-top: 1px solid var(--border);
+        margin-top: 3rem;
+        padding-top: 1.25rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>Privacy Policy</h1>
+        <p>2-value Image Editor &mdash; Last updated: April 2026</p>
+      </header>
+
+      <p>
+        2-value is a local desktop image editor for macOS, Windows, and Linux. This policy describes
+        what data is involved when you use the optional Pinterest integration.
+      </p>
+
+      <h2>What data the app collects</h2>
+      <p>
+        The app only processes data that you explicitly provide or authorise. No data is collected
+        passively, and there is no telemetry, analytics, or crash reporting.
+      </p>
+
+      <h2><span class="badge">Pinterest</span> OAuth access token</h2>
+      <p>
+        When you connect your Pinterest account the app receives an OAuth access token from
+        Pinterest. This token is:
+      </p>
+      <ul>
+        <li>Stored <strong>locally on your device only</strong>, encrypted using your operating system's
+          secure credential storage (Electron <code>safeStorage</code> — Keychain on macOS, Credential Manager
+          on Windows, libsecret on Linux).</li>
+        <li>Never uploaded to any server, cloud service, or third party.</li>
+        <li>Only transmitted to Pinterest's own API endpoints (<code>api.pinterest.com</code>) to
+          retrieve your boards and pins.</li>
+      </ul>
+
+      <h2><span class="badge">Pinterest</span> Board and pin metadata</h2>
+      <p>
+        When you browse your boards, the app fetches board names, pin counts, pin titles, and
+        thumbnail URLs from Pinterest on demand. This metadata is:
+      </p>
+      <ul>
+        <li>Held <strong>in memory only</strong> for the duration of the session.</li>
+        <li>Not written to disk, not cached, and not shared.</li>
+        <li>Discarded when you close the app or switch boards.</li>
+      </ul>
+
+      <h2>What the app does <em>not</em> do</h2>
+      <ul>
+        <li>Does not send any data to the app developer or any third-party service.</li>
+        <li>Does not write to Pinterest (no pins are created, edited, or deleted).</li>
+        <li>Does not include advertising, analytics, or tracking of any kind.</li>
+        <li>Does not require an account with the app developer.</li>
+      </ul>
+
+      <h2>Disconnecting Pinterest</h2>
+      <p>
+        You can disconnect your Pinterest account at any time using the <strong>Disconnect</strong>
+        option in the Gallery panel. This immediately deletes the locally stored token. You can
+        also revoke access directly from your
+        <a href="https://www.pinterest.com/settings/security" style="color: var(--accent);" target="_blank" rel="noopener noreferrer">
+          Pinterest security settings</a>.
+      </p>
+
+      <h2>Children's privacy</h2>
+      <p>
+        This app is not directed at children under 13 and does not knowingly collect any information
+        from children.
+      </p>
+
+      <h2>Changes to this policy</h2>
+      <p>
+        If this policy changes materially, the updated date at the top of this page will reflect
+        that. Continued use of the Pinterest integration after an update constitutes acceptance of
+        the revised policy.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Questions about this policy can be raised by opening an issue in the
+        <a href="https://github.com/downzed/2-value" style="color: var(--accent);" target="_blank" rel="noopener noreferrer">
+          2-value GitHub repository</a>.
+      </p>
+
+      <footer>
+        <p>2-value Image Editor &mdash; open-source desktop application. No data leaves your device.</p>
+      </footer>
+    </div>
+  </body>
+</html>
