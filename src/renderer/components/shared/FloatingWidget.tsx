@@ -1,8 +1,8 @@
 import { useRef } from 'react';
-import { useDraggablePanel } from '../hooks/useDraggablePanel';
-import { Icon } from './shared/Icon';
+import { useDraggablePanel } from '../../hooks/useDraggablePanel';
+import { Icon } from './Icon';
 
-interface FloatingPanelProps {
+interface FloatingWidgetProps {
 	/** Panel title displayed in the drag handle */
 	title: string;
 	/** localStorage key for position persistence */
@@ -23,7 +23,7 @@ interface FloatingPanelProps {
 	children: React.ReactNode;
 }
 
-const FloatingPanel: React.FC<FloatingPanelProps> = ({
+const FloatingWidget: React.FC<FloatingWidgetProps> = ({
 	title,
 	storageKey,
 	defaultPosition,
@@ -76,4 +76,4 @@ const FloatingPanel: React.FC<FloatingPanelProps> = ({
 	);
 };
 
-export default FloatingPanel;
+export default FloatingWidget;
