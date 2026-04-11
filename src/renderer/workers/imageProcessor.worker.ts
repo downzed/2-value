@@ -172,6 +172,6 @@ self.onmessage = (e: MessageEvent<ProcessRequest>) => {
 			width: req.width,
 			height: req.height,
 		};
-		(self as unknown as Worker).postMessage(resp);
+		(self as unknown as Worker).postMessage(resp, [req.data.buffer as ArrayBuffer]);
 	}
 };

@@ -629,9 +629,14 @@ yarn start                      # Uses electron-forge
 17. ~~Multi-format save (JPEG/PNG)~~ Done
 18. ~~Shell directory restructure (App, BottomPanel → shell/)~~ Done
 19. ~~Recents cache with JSON persistence~~ Done
+20. ~~Code review cleanup (bugs, smells, security)~~ Done (counter off-by-one, save-image null guard, blank thumbnails guard, worker error transfer list, stale zoom display, unused constants/CSS, isInRecents guard, sandbox comment, `React.MouseEvent` explicit import)
+21. ~~Unify `RecentEntry` type into `src/shared/types.ts`~~ Done
+22. ~~Extract shared `imageToImageData` utility~~ Done (`src/renderer/utils/imageConversion.ts`)
+23. ~~Path validation on `read-image-buffer` IPC (allowedPaths set)~~ Done
+24. ~~Reduce `useKeyboardShortcuts` re-registrations (canUndo/canRedo refs)~~ Done
 
 ### Medium Term (1 month)
-1. Add component-level test coverage (Canvas, FloatingImage, FloatingCounter, BottomPanel)
+1. ~~Add component-level test coverage (Canvas, FloatingImage, FloatingCounter, BottomPanel)~~ Done
 2. Profile with large images
 3. Consider web worker for filters
 

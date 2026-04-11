@@ -1,15 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useImageContext } from '../../hooks/ImageContext';
 import { imageLoadErrorMessage, useImageLoader } from '../../hooks/useImageLoader';
+import type { RecentEntry } from '../../../shared/types';
 import { Icon } from '../shared/Icon';
 import { SectionHeader } from '../shared/SectionHeader';
-
-interface RecentEntry {
-	path: string;
-	fileName: string;
-	thumbnail: string;
-	openedAt: number;
-}
 
 const GalleryPanel: React.FC = () => {
 	const { panels, setPanel } = useImageContext();

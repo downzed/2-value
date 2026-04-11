@@ -35,6 +35,7 @@ interface ImageState {
 	// Zoom
 	zoom: number;
 	fitMode: FitMode;
+	fitScale: number;
 
 	// Counter
 	counter: number;
@@ -56,6 +57,23 @@ const DEFAULT_PANELS: Record<PanelId, boolean> = {
 	gallery: false,
 };
 
+function createDefaultImageState() {
+	return {
+		blur: 0,
+		threshold: 0,
+		values: 2 as const,
+		showOriginal: false,
+		zoom: 1,
+		fitMode: 'fit' as FitMode,
+		fitScale: 1,
+		counter: 0,
+		counterRunning: false,
+		counterDuration: null as number | null,
+		adjustmentHistory: [] as AdjustmentSnapshot[],
+		adjustmentFuture: [] as AdjustmentSnapshot[],
+	};
+}
+
 function getSnapshot(state: ImageState): AdjustmentSnapshot {
 	return { blur: state.blur, threshold: state.threshold, values: state.values };
 }
@@ -73,18 +91,8 @@ export const useImage = () => {
 		sourceImage: null,
 		fileName: '',
 		filePath: '',
-		blur: 0,
-		threshold: 0,
-		values: 2,
-		showOriginal: false,
-		zoom: 1,
-		fitMode: 'fit',
-		counter: 0,
-		counterRunning: false,
-		counterDuration: null,
+		...createDefaultImageState(),
 		panels: { ...DEFAULT_PANELS },
-		adjustmentHistory: [],
-		adjustmentFuture: [],
 	});
 
 	const {
@@ -97,6 +105,7 @@ export const useImage = () => {
 		showOriginal,
 		zoom,
 		fitMode,
+		fitScale,
 		counter,
 		counterRunning,
 		counterDuration,
@@ -106,13 +115,6 @@ export const useImage = () => {
 	} = imageState;
 
 	const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-	/**
-	 * Holds the most recent effective zoom (fitScale when fit, zoom when manual).
-	 * Updated by Canvas during render so zoomIn/zoomOut can use the true visual
-	 * zoom as their base when transitioning out of fit mode.
-	 */
-	const effectiveZoomRef = useRef(1);
 
 	// Load image (already decoded)
 	// Store source once — no clone needed for currentImage/originalImage duplication.
@@ -125,18 +127,8 @@ export const useImage = () => {
 			sourceImage: image,
 			fileName,
 			filePath,
-			blur: 0,
-			threshold: 0,
-			values: 2,
-			showOriginal: false,
-			zoom: 1,
-			fitMode: 'fit',
-			counter: 0,
-			counterRunning: false,
-			counterDuration: null,
+			...createDefaultImageState(),
 			panels: { controls: true, original: true, timer: true, gallery: false },
-			adjustmentHistory: [],
-			adjustmentFuture: [],
 		});
 	}, []);
 
@@ -150,18 +142,8 @@ export const useImage = () => {
 			sourceImage: null,
 			fileName: '',
 			filePath: '',
-			blur: 0,
-			threshold: 0,
-			values: 2,
-			showOriginal: false,
-			zoom: 1,
-			fitMode: 'fit',
-			counter: 0,
-			counterRunning: false,
-			counterDuration: null,
+			...createDefaultImageState(),
 			panels: { ...DEFAULT_PANELS },
-			adjustmentHistory: [],
-			adjustmentFuture: [],
 		});
 	}, []);
 
@@ -298,7 +280,7 @@ export const useImage = () => {
 
 	const zoomIn = useCallback(() => {
 		setImageState((prev) => {
-			const base = prev.fitMode === 'fit' ? effectiveZoomRef.current : prev.zoom;
+			const base = prev.fitMode === 'fit' ? prev.fitScale : prev.zoom;
 			const next = Math.min(UI.ZOOM.MAX, Math.round((base + UI.ZOOM.STEP) * 100) / 100);
 			return { ...prev, zoom: next, fitMode: 'manual' as FitMode };
 		});
@@ -306,10 +288,14 @@ export const useImage = () => {
 
 	const zoomOut = useCallback(() => {
 		setImageState((prev) => {
-			const base = prev.fitMode === 'fit' ? effectiveZoomRef.current : prev.zoom;
+			const base = prev.fitMode === 'fit' ? prev.fitScale : prev.zoom;
 			const next = Math.max(UI.ZOOM.MIN, Math.round((base - UI.ZOOM.STEP) * 100) / 100);
 			return { ...prev, zoom: next, fitMode: 'manual' as FitMode };
 		});
+	}, []);
+
+	const setFitScale = useCallback((scale: number) => {
+		setImageState((prev) => ({ ...prev, fitScale: scale }));
 	}, []);
 
 	// Counter
@@ -323,12 +309,13 @@ export const useImage = () => {
 		}));
 		timerRef.current = setInterval(() => {
 			setImageState((prev) => {
-				if (prev.counter <= 0) {
+				const next = prev.counter - 1;
+				if (next <= 0) {
 					if (timerRef.current) clearInterval(timerRef.current);
 					timerRef.current = null;
 					return { ...prev, counter: 0, counterRunning: false };
 				}
-				return { ...prev, counter: prev.counter - 1 };
+				return { ...prev, counter: next };
 			});
 		}, 1000);
 	}, []);
@@ -386,11 +373,13 @@ export const useImage = () => {
 		// Zoom
 		zoom,
 		fitMode,
+		fitScale,
+		effectiveZoom: fitMode === 'fit' ? fitScale : zoom,
 		setZoom,
 		setFitMode,
+		setFitScale,
 		zoomIn,
 		zoomOut,
-		effectiveZoomRef,
 
 		// Counter
 		counter,

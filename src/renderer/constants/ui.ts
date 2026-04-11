@@ -25,9 +25,7 @@ export const UI = {
 	},
 	PERF: {
 		MAX_FILE_BYTES: 25 * 1024 * 1024, // hard stop (25MB input file)
-		WARN_FILE_BYTES: 10 * 1024 * 1024, // warn/confirm path
 		MAX_PIXELS: 40_000_000, // hard stop (e.g. 8k x 5k)
-		WARN_PIXELS: 20_000_000,
 		PREVIEW_MAX_PIXELS: 2_000_000, // interactive preview target
 		INTERACTIVE_DEBOUNCE_MS: 120,
 	},

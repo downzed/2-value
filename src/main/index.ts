@@ -1,19 +1,13 @@
 // Modules to control application life and create native browser window
-import electron, { type BaseWindow } from 'electron';
+import electron from 'electron';
 
 const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } = electron;
 
 import fs from 'node:fs';
 import path from 'node:path';
+import type { RecentEntry } from '../shared/types';
 
 // --- Recents storage ---
-
-interface RecentEntry {
-	path: string;
-	fileName: string;
-	thumbnail: string;
-	openedAt: number;
-}
 
 const RECENTS_MAX = 20;
 
@@ -43,6 +37,7 @@ async function saveRecents(entries: RecentEntry[]): Promise<void> {
 async function addRecentEntry(filePath: string): Promise<void> {
 	const entries = (await loadRecents()).filter((e) => e.path !== filePath);
 	const image = nativeImage.createFromPath(filePath);
+	if (image.isEmpty()) return; // skip — not a valid image
 	const thumbnail = image.resize({ width: 100 }).toDataURL();
 	entries.unshift({
 		path: filePath,
@@ -59,12 +54,19 @@ async function removeRecentEntry(filePath: string): Promise<void> {
 }
 
 function isInRecents(filePath: string): boolean {
-	return recentsCache?.some((e) => e.path === filePath) ?? false;
+	if (!recentsCache) return false; // cache not yet loaded
+	return recentsCache.some((e) => e.path === filePath);
 }
 
 // --- Window ---
 
 let mainWindow: electron.BrowserWindow | null = null;
+
+/**
+ * Tracks paths the user has explicitly opened (via dialog or recents).
+ * Currently used to validate read-image-buffer requests.
+ */
+const allowedPaths = new Set<string>();
 
 function createWindow() {
 	// Create the browser window.
@@ -75,7 +77,7 @@ function createWindow() {
 			preload: path.join(__dirname, '../preload/index.mjs'),
 			contextIsolation: true,
 			nodeIntegration: false,
-			sandbox: false,
+			sandbox: false, // Required: preload script uses Node.js APIs (path, fs) for IPC bridge
 		},
 	});
 
@@ -135,11 +137,13 @@ ipcMain.handle('open-image', async () => {
 	});
 	if (filePaths[0]) {
 		const filePath = filePaths[0];
-		const stat = await fs.promises.stat(filePath);
-		await addRecentEntry(filePath);
+		const resolvedPath = path.resolve(filePath);
+		const stat = await fs.promises.stat(resolvedPath);
+		await addRecentEntry(resolvedPath);
+		allowedPaths.add(resolvedPath);
 		return {
-			path: filePath,
-			fileName: path.basename(filePath),
+			path: resolvedPath,
+			fileName: path.basename(resolvedPath),
 			fileSize: stat.size,
 		};
 	}
@@ -168,6 +172,9 @@ ipcMain.handle('get-image-info', async (_event, { path: filePath }: { path: stri
  */
 ipcMain.handle('read-image-buffer', async (_event, { path: filePath }: { path: string }) => {
 	const resolvedPath = path.resolve(filePath);
+	if (!allowedPaths.has(resolvedPath)) {
+		throw new Error('Access denied: path not opened by user');
+	}
 	const buffer = await fs.promises.readFile(resolvedPath);
 	// Return as Uint8Array — Electron serialises Buffer as Uint8Array over IPC
 	return new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength);
@@ -177,7 +184,8 @@ ipcMain.handle('read-image-buffer', async (_event, { path: filePath }: { path: s
  * Save image: accepts binary ArrayBuffer from canvas.toBlob(), avoids base64.
  */
 ipcMain.handle('save-image', async (_event, { buffer, defaultPath }: { buffer: ArrayBuffer; defaultPath?: string }) => {
-	const { filePath, canceled } = await dialog.showSaveDialog(mainWindow as BaseWindow, {
+	if (!mainWindow) return null;
+	const { filePath, canceled } = await dialog.showSaveDialog(mainWindow, {
 		title: 'Save Image',
 		defaultPath: defaultPath || 'untitled.png',
 		filters: [
@@ -209,6 +217,7 @@ ipcMain.handle('open-image-from-path', async (_event, { path: filePath }) => {
 	}
 	const stat = await fs.promises.stat(resolvedPath);
 	await addRecentEntry(resolvedPath);
+	allowedPaths.add(resolvedPath);
 	return {
 		path: resolvedPath,
 		fileName: path.basename(resolvedPath),

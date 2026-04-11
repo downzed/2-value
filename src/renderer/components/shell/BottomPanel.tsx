@@ -22,11 +22,11 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		counterDuration,
 		zoom,
 		fitMode,
+		effectiveZoom,
 		setFitMode,
 		setZoom,
 		zoomIn,
 		zoomOut,
-		effectiveZoomRef,
 	} = useImageContext();
 	const { loadFromPath } = useImageLoader();
 	const [status, setStatus] = useState<Status>('ready');
@@ -242,9 +242,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 						</button>
 					</div>
 
-					<span className='text-slate-400 text-[10px] w-8 text-center'>
-						{Math.round(effectiveZoomRef.current * 100)}%
-					</span>
+					<span className='text-slate-400 text-[10px] w-8 text-center'>{Math.round(effectiveZoom * 100)}%</span>
 
 					<button
 						type='button'

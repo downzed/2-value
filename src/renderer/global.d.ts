@@ -1,11 +1,4 @@
-export {};
-
-interface RecentEntry {
-	path: string;
-	fileName: string;
-	thumbnail: string;
-	openedAt: number;
-}
+import type { RecentEntry } from '../shared/types';
 
 interface OpenImageResult {
 	path: string;
