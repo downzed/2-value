@@ -36,6 +36,7 @@ describe('useImage', () => {
 			original: true,
 			timer: true,
 			gallery: false,
+			pinterest: false,
 		});
 		expect(result.current.canUndo).toBe(false);
 		expect(result.current.canRedo).toBe(false);

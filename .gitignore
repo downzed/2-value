@@ -7,3 +7,5 @@ out
 .opencode/node_modules
 .zed
 .env
+.env.local
+.env.*.local

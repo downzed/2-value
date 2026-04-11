@@ -2,7 +2,7 @@ import type { Image } from 'image-js';
 import { useCallback, useState, useRef } from 'react';
 import { UI } from '../constants/ui';
 
-type PanelId = 'controls' | 'original' | 'timer' | 'gallery';
+type PanelId = 'controls' | 'original' | 'timer' | 'gallery' | 'pinterest';
 
 interface AdjustmentSnapshot {
 	blur: number;
@@ -55,6 +55,7 @@ const DEFAULT_PANELS: Record<PanelId, boolean> = {
 	original: true,
 	timer: true,
 	gallery: false,
+	pinterest: false,
 };
 
 function createDefaultImageState() {
@@ -128,7 +129,7 @@ export const useImage = () => {
 			fileName,
 			filePath,
 			...createDefaultImageState(),
-			panels: { controls: true, original: true, timer: true, gallery: false },
+			panels: { controls: true, original: true, timer: true, gallery: false, pinterest: false },
 		});
 	}, []);
 

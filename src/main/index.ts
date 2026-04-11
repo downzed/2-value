@@ -6,6 +6,9 @@ const { app, BrowserWindow, ipcMain, dialog, shell, nativeImage } = electron;
 import fs from 'node:fs';
 import path from 'node:path';
 import type { RecentEntry } from '../shared/types';
+import type { SavePinArgs } from '../shared/pinterest-types';
+import { fetchBoards, savePin } from './pinterest-api';
+import { getValidAccessToken, handleOAuthCallback, initiateOAuthFlow, isAuthenticated, logout } from './pinterest-auth';
 
 // --- Recents storage ---
 
@@ -227,3 +230,43 @@ ipcMain.handle('open-image-from-path', async (_event, { path: filePath }) => {
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and require them here.
+
+// ─── Pinterest IPC handlers ───────────────────────────────────────────────────
+
+/**
+ * Redirect URI used for the OAuth callback.
+ * Uses the custom app protocol registered at app startup.
+ */
+const PINTEREST_REDIRECT_URI = 'imageapp://pinterest/callback';
+
+/** Open Pinterest OAuth login in the system browser */
+ipcMain.handle('pinterest:auth', async () => {
+	return initiateOAuthFlow(PINTEREST_REDIRECT_URI);
+});
+
+/** Handle OAuth callback code + state (called by protocol handler or deep link) */
+ipcMain.handle('pinterest:auth-callback', async (_event, { code, state }: { code: string; state: string }) => {
+	return handleOAuthCallback(code, state, PINTEREST_REDIRECT_URI);
+});
+
+/** Check whether the user is authenticated */
+ipcMain.handle('pinterest:auth-status', async () => {
+	if (!isAuthenticated()) return { authenticated: false };
+	const token = await getValidAccessToken();
+	return { authenticated: token !== null };
+});
+
+/** Log out (remove stored token) */
+ipcMain.handle('pinterest:logout', async () => {
+	logout();
+});
+
+/** Fetch the authenticated user's boards */
+ipcMain.handle('pinterest:get-boards', async () => {
+	return fetchBoards();
+});
+
+/** Save an image as a Pinterest pin */
+ipcMain.handle('pinterest:save-pin', async (_event, args: SavePinArgs) => {
+	return savePin(args);
+});
