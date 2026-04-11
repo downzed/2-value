@@ -15,7 +15,11 @@ export function imageToImageData(source: Image): ImageData {
  * Extract raw pixel data from an image-js Image as a Uint8ClampedArray.
  * Ensures a concrete ArrayBuffer (not SharedArrayBuffer) for worker transfer.
  */
-export function imageToUint8Clamped(source: Image): { data: Uint8ClampedArray<ArrayBuffer>; width: number; height: number } {
+export function imageToUint8Clamped(source: Image): {
+	data: Uint8ClampedArray<ArrayBuffer>;
+	width: number;
+	height: number;
+} {
 	const raw = source.getRawImage();
 	const clamped = new Uint8ClampedArray(raw.data.byteLength) as Uint8ClampedArray<ArrayBuffer>;
 	for (let i = 0; i < raw.data.length; i++) clamped[i] = raw.data[i];

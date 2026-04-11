@@ -242,9 +242,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 						</button>
 					</div>
 
-					<span className='text-slate-400 text-[10px] w-8 text-center'>
-						{Math.round(effectiveZoom * 100)}%
-					</span>
+					<span className='text-slate-400 text-[10px] w-8 text-center'>{Math.round(effectiveZoom * 100)}%</span>
 
 					<button
 						type='button'

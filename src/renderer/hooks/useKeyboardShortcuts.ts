@@ -128,17 +128,5 @@ export function useKeyboardShortcuts() {
 
 		window.addEventListener('keydown', handleKeyDown);
 		return () => window.removeEventListener('keydown', handleKeyDown);
-	}, [
-		hasImage,
-		blur,
-		threshold,
-		setBlur,
-		setThreshold,
-		undo,
-		redo,
-		togglePanel,
-		setFitMode,
-		zoomIn,
-		zoomOut,
-	]);
+	}, [hasImage, blur, threshold, setBlur, setThreshold, undo, redo, togglePanel, setFitMode, zoomIn, zoomOut]);
 }
