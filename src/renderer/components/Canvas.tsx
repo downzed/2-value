@@ -173,42 +173,42 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 		return () => el.removeEventListener('wheel', handleWheel);
 	}, [handleWheel]);
 
-	if (!currentImage) {
-		return (
-			<div className='flex-1 flex items-center justify-center'>
-				<div className='text-center'>
-					<div className='w-24 h-24 mx-auto mb-4 bg-slate-200 rounded-full flex items-center justify-center'>
-						<Icon name='image' size='lg' className='text-slate-400' strokeWidth={1.5} />
-					</div>
-					<p className='text-lg font-medium text-slate-600'>No image loaded</p>
-					<p className='text-sm text-slate-500 mt-1'>Click "Open" to get started</p>
-				</div>
-			</div>
-		);
-	}
-
 	// Display dimensions: use processed size if available (may be preview-scaled),
 	// but layout is always based on source dimensions.
-	const canvasWidth = currentImage.width;
-	const canvasHeight = currentImage.height;
+	const canvasWidth = currentImage?.width ?? 0;
+	const canvasHeight = currentImage?.height ?? 0;
 	const scaledWidth = canvasWidth * effectiveZoom;
 	const scaledHeight = canvasHeight * effectiveZoom;
 
 	return (
-		<div ref={containerRef} className='flex-1 overflow-auto'>
-			<div className='flex items-center justify-center' style={{ minWidth: '100%', minHeight: '100%', padding: 24 }}>
-				<div className='bg-white rounded-lg shadow-lg p-1 overflow-hidden'>
-					<canvas
-						ref={previewCanvasRef}
-						className='border border-slate-200 rounded'
-						style={{
-							display: 'block',
-							width: scaledWidth,
-							height: scaledHeight,
-							imageRendering: 'pixelated',
-						}}
-					/>
-				</div>
+		<div className='flex-1 p-3 overflow-hidden'>
+			<div ref={containerRef} className='bg-white rounded-2xl shadow-lg w-full h-full overflow-auto'>
+				{!currentImage ? (
+					<div className='w-full h-full flex items-center justify-center'>
+						<div className='text-center'>
+							<div className='w-24 h-24 mx-auto mb-4 bg-slate-200 rounded-full flex items-center justify-center'>
+								<Icon name='image' size='lg' className='text-slate-400' strokeWidth={1.5} />
+							</div>
+							<p className='text-lg font-medium text-slate-600'>No image loaded</p>
+							<p className='text-sm text-slate-500 mt-1'>Click "Open" to get started</p>
+						</div>
+					</div>
+				) : (
+					<div
+						className='flex items-center justify-center'
+						style={{ minWidth: '100%', minHeight: '100%', padding: 24 }}
+					>
+						<canvas
+							ref={previewCanvasRef}
+							className='block'
+							style={{
+								width: scaledWidth,
+								height: scaledHeight,
+								imageRendering: 'pixelated',
+							}}
+						/>
+					</div>
+				)}
 			</div>
 		</div>
 	);
