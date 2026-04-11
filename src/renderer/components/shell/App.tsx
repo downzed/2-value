@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useRef } from 'react';
 import { ImageProvider } from '../../hooks/ImageContext';
+import { GalleryProvider } from '../../hooks/GalleryContext';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
 import BottomPanel from './BottomPanel';
 import GalleryPanel from './GalleryPanel';
@@ -30,7 +31,9 @@ const AppContent: React.FC = () => {
 const App: React.FC = () => {
 	return (
 		<ImageProvider>
-			<AppContent />
+			<GalleryProvider>
+				<AppContent />
+			</GalleryProvider>
 		</ImageProvider>
 	);
 };

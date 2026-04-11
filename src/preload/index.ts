@@ -34,8 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 		folderId: string,
 		metadata: { sourceId: string; author: string; authorUrl: string; description: string },
 	) => ipcRenderer.invoke('gallery:download-external', { url, folderId, metadata }),
-	gallerySearchImages: (query: string, page?: number) =>
-		ipcRenderer.invoke('gallery:search-images', { query, page }),
+	gallerySearchImages: (query: string, page?: number) => ipcRenderer.invoke('gallery:search-images', { query, page }),
 	galleryRandomImages: (query?: string, count?: number) =>
 		ipcRenderer.invoke('gallery:random-images', { query, count }),
 });

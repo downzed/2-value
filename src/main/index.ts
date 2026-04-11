@@ -286,18 +286,17 @@ ipcMain.handle('gallery:reorder-folders', (_event, { orderedIds }: { orderedIds:
 	reorderFolders(orderedIds),
 );
 
-ipcMain.handle(
-	'gallery:import-image',
-	(_event, { sourcePath, folderId }: { sourcePath: string; folderId: string }) => {
-		if (!allowedPaths.has(sourcePath)) {
-			throw new Error('Import path not authorized');
-		}
-		return importImage(sourcePath, folderId);
-	},
-);
+ipcMain.handle('gallery:import-image', (_event, { sourcePath, folderId }: { sourcePath: string; folderId: string }) => {
+	if (!allowedPaths.has(sourcePath)) {
+		throw new Error('Import path not authorized');
+	}
+	return importImage(sourcePath, folderId);
+});
 
-ipcMain.handle('gallery:move-image', (_event, { imageId, targetFolderId }: { imageId: string; targetFolderId: string }) =>
-	moveImage(imageId, targetFolderId),
+ipcMain.handle(
+	'gallery:move-image',
+	(_event, { imageId, targetFolderId }: { imageId: string; targetFolderId: string }) =>
+		moveImage(imageId, targetFolderId),
 );
 
 ipcMain.handle(

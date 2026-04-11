@@ -1,3 +1,5 @@
+export const UNSORTED_FOLDER_NAME = 'Unsorted';
+
 export interface RecentEntry {
 	path: string;
 	fileName: string;

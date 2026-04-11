@@ -1,4 +1,11 @@
-import type { RecentEntry, GalleryData, GalleryFolder, GalleryImage, SourceSplashSearchResult, SourceSplashImage } from '../shared/types';
+import type {
+	RecentEntry,
+	GalleryData,
+	GalleryFolder,
+	GalleryImage,
+	SourceSplashSearchResult,
+	SourceSplashImage,
+} from '../shared/types';
 
 interface OpenImageResult {
 	path: string;
