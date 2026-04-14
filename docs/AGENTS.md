@@ -17,10 +17,11 @@
 - `src/main/` - Electron main process (Node.js) — file dialogs, IPC handlers, recents cache
 - `src/preload/` - IPC bridge (exposes `electronAPI`: openImage, saveImage, getRecents, removeRecent, openImageFromPath)
 - `src/renderer/` - React frontend
-  - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), OpenDialog (gallery/recents modal)
+  - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), GalleryPanel (gallery/recents modal)
+  - `components/gallery/` - FolderContextMenu, FolderPickerDialog, ImageContextMenu
   - `components/shared/` - Icon, PillButton, SectionHeader, SliderRow (reusable UI primitives)
   - `components/` - Canvas, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
-  - `hooks/` - useImage, ImageContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
+  - `hooks/` - useImage, ImageContext, useGallery, GalleryContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
   - `constants/` - UI constants (filter ranges, presets, history config)
 
 ## Key Implementation Details
@@ -32,7 +33,9 @@
 - Panel drag logic extracted into `useDraggablePanel` hook
 - Panel positions persisted to localStorage (separate key per panel)
 - File save supports JPEG/PNG based on chosen extension (async `fs.promises.writeFile`)
-- OpenDialog modal for gallery/recents with thumbnail grid, browse button, error handling
+- GalleryPanel modal for gallery/recents with folder organization, thumbnail grid, Pexels search
+- Gallery data: atomic JSON persistence at `app.getPath('userData')/gallery/gallery.json`
+- Custom `gallery-thumb://` protocol for efficient thumbnail serving
 - Recents cache: in-memory + JSON persistence at `app.getPath('userData')/recents.json`
 - Shared UI primitives (Icon, PillButton, SectionHeader, SliderRow) used across all panels
 

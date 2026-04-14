@@ -16,6 +16,7 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone or 3-ton
 
 ## Features
 
+- **Gallery**: Self-contained image management system with folder organization, local import, and external search (Pexels API)
 - **Gallery/Recents**: Open images from a recent files grid or browse the filesystem
 - Open images (PNG, JPG, JPEG, BMP)
 - Save images as PNG or JPEG (format auto-detected from extension)
@@ -50,10 +51,11 @@ A 2-value image editor for drawing studies. Converts images to a 2-tone or 3-ton
 - `src/main/` - Electron main process (Node.js) — file dialogs, IPC handlers, recents cache
 - `src/preload/` - IPC bridge (exposes `electronAPI`: openImage, saveImage, getRecents, removeRecent, openImageFromPath)
 - `src/renderer/` - React frontend
-  - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), OpenDialog (gallery/recents modal)
+  - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), GalleryPanel (gallery/recents modal)
+  - `components/gallery/` - FolderContextMenu, FolderPickerDialog, ImageContextMenu
   - `components/shared/` - Icon, PillButton, SectionHeader, SliderRow (reusable UI primitives)
   - `components/` - Canvas, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
-  - `hooks/` - useImage, ImageContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
+  - `hooks/` - useImage, ImageContext, useGallery, GalleryContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
   - `constants/` - UI constants (filter ranges, presets, history config)
 
 ## Tech Stack
