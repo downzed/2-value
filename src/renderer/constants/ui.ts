@@ -29,4 +29,10 @@ export const UI = {
 		PREVIEW_MAX_PIXELS: 2_000_000, // interactive preview target
 		INTERACTIVE_DEBOUNCE_MS: 120,
 	},
+	GALLERY: {
+		PANEL_WIDTH: 380,
+		THUMBNAIL_COLS: 3,
+		SUGGESTION_COUNT: 6,
+		CACHE_TTL_MS: 3 * 60 * 1000, // 3 minutes
+	},
 };

@@ -65,15 +65,7 @@ export function useImageProcessingWorker() {
 			// Use dynamic import via Vite's worker import syntax.
 			// The ?worker suffix is a Vite convention; we use the Worker constructor
 			// with a relative URL string so it works after bundling.
-			worker = new Worker(
-				// Note: import.meta.url is handled by Vite's bundler for the renderer process.
-				// The tsconfig uses CommonJS module mode (for main/preload), but Vite transforms
-				// import.meta before TypeScript sees it in the renderer bundle.
-				// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-				// @ts-expect-error: import.meta.url is valid in Vite renderer context
-				new URL('../workers/imageProcessor.worker.ts', import.meta.url),
-				{ type: 'module' },
-			);
+			worker = new Worker(new URL('../workers/imageProcessor.worker.ts', import.meta.url), { type: 'module' });
 			worker.onmessage = (e: MessageEvent<ProcessResponse>) => {
 				const { jobId, data, width, height } = e.data;
 				const cb = pendingCallbackRef.current.get(jobId);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
+import { UI } from '../constants/ui';
 import { useImageContext } from '../hooks/ImageContext';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
-import { UI } from '../constants/ui';
 import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
 import { PillButton } from './shared/PillButton';

@@ -49,23 +49,23 @@ export function useKeyboardShortcuts() {
 				return;
 			}
 
-			// Alt+1/2/3 = Toggle panels
-			if (e.altKey && e.key === '1') {
+			// Alt+1/2/3 or Ctrl+1/2/3 = Toggle panels
+			if ((e.altKey || e.ctrlKey) && e.key === '1') {
 				e.preventDefault();
 				togglePanel('controls');
 				return;
 			}
-			if (e.altKey && e.key === '2') {
+			if ((e.altKey || e.ctrlKey) && e.key === '2') {
 				e.preventDefault();
 				togglePanel('original');
 				return;
 			}
-			if (e.altKey && e.key === '3') {
+			if ((e.altKey || e.ctrlKey) && e.key === '3') {
 				e.preventDefault();
 				togglePanel('timer');
 				return;
 			}
-			if (e.altKey && e.key === '4') {
+			if ((e.altKey || e.ctrlKey) && e.key === '4') {
 				e.preventDefault();
 				togglePanel('gallery');
 				return;

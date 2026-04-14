@@ -13,6 +13,21 @@ export function createElectronAPIMock() {
 		getRecents: vi.fn().mockResolvedValue([]),
 		removeRecent: vi.fn().mockResolvedValue(undefined),
 		openImageFromPath: vi.fn(),
+		// Gallery
+		galleryGetData: vi.fn().mockResolvedValue({ version: 1, folders: [], images: [] }),
+		galleryCreateFolder: vi.fn(),
+		galleryRenameFolder: vi.fn(),
+		galleryDeleteFolder: vi.fn(),
+		galleryUpdateFolderTags: vi.fn(),
+		galleryReorderFolders: vi.fn(),
+		galleryImportImage: vi.fn(),
+		galleryMoveImage: vi.fn(),
+		galleryCopyImage: vi.fn(),
+		galleryDeleteImage: vi.fn(),
+		galleryOpenImage: vi.fn(),
+		galleryDownloadExternal: vi.fn(),
+		gallerySearchImages: vi.fn(),
+		galleryRandomImages: vi.fn(),
 	};
 }
 

@@ -8,6 +8,33 @@ vi.mock('../../../src/renderer/hooks/ImageContext', () => ({
 	useImageContext: vi.fn(),
 }));
 
+vi.mock('../../../src/renderer/hooks/GalleryContext', () => ({
+	useGalleryContext: vi.fn(() => ({
+		folders: [],
+		images: [],
+		filteredImages: [],
+		selectedFolderId: null,
+		gallerySearchQuery: '',
+		activeTab: 'folders',
+		loading: false,
+		error: null,
+		loadGallery: vi.fn(),
+		createFolder: vi.fn(),
+		renameFolder: vi.fn(),
+		deleteFolder: vi.fn(),
+		updateFolderTags: vi.fn(),
+		importImage: vi.fn(),
+		moveImage: vi.fn(),
+		copyImage: vi.fn(),
+		deleteImage: vi.fn(),
+		openGalleryImage: vi.fn(),
+		setSelectedFolder: vi.fn(),
+		setGallerySearchQuery: vi.fn(),
+		setActiveTab: vi.fn(),
+		clearError: vi.fn(),
+	})),
+}));
+
 vi.mock('../../../src/renderer/hooks/useImageLoader', () => ({
 	useImageLoader: vi.fn(() => ({
 		loadFromPath: vi.fn().mockResolvedValue({ ok: true }),

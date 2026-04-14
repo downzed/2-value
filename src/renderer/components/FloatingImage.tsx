@@ -75,8 +75,8 @@ const FloatingImage: React.FC = () => {
 			zClass='z-40'
 		>
 			{/* Title bar is ~40px (px-3 py-2 + border), subtract from maxHeight */}
-			<div className='p-2 overflow-auto' style={{ maxHeight: 'calc(60vh - 40px)' }}>
-				<canvas ref={originalCanvasRef} key={showKey} className='w-full border border-slate-200 rounded' />
+			<div className='overflow-auto' style={{ maxHeight: 'calc(60vh - 40px)' }}>
+				<canvas ref={originalCanvasRef} key={showKey} className='w-full border border-slate-200 rounded-b-md' />
 			</div>
 		</FloatingWidget>
 	);
