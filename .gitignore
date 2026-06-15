@@ -4,7 +4,7 @@ out
 .DS_Store
 *.log
 
-.opencode/node_modules
+.opencode
 .zed
 .env
 .env.local
