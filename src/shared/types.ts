@@ -19,43 +19,15 @@ export interface GalleryImage {
 	id: string;
 	folderId: string;
 	fileName: string;
-	originalPath: string;
-	storedFileName: string;
-	thumbnailFileName: string;
 	width: number;
 	height: number;
 	fileSize: number;
 	addedAt: number;
-	source: 'local' | 'sourcesplash';
-	sourceMetadata?: {
-		sourceId: string;
-		author: string;
-		authorUrl: string;
-		description: string;
-	};
+	source: 'local';
 }
 
 export interface GalleryData {
 	version: 1;
 	folders: GalleryFolder[];
 	images: GalleryImage[];
-}
-
-export interface ExternalImage {
-	id: string;
-	url: string;
-	thumbnail: string;
-	width: number;
-	height: number;
-	author: string;
-	authorUrl: string;
-	source: string;
-	sourceProvider: string;
-	description: string;
-}
-
-export interface ExternalSearchResult {
-	images: ExternalImage[];
-	page: number;
-	hasMore: boolean;
 }

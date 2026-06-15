@@ -2,18 +2,37 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useGallery } from '../../../src/renderer/hooks/useGallery';
 import type { GalleryImage } from '../../../src/shared/types';
+import { galleryStore } from '../../../src/renderer/utils/storage';
 
 // ---------------------------------------------------------------------------
-// Minimal mock for window.electronAPI
+// Mock galleryStore
 // ---------------------------------------------------------------------------
+
+vi.mock('../../../src/renderer/utils/storage', () => ({
+	galleryStore: {
+		getData: vi.fn(),
+		createFolder: vi.fn(),
+		renameFolder: vi.fn(),
+		deleteFolder: vi.fn(),
+		updateFolderTags: vi.fn(),
+		reorderFolders: vi.fn(),
+		importImage: vi.fn(),
+		moveImage: vi.fn(),
+		copyImage: vi.fn(),
+		deleteImage: vi.fn(),
+		getImageBlob: vi.fn(),
+		getThumbnailBlob: vi.fn(),
+		clearAll: vi.fn(),
+	},
+}));
+
+const mockGetData = vi.mocked(galleryStore.getData);
+const mockCreateFolder = vi.mocked(galleryStore.createFolder);
 
 const makeImage = (id: string, fileName: string, folderId = 'f1'): GalleryImage => ({
 	id,
 	folderId,
 	fileName,
-	originalPath: `/tmp/${fileName}`,
-	storedFileName: fileName,
-	thumbnailFileName: `${id}.thumb.jpg`,
 	width: 100,
 	height: 100,
 	fileSize: 1024,
@@ -21,36 +40,8 @@ const makeImage = (id: string, fileName: string, folderId = 'f1'): GalleryImage 
 	source: 'local',
 });
 
-const mockGetData = vi.fn();
-const mockCreateFolder = vi.fn();
-
-const MOCK_API = {
-	galleryGetData: mockGetData,
-	galleryCreateFolder: mockCreateFolder,
-	galleryRenameFolder: vi.fn(),
-	galleryDeleteFolder: vi.fn(),
-	galleryUpdateFolderTags: vi.fn(),
-	galleryReorderFolders: vi.fn(),
-	galleryImportImage: vi.fn(),
-	galleryMoveImage: vi.fn(),
-	galleryCopyImage: vi.fn(),
-	galleryDeleteImage: vi.fn(),
-	galleryOpenImage: vi.fn(),
-	galleryDownloadExternal: vi.fn(),
-	gallerySearchImages: vi.fn(),
-	galleryRandomImages: vi.fn(),
-	openImage: vi.fn(),
-	getImageInfo: vi.fn(),
-	readImageBuffer: vi.fn(),
-	saveImage: vi.fn(),
-	getRecents: vi.fn(),
-	removeRecent: vi.fn(),
-	openImageFromPath: vi.fn(),
-};
-
 beforeEach(() => {
 	vi.clearAllMocks();
-	Object.defineProperty(window, 'electronAPI', { value: MOCK_API, writable: true, configurable: true });
 });
 
 // ---------------------------------------------------------------------------
@@ -64,7 +55,6 @@ describe('useGallery – initial state', () => {
 		expect(result.current.images).toEqual([]);
 		expect(result.current.filteredImages).toEqual([]);
 		expect(result.current.gallerySearchQuery).toBe('');
-		expect(result.current.activeTab).toBe('folders');
 		expect(result.current.loading).toBe(false);
 		expect(result.current.error).toBe(null);
 	});
@@ -83,7 +73,7 @@ describe('useGallery – filteredImages', () => {
 	];
 
 	async function setupWithImages() {
-		mockGetData.mockResolvedValueOnce({ folders: [], images });
+		mockGetData.mockResolvedValueOnce({ version: 1, folders: [], images });
 		const hook = renderHook(() => useGallery());
 		await act(async () => {
 			await hook.result.current.loadGallery();
@@ -143,17 +133,14 @@ describe('useGallery – loadGallery', () => {
 		mockGetData.mockReturnValueOnce(new Promise((r) => (resolve = r)));
 		const { result } = renderHook(() => useGallery());
 
-		// Start the load but don't await yet
 		let loadPromise: Promise<void>;
 		act(() => {
 			loadPromise = result.current.loadGallery();
 		});
-		// After act flushes the initial setState, loading should be true
 		expect(result.current.loading).toBe(true);
 
-		// Resolve and await completion
 		await act(async () => {
-			resolve({ folders: [], images: [] });
+			resolve({ version: 1, folders: [], images: [] });
 			await loadPromise;
 		});
 		expect(result.current.loading).toBe(false);
@@ -162,7 +149,7 @@ describe('useGallery – loadGallery', () => {
 	it('stores folders and images from the API response', async () => {
 		const folders = [{ id: 'f1', name: 'Nature', tags: [], createdAt: 0, sortOrder: 0 }];
 		const images = [makeImage('1', 'tree.jpg', 'f1')];
-		mockGetData.mockResolvedValueOnce({ folders, images });
+		mockGetData.mockResolvedValueOnce({ version: 1, folders, images });
 		const { result } = renderHook(() => useGallery());
 
 		await act(async () => {
@@ -192,9 +179,9 @@ describe('useGallery – loadGallery', () => {
 // ---------------------------------------------------------------------------
 
 describe('useGallery – createFolder', () => {
-	it('re-throws and sets error when IPC fails', async () => {
+	it('re-throws and sets error when storage call fails', async () => {
 		mockCreateFolder.mockRejectedValueOnce(new Error('duplicate name'));
-		mockGetData.mockResolvedValue({ folders: [], images: [] });
+		mockGetData.mockResolvedValue({ version: 1, folders: [], images: [] });
 
 		const { result } = renderHook(() => useGallery());
 		await act(async () => {
