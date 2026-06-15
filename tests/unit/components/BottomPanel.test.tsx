@@ -2,7 +2,7 @@ import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useRef } from 'react';
 import BottomPanel from '../../../src/renderer/components/shell/BottomPanel';
-import { createMockContextValue, setupElectronAPIMock } from '../../helpers/mocks';
+import { createMockContextValue } from '../../helpers/mocks';
 
 vi.mock('../../../src/renderer/hooks/ImageContext', () => ({
 	useImageContext: vi.fn(),
@@ -15,7 +15,6 @@ vi.mock('../../../src/renderer/hooks/GalleryContext', () => ({
 		filteredImages: [],
 		selectedFolderId: null,
 		gallerySearchQuery: '',
-		activeTab: 'folders',
 		loading: false,
 		error: null,
 		loadGallery: vi.fn(),
@@ -30,14 +29,13 @@ vi.mock('../../../src/renderer/hooks/GalleryContext', () => ({
 		openGalleryImage: vi.fn(),
 		setSelectedFolder: vi.fn(),
 		setGallerySearchQuery: vi.fn(),
-		setActiveTab: vi.fn(),
 		clearError: vi.fn(),
 	})),
 }));
 
 vi.mock('../../../src/renderer/hooks/useImageLoader', () => ({
 	useImageLoader: vi.fn(() => ({
-		loadFromPath: vi.fn().mockResolvedValue({ ok: true }),
+		loadFromFile: vi.fn().mockResolvedValue({ ok: true }),
 	})),
 	imageLoadErrorMessage: vi.fn((e: string) => e),
 }));
@@ -50,10 +48,7 @@ function BottomPanelWrapper() {
 }
 
 describe('BottomPanel', () => {
-	let electronAPI: ReturnType<typeof setupElectronAPIMock>;
-
 	beforeEach(() => {
-		electronAPI = setupElectronAPIMock();
 		vi.mocked(useImageContext).mockReturnValue(createMockContextValue() as ReturnType<typeof useImageContext>);
 	});
 
@@ -95,13 +90,15 @@ describe('BottomPanel', () => {
 		expect(screen.getByText('800 × 600')).toBeDefined();
 	});
 
-	it('Open button triggers file open flow', async () => {
-		electronAPI.openImage.mockResolvedValue(null);
+	it('Open button exists and is clickable', async () => {
 		render(<BottomPanelWrapper />);
+		const openBtn = screen.getByText('Open').closest('button');
+		expect(openBtn).toBeDefined();
 		await act(async () => {
-			fireEvent.click(screen.getByText('Open'));
+			fireEvent.click(openBtn as HTMLButtonElement);
 		});
-		expect(electronAPI.openImage).toHaveBeenCalled();
+		// Status changes to 'loading' when open is triggered
+		expect(screen.getByText('Loading...')).toBeDefined();
 	});
 
 	it('shows status text "Ready" initially', () => {

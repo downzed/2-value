@@ -51,16 +51,11 @@ vi.mock('image-js', () => {
 	return { Image: MockImage, readImg: vi.fn() };
 });
 
-// Mock electronAPI
-const mockReadImageBuffer = vi.fn().mockResolvedValue(new Uint8Array(10));
-Object.defineProperty(globalThis, 'window', {
-	value: {
-		electronAPI: {
-			readImageBuffer: mockReadImageBuffer,
-		},
-	},
-	writable: true,
-});
+// Helper: create a mock File of a given size
+function makeFile(name: string, size: number): File {
+	const content = new Uint8Array(size);
+	return new File([content], name, { type: 'image/png' });
+}
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -69,7 +64,6 @@ Object.defineProperty(globalThis, 'window', {
 describe('useImageLoader', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockReadImageBuffer.mockResolvedValue(new Uint8Array(10));
 		mockLoadImage.mockResolvedValue(undefined);
 		(globalThis.createImageBitmap as ReturnType<typeof vi.fn>).mockResolvedValue(mockBitmap);
 		mockGetImageData.mockReturnValue({ data: new Uint8ClampedArray(100 * 80 * 4) });
@@ -78,9 +72,9 @@ describe('useImageLoader', () => {
 	it('returns ok:true when image is within limits', async () => {
 		const { result } = renderHook(() => useImageLoader());
 
-		let outcome: Awaited<ReturnType<typeof result.current.loadFromPath>>;
+		let outcome: Awaited<ReturnType<typeof result.current.loadFromFile>>;
 		await act(async () => {
-			outcome = await result.current.loadFromPath('/test/image.png', 1024);
+			outcome = await result.current.loadFromFile(makeFile('image.png', 1024));
 		});
 		expect(outcome?.ok).toBe(true);
 		expect(mockLoadImage).toHaveBeenCalledTimes(1);
@@ -90,45 +84,42 @@ describe('useImageLoader', () => {
 	it('returns FILE_TOO_LARGE error when fileSize exceeds MAX_FILE_BYTES', async () => {
 		const { result } = renderHook(() => useImageLoader());
 
-		let outcome: Awaited<ReturnType<typeof result.current.loadFromPath>>;
+		let outcome: Awaited<ReturnType<typeof result.current.loadFromFile>>;
 		await act(async () => {
-			outcome = await result.current.loadFromPath('/test/image.png', UI.PERF.MAX_FILE_BYTES + 1);
+			outcome = await result.current.loadFromFile(makeFile('big.png', UI.PERF.MAX_FILE_BYTES + 1));
 		});
 		expect(outcome?.ok).toBe(false);
 		if (!outcome?.ok) {
 			expect(outcome?.error.code).toBe('FILE_TOO_LARGE');
 		}
-		expect(mockReadImageBuffer).not.toHaveBeenCalled();
 	});
 
 	it('returns TOO_MANY_PIXELS error when pixel count exceeds MAX_PIXELS', async () => {
-		// Make bitmap appear huge
 		const hugeBitmap = { ...mockBitmap, width: 10000, height: 5000 };
 		(globalThis.createImageBitmap as ReturnType<typeof vi.fn>).mockResolvedValueOnce(hugeBitmap);
-		// Use a small stub — the pixel count comes from bitmap/Image dimensions, not data size
 		mockGetImageData.mockReturnValueOnce({ data: new Uint8ClampedArray(4) });
 
 		const { result } = renderHook(() => useImageLoader());
 
-		let outcome: Awaited<ReturnType<typeof result.current.loadFromPath>>;
+		let outcome: Awaited<ReturnType<typeof result.current.loadFromFile>>;
 		await act(async () => {
-			outcome = await result.current.loadFromPath('/test/big.png', 1024);
+			outcome = await result.current.loadFromFile(makeFile('big.png', 1024));
 		});
 		expect(outcome?.ok).toBe(false);
 		if (!outcome?.ok) {
 			expect(outcome?.error.code).toBe('TOO_MANY_PIXELS');
 		}
-		// bitmap.close() is called in the TOO_MANY_PIXELS rejection path
 		expect(mockBitmapClose).toHaveBeenCalledTimes(1);
 	});
 
-	it('returns DECODE_FAILED when readImageBuffer throws', async () => {
-		mockReadImageBuffer.mockRejectedValueOnce(new Error('IPC error'));
+	it('returns DECODE_FAILED when decode fails (e.g. bad data)', async () => {
+		// Make createImageBitmap reject to simulate a decode failure
+		(globalThis.createImageBitmap as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('decode error'));
 		const { result } = renderHook(() => useImageLoader());
 
-		let outcome: Awaited<ReturnType<typeof result.current.loadFromPath>>;
+		let outcome: Awaited<ReturnType<typeof result.current.loadFromFile>>;
 		await act(async () => {
-			outcome = await result.current.loadFromPath('/test/bad.png', 1024);
+			outcome = await result.current.loadFromFile(makeFile('bad.png', 1024));
 		});
 		expect(outcome?.ok).toBe(false);
 		if (!outcome?.ok) {
@@ -139,7 +130,7 @@ describe('useImageLoader', () => {
 	it('does not call loadImage when file is too large', async () => {
 		const { result } = renderHook(() => useImageLoader());
 		await act(async () => {
-			await result.current.loadFromPath('/test/image.png', UI.PERF.MAX_FILE_BYTES + 100);
+			await result.current.loadFromFile(makeFile('big.png', UI.PERF.MAX_FILE_BYTES + 100));
 		});
 		expect(mockLoadImage).not.toHaveBeenCalled();
 	});

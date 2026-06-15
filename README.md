@@ -4,19 +4,17 @@ A value image editor for drawing studies. Converts images to a 2-tone or 3-tone 
 
 ## Commands
 
-- `yarn dev` - Run in development mode (electron-vite, port 5173)
+- `yarn dev` - Run in development mode (Vite dev server, port 5173)
 - `yarn build` - Build for production
-- `yarn start` - Run built app in production mode
+- `yarn preview` - Preview production build
 - `yarn typecheck` - Run TypeScript type checking
 - `yarn test` - Run vitest tests
 - `yarn lint` - Run Biome linter
 - `yarn format:check` - Check formatting with Biome
-- `yarn package` - Package the app
-- `yarn make` - Create distributable
 
 ## Features
 
-- **Gallery**: Self-contained image management system with folder organization, local import, and external search (Pexels API)
+- **Gallery**: Self-contained image management system with folder organization, local import
 - **Gallery/Recents**: Open images from a recent files grid or browse the filesystem
 - Open images (PNG, JPG, JPEG, BMP)
 - Save images as PNG or JPEG (format auto-detected from extension)
@@ -53,26 +51,24 @@ A value image editor for drawing studies. Converts images to a 2-tone or 3-tone 
 
 ## Architecture
 
-- `src/main/` - Electron main process (Node.js) — file dialogs, IPC handlers, recents cache
-- `src/preload/` - IPC bridge (exposes `electronAPI`: openImage, saveImage, getRecents, removeRecent, openImageFromPath)
-- `src/renderer/` - React frontend
-  - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), GalleryPanel (gallery/recents modal)
+- `src/renderer/` - React frontend (pure browser app, no Electron)
+  - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), GalleryPanel (gallery modal)
   - `components/gallery/` - FolderContextMenu, FolderPickerDialog, ImageContextMenu
   - `components/shared/` - Icon, PillButton, SectionHeader, SliderRow (reusable UI primitives)
   - `components/` - Canvas, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
   - `hooks/` - useImage, ImageContext, useGallery, GalleryContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
+  - `utils/` - fileOps (file open/save with FSA + fallback), storage (IndexedDB wrapper)
   - `constants/` - UI constants (filter ranges, presets, history config)
 
 ## Tech Stack
 
 | Category | Technology |
 |----------|------------|
-| Framework | Electron 41.2.0 |
-| Build Tool | electron-vite 5.0.0 + Vite 8.0.7 |
+| Platform | Browser (Chrome, Firefox, Safari 16.4+) |
+| Build Tool | Vite 8.0.7 |
 | UI Library | React 19.2.4 |
 | Image Processing | image-js 1.5.0 |
 | Styling | Tailwind CSS 4.2.2 |
 | Language | TypeScript 6.0.2 |
-| Packaging | Electron Forge 7.11.1 |
 | Linting/Formatting | Biome |
 | Testing | Vitest + Testing Library |

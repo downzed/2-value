@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useImageContext } from '../../hooks/ImageContext';
 import { useGalleryContext } from '../../hooks/GalleryContext';
+import { useImageContext } from '../../hooks/ImageContext';
 import { imageLoadErrorMessage, useImageLoader } from '../../hooks/useImageLoader';
-import { Icon } from '../shared/Icon';
+import { openImageFile, saveImageFile } from '../../utils/fileOps';
+import { galleryStore } from '../../utils/storage';
 import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
+import { Icon } from '../shared/Icon';
 
 type Status = 'ready' | 'loading' | 'loaded' | 'saving' | 'saved' | 'error';
 
 interface PendingOpen {
-	path: string;
-	fileName: string;
-	fileSize: number;
+	file: File;
 }
 
 interface BottomPanelProps {
@@ -22,7 +22,6 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		hasImage,
 		currentImage,
 		fileName,
-		filePath,
 		panels,
 		setPanel,
 		counter,
@@ -37,7 +36,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		zoomOut,
 	} = useImageContext();
 	const { folders, importImage, loadGallery } = useGalleryContext();
-	const { loadFromPath } = useImageLoader();
+	const { loadFromFile } = useImageLoader();
 	const [status, setStatus] = useState<Status>('ready');
 	const [errorMsg, setErrorMsg] = useState<string | null>(null);
 	const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
@@ -45,10 +44,9 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	const width = currentImage?.width ?? '--';
 	const height = currentImage?.height ?? '--';
 
-	// Load an image from path (shared by both skip and save flows)
-	const doLoadFromPath = useCallback(
-		async (result: PendingOpen) => {
-			const outcome = await loadFromPath(result.path, result.fileSize);
+	const doLoadFromFile = useCallback(
+		async (pending: PendingOpen) => {
+			const outcome = await loadFromFile(pending.file);
 			if (outcome.ok) {
 				setStatus('loaded');
 			} else {
@@ -58,17 +56,16 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 				console.error('Image load rejected:', outcome.error);
 			}
 		},
-		[loadFromPath],
+		[loadFromFile],
 	);
 
 	const handleOpen = useCallback(async () => {
 		try {
 			setStatus('loading');
 			setErrorMsg(null);
-			const result = await window.electronAPI.openImage();
-			if (result) {
-				// Show folder picker dialog instead of loading immediately
-				setPendingOpen(result);
+			const file = await openImageFile();
+			if (file) {
+				setPendingOpen({ file });
 			} else {
 				setStatus(hasImage ? 'loaded' : 'ready');
 			}
@@ -81,13 +78,12 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	const handleFolderPickerSelect = useCallback(
 		async (folderId: string) => {
 			if (!pendingOpen) return;
-			const result = pendingOpen;
+			const { file } = pendingOpen;
 			setPendingOpen(null);
 
 			try {
-				await importImage(result.path, folderId);
+				await importImage(file, folderId);
 			} catch (err) {
-				// Duplicate rejection: show message but still open the image
 				const msg = err instanceof Error ? err.message : 'Import failed';
 				if (msg.includes('already in')) {
 					console.warn('Duplicate detected, opening image anyway:', msg);
@@ -96,21 +92,21 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 				}
 			}
 
-			await doLoadFromPath(result);
+			await doLoadFromFile({ file });
 		},
-		[pendingOpen, importImage, doLoadFromPath],
+		[pendingOpen, importImage, doLoadFromFile],
 	);
 
 	const handleFolderPickerSkip = useCallback(async () => {
 		if (!pendingOpen) return;
-		const result = pendingOpen;
+		const { file } = pendingOpen;
 		setPendingOpen(null);
-		await doLoadFromPath(result);
-	}, [pendingOpen, doLoadFromPath]);
+		await doLoadFromFile({ file });
+	}, [pendingOpen, doLoadFromFile]);
 
 	const handleCreateFolderInPicker = useCallback(
 		async (name: string) => {
-			const folder = await window.electronAPI.galleryCreateFolder(name);
+			const folder = await galleryStore.createFolder(name);
 			await loadGallery();
 			return folder;
 		},
@@ -123,23 +119,17 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		try {
 			setStatus('saving');
 			const canvas = previewCanvasRef.current;
-			// Use binary transport: canvas.toBlob -> ArrayBuffer -> IPC (avoids base64 inflation)
 			const blob = await new Promise<Blob>((resolve, reject) => {
 				canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob returned null'))), 'image/png');
 			});
-			const buffer = await blob.arrayBuffer();
-			const savedPath = await window.electronAPI.saveImage(buffer, filePath || undefined);
-			if (savedPath) {
-				setStatus('saved');
-				setTimeout(() => setStatus('loaded'), 2000);
-			} else {
-				setStatus('loaded');
-			}
+			await saveImageFile(blob, fileName || 'image.png');
+			setStatus('saved');
+			setTimeout(() => setStatus('loaded'), 2000);
 		} catch (error) {
 			setStatus('error');
 			console.error('Failed to save image:', error);
 		}
-	}, [previewCanvasRef, filePath]);
+	}, [previewCanvasRef, fileName]);
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -238,7 +228,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 						>
 							<Icon name='clock' size='sm' />
 							{counterRunning && counterDuration && (
-								<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5'>
+								<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-3.5 h-3.5 flex items-center justify-center px-0.5'>
 									{formatBadge(counter)}
 								</span>
 							)}

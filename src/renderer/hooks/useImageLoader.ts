@@ -37,28 +37,22 @@ async function decodeBytesToImage(bytes: Uint8Array): Promise<{ image: Image; bi
 export function useImageLoader() {
 	const { loadImage } = useImageContext();
 
-	/**
-	 * Primary load path: fetch raw bytes from main process, decode in renderer,
-	 * apply guardrails, then hand off to useImage.
-	 */
-	const loadFromPath = useCallback(
-		async (filePath: string, fileSize: number): Promise<{ ok: true } | { ok: false; error: ImageLoadError }> => {
-			// File-size preflight
-			if (fileSize > UI.PERF.MAX_FILE_BYTES) {
+	const loadFromFile = useCallback(
+		async (file: File): Promise<{ ok: true } | { ok: false; error: ImageLoadError }> => {
+			if (file.size > UI.PERF.MAX_FILE_BYTES) {
 				return {
 					ok: false,
-					error: { code: 'FILE_TOO_LARGE', fileSize, maxBytes: UI.PERF.MAX_FILE_BYTES },
+					error: { code: 'FILE_TOO_LARGE', fileSize: file.size, maxBytes: UI.PERF.MAX_FILE_BYTES },
 				};
 			}
 
 			let bitmap: ImageBitmap | undefined;
 			try {
-				const bytes = await window.electronAPI.readImageBuffer(filePath);
+				const bytes = new Uint8Array(await file.arrayBuffer());
 				const decoded = await decodeBytesToImage(bytes);
 				bitmap = decoded.bitmap;
 				const image = decoded.image;
 
-				// Pixel-count guardrail
 				const pixels = image.width * image.height;
 				if (pixels > UI.PERF.MAX_PIXELS) {
 					bitmap.close();
@@ -68,8 +62,7 @@ export function useImageLoader() {
 					};
 				}
 
-				const fileName = filePath.split(/[/\\]/).pop() ?? 'Untitled';
-				await loadImage(image, fileName, filePath);
+				await loadImage(image, file.name, '');
 				bitmap.close();
 				return { ok: true };
 			} catch (cause) {
@@ -80,7 +73,7 @@ export function useImageLoader() {
 		[loadImage],
 	);
 
-	return { loadFromPath };
+	return { loadFromFile };
 }
 
 /**
