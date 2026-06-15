@@ -191,13 +191,19 @@ export class GalleryStore {
 						tx.objectStore('thumbnailBlobs').delete(img.id);
 					}
 					tx.objectStore('folders').delete(folderId);
-					tx.oncomplete = () => { resolve(); db.close(); };
-					tx.onerror = () => { reject(tx.error); db.close(); };
+					tx.oncomplete = () => {
+						resolve();
+						db.close();
+					};
+					tx.onerror = () => {
+						reject(tx.error);
+						db.close();
+					};
 				});
 			} else {
 				const unsortedFolder = data.folders.find((f) => f.name === UNSORTED_FOLDER_NAME);
-			if (!unsortedFolder) throw new Error('Unsorted folder not found');
-			const unsortedId = unsortedFolder.id;
+				if (!unsortedFolder) throw new Error('Unsorted folder not found');
+				const unsortedId = unsortedFolder.id;
 				const db = await getDB();
 				await new Promise<void>((resolve, reject) => {
 					const tx = db.transaction(['images', 'folders'], 'readwrite');
@@ -205,8 +211,14 @@ export class GalleryStore {
 						tx.objectStore('images').put({ ...img, folderId: unsortedId });
 					}
 					tx.objectStore('folders').delete(folderId);
-					tx.oncomplete = () => { resolve(); db.close(); };
-					tx.onerror = () => { reject(tx.error); db.close(); };
+					tx.oncomplete = () => {
+						resolve();
+						db.close();
+					};
+					tx.onerror = () => {
+						reject(tx.error);
+						db.close();
+					};
 				});
 			}
 		});
@@ -264,8 +276,14 @@ export class GalleryStore {
 				tx.objectStore('images').put(image);
 				tx.objectStore('imageBlobs').put({ imageId: id, blob: file });
 				tx.objectStore('thumbnailBlobs').put({ imageId: id, blob: thumbnailBlob });
-				tx.oncomplete = () => { resolve(); db.close(); };
-				tx.onerror = () => { reject(tx.error); db.close(); };
+				tx.oncomplete = () => {
+					resolve();
+					db.close();
+				};
+				tx.onerror = () => {
+					reject(tx.error);
+					db.close();
+				};
 			});
 
 			return image;
@@ -324,8 +342,14 @@ export class GalleryStore {
 				tx.objectStore('images').put(newImage);
 				if (sourceBlobReq) tx.objectStore('imageBlobs').put({ imageId: newId, blob: sourceBlobReq });
 				if (sourceThumbReq) tx.objectStore('thumbnailBlobs').put({ imageId: newId, blob: sourceThumbReq });
-				tx.oncomplete = () => { resolve(); db.close(); };
-				tx.onerror = () => { reject(tx.error); db.close(); };
+				tx.oncomplete = () => {
+					resolve();
+					db.close();
+				};
+				tx.onerror = () => {
+					reject(tx.error);
+					db.close();
+				};
 			});
 
 			return newImage;
@@ -340,8 +364,14 @@ export class GalleryStore {
 				tx.objectStore('images').delete(imageId);
 				tx.objectStore('imageBlobs').delete(imageId);
 				tx.objectStore('thumbnailBlobs').delete(imageId);
-				tx.oncomplete = () => { resolve(); db.close(); };
-				tx.onerror = () => { reject(tx.error); db.close(); };
+				tx.oncomplete = () => {
+					resolve();
+					db.close();
+				};
+				tx.onerror = () => {
+					reject(tx.error);
+					db.close();
+				};
 			});
 		});
 	}
@@ -387,8 +417,14 @@ export class GalleryStore {
 				tx.objectStore('images').clear();
 				tx.objectStore('imageBlobs').clear();
 				tx.objectStore('thumbnailBlobs').clear();
-				tx.oncomplete = () => { resolve(); db.close(); };
-				tx.onerror = () => { reject(tx.error); db.close(); };
+				tx.oncomplete = () => {
+					resolve();
+					db.close();
+				};
+				tx.onerror = () => {
+					reject(tx.error);
+					db.close();
+				};
 			});
 		});
 	}

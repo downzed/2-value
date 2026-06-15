@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useImageContext } from '../../hooks/ImageContext';
 import { useGalleryContext } from '../../hooks/GalleryContext';
+import { useImageContext } from '../../hooks/ImageContext';
 import { imageLoadErrorMessage, useImageLoader } from '../../hooks/useImageLoader';
-import { Icon } from '../shared/Icon';
-import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
 import { openImageFile, saveImageFile } from '../../utils/fileOps';
 import { galleryStore } from '../../utils/storage';
+import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
+import { Icon } from '../shared/Icon';
 
 type Status = 'ready' | 'loading' | 'loaded' | 'saving' | 'saved' | 'error';
 
@@ -228,7 +228,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 						>
 							<Icon name='clock' size='sm' />
 							{counterRunning && counterDuration && (
-								<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-0.5'>
+								<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-3.5 h-3.5 flex items-center justify-center px-0.5'>
 									{formatBadge(counter)}
 								</span>
 							)}

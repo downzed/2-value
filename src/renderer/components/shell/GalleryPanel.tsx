@@ -89,7 +89,6 @@ const GalleryPanel: React.FC = () => {
 		const prevIds = new Set(prevImageIdsRef.current);
 		const newImages = images.filter((i) => !prevIds.has(i.id));
 		const removedIds = prevImageIdsRef.current.filter((id) => !images.some((i) => i.id === id));
-		prevImageIdsRef.current = images.map((i) => i.id);
 
 		// Revoke URLs for removed images via functional state update
 		if (removedIds.length > 0) {
@@ -123,6 +122,7 @@ const GalleryPanel: React.FC = () => {
 			}),
 		).then(() => {
 			if (!cancelled) {
+				prevImageIdsRef.current = images.map((i) => i.id);
 				setThumbnailUrls((prev) => ({ ...prev, ...newUrls }));
 			}
 		});
