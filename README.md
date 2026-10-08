@@ -17,7 +17,12 @@ A value image editor for drawing studies. Converts images to a 2-tone or 3-tone 
 - **Gallery**: Self-contained image management system with folder organization, local import
 - **Gallery/Recents**: Open images from a recent files grid or browse the filesystem
 - Open images (PNG, JPG, JPEG, BMP)
-- Save images as PNG or JPEG (format auto-detected from extension)
+- New blank canvas sized to the stage, with freehand drawing
+- **Auto folder in the gallery**: every image and canvas you currently have open, so you can
+  switch between them — each keeps its own adjustments, undo history and drawing
+- Save writes back to the gallery (overwriting the item's own entry, or creating one in
+  `Unsorted`); use **Export as...** on any gallery item's menu to download a file
+- Export images to disk as PNG or JPEG via **Export as...**
 - Adjustable blur (0-10) and threshold (0-255)
 - 2-value / 3-value mode toggle (binary or three-zone threshold)
 - 3 adjustment presets: Sketch, High Contrast, 3-Tone
@@ -41,6 +46,7 @@ A value image editor for drawing studies. Converts images to a 2-tone or 3-tone 
 | `Ctrl+0` | Fit to view |
 | `Ctrl++` | Zoom in |
 | `Ctrl+-` | Zoom out |
+| `Ctrl+N` | New blank canvas (see note) |
 | `Ctrl+O` | Open image |
 | `Ctrl+S` | Save image |
 | `h` | Decrease blur (-0.5) |
@@ -48,6 +54,11 @@ A value image editor for drawing studies. Converts images to a 2-tone or 3-tone 
 | `j` | Decrease threshold (-1) |
 | `k` | Increase threshold (+1) |
 | `Escape` | Close context menus, folder picker, back from folder view |
+
+> **Note on `Ctrl+N`:** Chrome and Edge reserve `Ctrl+N` for "new window" and will
+> not deliver it to the page in a normal tab. The shortcut works in Firefox, in
+> Chrome's Application mode, and once the app is installed as a PWA. Use the
+> **New** button in the status bar for a reliable path.
 
 ## Architecture
 

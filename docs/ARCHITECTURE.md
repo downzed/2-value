@@ -171,10 +171,101 @@ The app uses React Context + custom hooks for state management, split into two i
 - **Composition:** Assembles Canvas, FloatingImage, FloatingControls, FloatingCounter, BottomPanel
 
 ### BottomPanel.tsx (Status Bar + File Operations)
+- **New:** Calls `newBlankCanvas()` from useImage, starting a blank drawing surface
 - **Open:** Calls `openImageFile()` from fileOps, then `loadFromFile()` from useImageLoader
-- **Save:** Gets canvas blob, calls `saveImageFile()` from fileOps
+- **Save:** Gets canvas blob, calls `saveImageFile()` from fileOps. Enabled when `hasCanvas`
+  (an open image *or* a blank canvas), disabled on a truly empty stage
 - **Display:** File info, status, zoom controls, minimized panel icons
-- **Keybindings:** Ctrl+O / Ctrl+S
+- **Keybindings:** Ctrl+N / Ctrl+O / Ctrl+S
+
+### Blank Canvas Mode
+`canvasMode` in `useImage` is `'image' | 'blank'` and decides what owns the `<canvas>`:
+
+- **`'image'`** — `sourceImage` is set and the surface is painted by the filter worker via
+  `putImageData`. Existing behaviour, unchanged.
+- **`'blank'`** — `sourceImage` is `null` and the surface is a freehand drawing target.
+  Every worker/`putImageData` path in `Canvas.tsx` is gated on `isBlank`, so the pipeline
+  is bypassed entirely and the adjustments panel has nothing to act on.
+
+Mechanics:
+
+- **Sizing:** The backing store is sized to the stage (the white card), so backing store and
+  CSS size are 1:1 and pointer coordinates map directly. `Canvas.tsx` reports the measured
+  size up via `setViewport`; `setViewport` returns the previous state object unchanged when the
+  size matches, so the measurement round-trip can't drive a render loop.
+- **Strokes:** Kept in refs (`strokesRef`), never in state, so painting triggers no re-render.
+  Coordinates are normalized to 0..1, which lets a window resize rescale the drawing instead of
+  smearing or discarding it.
+- **Incremental painting:** `onPointerMove` strokes only the new segment; a full replay happens
+  only on resize or on a new canvas.
+- **`blankCanvasId`:** Incremented by every `newBlankCanvas()` call. `canvasMode` alone cannot
+  signal "New" pressed while *already* blank, which would otherwise keep the old drawing.
+- **Pointer capture:** Taken on `pointerdown` so a drag that leaves the canvas still tracks.
+
+Blank canvases are not importable to the gallery; undo history remains scoped to adjustments.
+
+## Saving and exporting
+
+- **Save** (status bar, `Ctrl+S`) writes the canvas **into the gallery**, not to disk.
+  - If the active item is gallery-backed, `galleryStore.updateImageBlob` replaces that
+    entry's blob, thumbnail and derived metadata **in place**, so repeated saves keep
+    updating one entry instead of piling up copies.
+  - Otherwise `galleryStore.importImage` creates a new entry in `Unsorted`, and the open
+    item is relinked to it — which also makes it restorable.
+  - The saved pixels are the **graded canvas**: filtered output for images, replayed strokes
+    for blank canvases.
+- **Export as...** downloads a real file, via `showSaveFilePicker` with an `<a download>`
+  fallback. It exists on both menus:
+  - *Gallery images* — exports the stored blob directly.
+  - *Auto-folder (open) items* — re-renders offscreen, because the status bar's Save reads the
+    live preview canvas, which only reflects the item currently on screen. `useExportItem`
+    exposes one `renderItemToBlob` used by both Save-from-menu and Export so they cannot drift.
+
+## Open Items (multi-document)
+
+`useImage` holds a list of `OpenItem`s rather than a single document. `activeItemId` selects
+which one is projected onto the legacy single-document shape (`currentImage`, `blur`, ...), so
+consumers outside `Canvas`/`BottomPanel` are largely unaware of the change.
+
+```
+interface OpenItem {
+  id; kind: 'image' | 'blank'; label; fileName
+  image: Image | null            // null for blank
+  galleryImageId: string | null  // set => restorable across reloads
+  dedupeKey: string | null       // identity for open-once semantics
+  blur; threshold; values; showOriginal
+  history; future                // undo is per item, never shared
+  dirty: boolean
+}
+```
+
+- **Per-item everything.** Adjustments, undo/redo and blank-canvas strokes all belong to the
+  item, so switching restores exactly what you left.
+- **Strokes live in `strokesByItemRef`**, a `Map<itemId, Stroke[]>` held in a ref and exposed
+  through context. Keying by id means switching items restores the right drawing without
+  copying, and painting still causes no re-render.
+- **App-global state** is limited to zoom/fit, the timer, panel visibility and the stage
+  viewport. Zoom resets to fit whenever the active item changes.
+- **The Auto folder** is a *virtual* gallery folder: it is derived from the live open-items
+  list, always rendered first, never persisted, and has no create/rename/delete. Because it is
+  derived rather than stored it cannot drift out of sync. Selecting it lists the open items;
+  clicking a tile activates that item, and right-click opens `OpenItemContextMenu`
+  (Open / Save to gallery / Export as... / Close).
+- **Panels are global** — opening a second image no longer closes the gallery.
+- **Opening twice.** `loadImage` takes an optional `dedupeKey`/`galleryImageId`; if a clean item
+  with that identity is already open it is reactivated instead of duplicated. A *dirty* item is
+  never merged, so unsaved work is never silently collapsed.
+
+### Unsaved changes and restore
+
+- Items are marked `dirty` on adjustment changes and on stroke commit; Save clears it.
+- `useUnsavedChangesGuard` registers a `beforeunload` handler while anything is dirty.
+- Closing a dirty item from the widget asks for confirmation.
+- `useRestoreOpenItems` persists `restorableItemIds` (gallery-backed, non-dirty) to
+  `localStorage` and reopens them on load from their IndexedDB blobs. Persisting is held off
+  until restoration has run, otherwise the first paint would overwrite the saved list before
+  reading it. Files opened from disk and blank canvases are session-only — the browser cannot
+  re-read an exported file without a permission prompt, and canvases have no bytes.
 
 ### GalleryPanel.tsx (Gallery Modal)
 - **Folders only:** No external gallery/explore tab
@@ -200,6 +291,7 @@ Registered in `useKeyboardShortcuts` at the `App` level. All shortcuts use `keyd
 | `Ctrl+0` | Fit to view |
 | `Ctrl++` | Zoom in |
 | `Ctrl+-` | Zoom out |
+| `Ctrl+N` | New blank canvas (see note) |
 | `Ctrl+O` | Open image |
 | `Ctrl+S` | Save image |
 | `h` | Decrease blur (-0.5) |
@@ -207,6 +299,14 @@ Registered in `useKeyboardShortcuts` at the `App` level. All shortcuts use `keyd
 | `j` | Decrease threshold (-1) |
 | `k` | Increase threshold (+1) |
 | `Escape` | Close context menus, folder picker, back from folder view |
+
+> **Note on `Ctrl+N`:** Chrome and Edge reserve `Ctrl+N` for "new window" and will not deliver
+> it to the page in a normal tab. The shortcut works in Firefox, in Chrome's Application mode,
+> and once the app is installed as a PWA. Use the **New** button for a reliable path.
+
+Note that there are **two** shortcut registries, and the file operations are split across both:
+`Ctrl+N` / `Ctrl+O` / `Ctrl+S` are registered in `BottomPanel.tsx` (they need the canvas ref and
+local file state), while the panel toggles, zoom and undo/redo live in `useKeyboardShortcuts.ts`.
 
 ---
 

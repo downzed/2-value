@@ -36,6 +36,9 @@ export const useGallery = () => {
 		const gen = loadGenRef.current;
 		try {
 			setState((prev) => ({ ...prev, loading: true, error: null }));
+			// Seed `Unsorted` first — a fresh install has no folders at all, and
+			// saved images need somewhere to land.
+			await galleryStore.ensureUnsortedFolder();
 			const data = await galleryStore.getData();
 			if (gen !== loadGenRef.current) return;
 			setState((prev) => ({ ...prev, folders: data.folders, images: data.images, loading: false }));
@@ -137,6 +140,36 @@ export const useGallery = () => {
 		[loadGallery],
 	);
 
+	/**
+	 * Writes an image's pixels over an existing gallery entry, or into `Unsorted`
+	 * when the item has no gallery entry yet. Returns the gallery id it now maps
+	 * to, so the caller can relink the open item.
+	 */
+	const saveImageToGallery = useCallback(
+		async (blob: Blob, fileName: string, existingImageId: string | null): Promise<string> => {
+			try {
+				setState((prev) => ({ ...prev, error: null }));
+				if (existingImageId) {
+					const updated = await galleryStore.updateImageBlob(existingImageId, blob);
+					await loadGallery();
+					return updated.id;
+				}
+				const unsorted = await galleryStore.ensureUnsortedFolder();
+				const created = await galleryStore.importImage(
+					new File([blob], fileName, { type: blob.type || 'image/png' }),
+					unsorted.id,
+				);
+				await loadGallery();
+				return created.id;
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : 'Failed to save image.';
+				setState((prev) => ({ ...prev, error: msg }));
+				throw err;
+			}
+		},
+		[loadGallery],
+	);
+
 	const moveImage = useCallback(
 		async (imageId: string, targetFolderId: string) => {
 			try {
@@ -182,6 +215,9 @@ export const useGallery = () => {
 		[loadGallery],
 	);
 
+	/** Reads a gallery image's stored bytes, for exporting to a file. */
+	const getImageBlob = useCallback((imageId: string) => galleryStore.getImageBlob(imageId), []);
+
 	const openGalleryImage = useCallback(
 		async (imageId: string): Promise<OpenImageResult> => {
 			setState((prev) => ({ ...prev, error: null }));
@@ -217,10 +253,12 @@ export const useGallery = () => {
 		deleteFolder,
 		updateFolderTags,
 		importImage,
+		saveImageToGallery,
 		moveImage,
 		copyImage,
 		deleteImage,
 		openGalleryImage,
+		getImageBlob,
 		setSelectedFolder,
 		setGallerySearchQuery,
 		clearError,

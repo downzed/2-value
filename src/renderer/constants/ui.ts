@@ -23,6 +23,16 @@ export const UI = {
 	HISTORY: {
 		MAX_DEPTH: 50,
 	},
+	CANVAS: {
+		MIN_SIZE: 320, // floor for a blank canvas backing store, in px
+		BRUSH_SIZE: 6,
+		BRUSH_COLOR: '#1f2937',
+		BACKGROUND: '#ffffff',
+	},
+	OPEN_ITEMS: {
+		THUMB_SIZE: 160, // longest edge of the hover preview, in px
+		ROW_HEIGHT: 28,
+	},
 	PERF: {
 		MAX_FILE_BYTES: 25 * 1024 * 1024, // hard stop (25MB input file)
 		MAX_PIXELS: 40_000_000, // hard stop (e.g. 8k x 5k)

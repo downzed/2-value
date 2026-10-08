@@ -38,7 +38,10 @@ export function useImageLoader() {
 	const { loadImage } = useImageContext();
 
 	const loadFromFile = useCallback(
-		async (file: File): Promise<{ ok: true } | { ok: false; error: ImageLoadError }> => {
+		async (
+			file: File,
+			meta: { galleryImageId?: string | null; thumbUrl?: string | null } = {},
+		): Promise<{ ok: true } | { ok: false; error: ImageLoadError }> => {
 			if (file.size > UI.PERF.MAX_FILE_BYTES) {
 				return {
 					ok: false,
@@ -62,7 +65,7 @@ export function useImageLoader() {
 					};
 				}
 
-				await loadImage(image, file.name, '');
+				await loadImage(image, file.name, meta);
 				bitmap.close();
 				return { ok: true };
 			} catch (cause) {

@@ -108,35 +108,33 @@ export class GalleryStore {
 		});
 	}
 
-	async init(): Promise<void> {
-		await this.withMutationLock(async () => {
-			const db = await getDB();
-			await new Promise<void>((resolve, reject) => {
-				const tx = db.transaction('folders', 'readwrite');
-				const store = tx.objectStore('folders');
-				const request = store.getAll();
-				tx.oncomplete = () => {
-					const folders = request.result as GalleryFolder[];
-					const hasUnsorted = folders.some((f) => f.name === UNSORTED_FOLDER_NAME);
-					if (!hasUnsorted) {
-						const unsorted: GalleryFolder = {
-							id: crypto.randomUUID(),
-							name: UNSORTED_FOLDER_NAME,
-							tags: [],
-							createdAt: Date.now(),
-							sortOrder: 0,
-						};
-						store.put(unsorted);
-					}
-					resolve();
-					db.close();
-				};
-				tx.onerror = () => {
-					reject(tx.error);
-					db.close();
-				};
-			});
+	/**
+	 * Returns the `Unsorted` folder, creating it if absent.
+	 *
+	 * Reads and writes happen in separate transactions on purpose: issuing the
+	 * `put` inside the `getAll` transaction's `oncomplete` callback silently
+	 * discards the write, since that transaction has already finished.
+	 */
+	async ensureUnsortedFolder(): Promise<GalleryFolder> {
+		return this.withMutationLock(async () => {
+			const folders = await this.idbGetAll<GalleryFolder>('folders');
+			const existing = folders.find((f) => f.name === UNSORTED_FOLDER_NAME);
+			if (existing) return existing;
+
+			const unsorted: GalleryFolder = {
+				id: crypto.randomUUID(),
+				name: UNSORTED_FOLDER_NAME,
+				tags: [],
+				createdAt: Date.now(),
+				sortOrder: 0,
+			};
+			await this.idbPut('folders', unsorted);
+			return unsorted;
 		});
+	}
+
+	async init(): Promise<void> {
+		await this.ensureUnsortedFolder();
 	}
 
 	async getData(): Promise<GalleryData> {
@@ -287,6 +285,50 @@ export class GalleryStore {
 			});
 
 			return image;
+		});
+	}
+
+	/**
+	 * Replaces an existing image's pixels, thumbnail and derived metadata in
+	 * place. Used when saving over a gallery-backed open item, so repeated saves
+	 * update one entry instead of piling up copies.
+	 */
+	async updateImageBlob(imageId: string, blob: Blob): Promise<GalleryImage> {
+		return this.withMutationLock(async () => {
+			const images = await this.idbGetAll<GalleryImage>('images');
+			const image = images.find((i) => i.id === imageId);
+			if (!image) throw new Error(`Image ${imageId} not found`);
+
+			const thumbnailBlob = await generateThumbnail(blob);
+			const bitmap = await createImageBitmap(blob);
+			const { width, height } = bitmap;
+			bitmap.close();
+
+			const updated: GalleryImage = {
+				...image,
+				width,
+				height,
+				fileSize: blob.size,
+				addedAt: Date.now(),
+			};
+
+			const db = await getDB();
+			await new Promise<void>((resolve, reject) => {
+				const tx = db.transaction(['images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite');
+				tx.objectStore('images').put(updated);
+				tx.objectStore('imageBlobs').put({ imageId, blob });
+				tx.objectStore('thumbnailBlobs').put({ imageId, blob: thumbnailBlob });
+				tx.oncomplete = () => {
+					resolve();
+					db.close();
+				};
+				tx.onerror = () => {
+					reject(tx.error);
+					db.close();
+				};
+			});
+
+			return updated;
 		});
 	}
 
