@@ -46,6 +46,13 @@ interface ImageState {
 	 */
 	viewport: Viewport;
 
+	/**
+	 * Incremented by every newBlankCanvas() call. Lets Canvas.tsx discard
+	 * strokes for a freshly created canvas — including when "New" is pressed
+	 * while already in blank mode, which canvasMode alone cannot signal.
+	 */
+	blankCanvasId: number;
+
 	// Adjustments
 	blur: number;
 	threshold: number;
@@ -115,6 +122,7 @@ export const useImage = () => {
 		filePath: '',
 		canvasMode: 'image',
 		viewport: DEFAULT_VIEWPORT,
+		blankCanvasId: 0,
 		...createDefaultImageState(),
 		panels: { ...DEFAULT_PANELS },
 	});
@@ -125,6 +133,7 @@ export const useImage = () => {
 		filePath,
 		canvasMode,
 		viewport,
+		blankCanvasId,
 		blur,
 		threshold,
 		values,
@@ -159,6 +168,7 @@ export const useImage = () => {
 			panels: { ...DEFAULT_PANELS },
 			// viewport describes the stage, not the document — carry it over
 			viewport: prev.viewport,
+			blankCanvasId: 0,
 		}));
 	}, []);
 
@@ -176,6 +186,7 @@ export const useImage = () => {
 			...createDefaultImageState(),
 			panels: { ...DEFAULT_PANELS },
 			viewport: prev.viewport,
+			blankCanvasId: 0,
 		}));
 	}, []);
 
@@ -193,6 +204,7 @@ export const useImage = () => {
 			...createDefaultImageState(),
 			panels: { ...DEFAULT_PANELS },
 			viewport: prev.viewport,
+			blankCanvasId: prev.blankCanvasId + 1,
 		}));
 	}, []);
 
@@ -402,6 +414,7 @@ export const useImage = () => {
 		// Blank canvas mode (bypasses the filter worker)
 		canvasMode,
 		viewport,
+		blankCanvasId,
 		hasBlankCanvas: canvasMode === 'blank',
 		// True when there is something on the stage worth saving to PNG.
 		hasCanvas: !!sourceImage || canvasMode === 'blank',

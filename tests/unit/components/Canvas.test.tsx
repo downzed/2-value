@@ -48,7 +48,7 @@ describe('Canvas', () => {
 	it('renders empty state with placeholder when no image is loaded', () => {
 		render(<CanvasWrapper />);
 		expect(screen.getByText('No image loaded')).toBeDefined();
-		expect(screen.getByText('Click "Open" to get started')).toBeDefined();
+		expect(screen.getByText('Click "New" or "Open" to get started')).toBeDefined();
 	});
 
 	it('does not render the "No image loaded" placeholder when image is provided', () => {
