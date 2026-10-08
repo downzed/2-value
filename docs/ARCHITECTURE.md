@@ -221,6 +221,44 @@ Blank canvases are not importable to the gallery; undo history remains scoped to
     live preview canvas, which only reflects the item currently on screen. `useExportItem`
     exposes one `renderItemToBlob` used by both Save-from-menu and Export so they cannot drift.
 
+## Domain Layer
+
+`src/renderer/core/` holds the domain as **plain classes with no React imports**, so it can be
+unit-tested directly (`tests/unit/core/`) and reused from a command or worker.
+
+```
+core/
+  types.ts          EditorState, OpenItem, Stroke, PanelId, …
+  EditorStore.ts    open items, active item, per-item adjustments/undo,
+                    zoom/panels/viewport/timer, dirty tracking
+```
+
+`EditorStore` is an external store: `getState()` returns an immutable `EditorState` snapshot and
+`subscribe(listener)` notifies on change. `src/renderer/hooks/useImage.ts` is currently a thin
+`useSyncExternalStore` binding over it, kept only so the Context wiring survives the migration.
+
+Two invariants the class is responsible for:
+
+1. **Strokes are never in state.** They live in a private `Map<itemId, Stroke[]>`, because painting
+   must not notify subscribers and keying by id makes switching items restore the right drawing.
+2. **`getState()` is referentially stable between mutations.** Every mutator returns the *identical*
+   state object when nothing changed, or `useSyncExternalStore` will loop forever. `#patch()` is the
+   single mutation funnel that enforces this.
+
+### Why no Redux
+
+Considered and rejected (recorded so the decision is revisitable):
+
+- It inverts the OOP direction this refactor set out to take — state would become
+  `(state, action) => state` reducers again.
+- It would not replace `GalleryStore`: the IndexedDB/blob/thumbnail work is imperative and does not
+  fit reducers, leaving two paradigms inside one store.
+- It would not fix the re-render fan-out any better than a subscription seam.
+
+`useSyncExternalStore` is React's own primitive for wrapping external mutable stores, which is
+exactly what these classes are. The binding is one small file, so a library can be substituted later
+without touching the domain.
+
 ## Open Items (multi-document)
 
 `useImage` holds a list of `OpenItem`s rather than a single document. `activeItemId` selects

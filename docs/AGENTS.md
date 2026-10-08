@@ -17,7 +17,8 @@
   - `components/gallery/` - FolderContextMenu, FolderPickerDialog, ImageContextMenu, OpenItemContextMenu
   - `components/shared/` - Icon, PillButton, SectionHeader, SliderRow (reusable UI primitives)
   - `components/` - Canvas, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
-  - `hooks/` - useImage, ImageContext, useGallery, GalleryContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts, useUnsavedChangesGuard, useRestoreOpenItems
+  - `core/` - framework-free domain classes (EditorStore); no React imports
+  - `hooks/` - useImage (thin binding), ImageContext, useGallery, GalleryContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts, useUnsavedChangesGuard, useRestoreOpenItems
   - `utils/` - fileOps (file open/save with FSA + fallbacks), storage (IndexedDB wrapper for gallery)
   - `constants/` - UI constants (filter ranges, presets, history config, blank-canvas brush)
 
@@ -52,6 +53,17 @@ freehand drawing target.
 - Save writes into the gallery, not to disk; downloading is `Export as...` on a gallery item menu
 - Blank-canvas strokes are held in a `Map<itemId, Stroke[]>` ref exposed via context, keyed by
   item id so switching items restores the right drawing without copying
+
+## Domain Layer
+
+- `core/EditorStore.ts` holds editor state as a class exposing `getState()` / `subscribe()`; it
+  imports no React and is unit-tested in `tests/unit/core/` without rendering anything
+- `hooks/useImage.ts` is currently a thin `useSyncExternalStore` binding kept for the Context
+  wiring; Phase 4 replaces it with field-level selectors
+- **No Redux** (deliberate): reducers invert the OOP direction, would not replace `GalleryStore`,
+  and would not fix re-renders any better. See ARCHITECTURE.md
+- Two invariants: strokes are never in observable state, and `getState()` must stay referentially
+  stable between mutations (no-op mutators return the same object) or `useSyncExternalStore` loops
 
 ## Open Items (multi-document)
 
