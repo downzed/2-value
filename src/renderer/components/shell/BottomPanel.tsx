@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useGalleryContext } from '../../hooks/GalleryContext';
 import { useImageContext } from '../../hooks/ImageContext';
-import { imageLoadErrorMessage, useImageLoader } from '../../hooks/useImageLoader';
+import { decodeErrorMessage } from '../../core/decode';
 import { openImageFile } from '../../utils/fileOps';
-import { useSaveToGallery } from '../../hooks/useSaveToGallery';
+import { useCommands } from '../../react/useCommands';
 import { galleryRepository } from '../../utils/storage';
 import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
 import { Icon } from '../shared/Icon';
@@ -41,8 +41,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		zoomOut,
 	} = useImageContext();
 	const { folders, importImage, loadGallery } = useGalleryContext();
-	const { loadFromFile } = useImageLoader();
-	const saveToGallery = useSaveToGallery();
+	const commands = useCommands();
 	const [status, setStatus] = useState<Status>('ready');
 	const [errorMsg, setErrorMsg] = useState<string | null>(null);
 	const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
@@ -64,17 +63,17 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 	const doLoadFromFile = useCallback(
 		async (pending: PendingOpen) => {
-			const outcome = await loadFromFile(pending.file);
+			const outcome = await commands.openFile(pending.file);
 			if (outcome.ok) {
 				setStatus('loaded');
 			} else {
-				const msg = imageLoadErrorMessage(outcome.error);
+				const msg = decodeErrorMessage(outcome.error);
 				setErrorMsg(msg);
 				setStatus('error');
 				console.error('Image load rejected:', outcome.error);
 			}
 		},
-		[loadFromFile],
+		[commands],
 	);
 
 	const handleOpen = useCallback(async () => {
@@ -142,14 +141,14 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			const blob = await new Promise<Blob>((resolve, reject) => {
 				canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob returned null'))), 'image/png');
 			});
-			await saveToGallery(blob, fileName || 'image.png');
+			await commands.saveActiveItemToGallery(blob, fileName || 'image.png');
 			setStatus('saved');
 			setTimeout(() => setStatus('loaded'), 2000);
 		} catch (error) {
 			setStatus('error');
 			console.error('Failed to save image:', error);
 		}
-	}, [previewCanvasRef, fileName, hasCanvas, saveToGallery]);
+	}, [previewCanvasRef, fileName, hasCanvas, commands]);
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {

@@ -8,6 +8,9 @@ const PNG = 'image/png';
 /**
  * Renders any open item to a PNG blob, offscreen.
  *
+ * Returns null when rendering is unavailable (no `OffscreenCanvas`, e.g. older
+ * Safari, or jsdom) rather than throwing, matching `utils/thumbnails.ts`.
+ *
  * The status bar's Save reads the live preview canvas, which is only correct for
  * the item currently on screen. Export needs to work for *any* open item, so the
  * content is reproduced here: filtered pixels for images, replayed strokes for
@@ -23,6 +26,8 @@ export async function renderImageItemToBlob(
 		callback: (result: { ok: true; imageData: ImageData } | { ok: false }) => void,
 	) => () => void,
 ): Promise<Blob | null> {
+	if (typeof OffscreenCanvas === 'undefined') return null;
+
 	const imageData = await new Promise<ImageData | null>((resolve) => {
 		process(image, params, false, (result) => resolve(result.ok ? result.imageData : null));
 	});
@@ -37,6 +42,8 @@ export async function renderImageItemToBlob(
 
 export async function renderBlankItemToBlob(strokes: number[][], width: number, height: number): Promise<Blob | null> {
 	if (width <= 0 || height <= 0) return null;
+	if (typeof OffscreenCanvas === 'undefined') return null;
+
 	const canvas = new OffscreenCanvas(width, height);
 	const ctx = canvas.getContext('2d');
 	if (!ctx) return null;

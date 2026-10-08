@@ -9,8 +9,10 @@ import { galleryRepository } from '../utils/storage';
  * every gallery consumer still re-renders on any gallery change. Phase 4 swaps
  * this for field-level selectors.
  */
-export const useGallery = () => {
-	const store = useMemo(() => new GalleryStore(galleryRepository), []);
+/** @param injected Optional store; see {@link useImage}. */
+export function useGallery(injected?: GalleryStore) {
+	const local = useMemo(() => (injected ? null : new GalleryStore(galleryRepository)), [injected]);
+	const store = injected ?? (local as GalleryStore);
 	const state = useSyncExternalStore(store.subscribe, store.getState);
 
 	return {
@@ -37,7 +39,7 @@ export const useGallery = () => {
 		setGallerySearchQuery: store.setGallerySearchQuery,
 		clearError: store.clearError,
 	};
-};
+}
 
 export type { GalleryState, OpenImageResult } from '../core/GalleryStore';
 export type GalleryContextValue = ReturnType<typeof useGallery>;

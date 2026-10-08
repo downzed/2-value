@@ -1,5 +1,6 @@
 import type React from 'react';
 import { createContext, useContext } from 'react';
+import { getAppStore } from '../core/store';
 import { useGallery } from './useGallery';
 
 type GalleryContextValue = ReturnType<typeof useGallery>;
@@ -7,7 +8,7 @@ type GalleryContextValue = ReturnType<typeof useGallery>;
 const GalleryContext = createContext<GalleryContextValue | null>(null);
 
 export const GalleryProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	const galleryState = useGallery();
+	const galleryState = useGallery(getAppStore().gallery);
 	return <GalleryContext.Provider value={galleryState}>{children}</GalleryContext.Provider>;
 };
 

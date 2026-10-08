@@ -62,8 +62,12 @@ freehand drawing target.
   - `GalleryStore` — gallery state and orchestration, over the `GalleryRepository` in `utils/storage.ts`
   - `ImageProcessor` — Worker lifecycle and latest-wins queue
   - `decode.ts` — pure file → image, with size limits
-- `hooks/useImage.ts` is currently a thin `useSyncExternalStore` binding kept for the Context
-  wiring; Phase 4 replaces it with field-level selectors
+- `hooks/useImage.ts` / `useGallery.ts` are thin `useSyncExternalStore` bindings kept for the
+  Context wiring; Phase 4 replaces them with field-level selectors
+- `core/commands.ts` holds the cross-store operations that used to be four separate hooks;
+  the app store is a module singleton in `core/store.ts`
+- App-wide side effects (shortcuts, unsaved-changes warning, session restore) are classes
+  with `start()`/`stop()`, mounted once in `AppContent`
 - **No Redux** (deliberate): reducers invert the OOP direction, would not replace `GalleryStore`,
   and would not fix re-renders any better. See ARCHITECTURE.md
 - Two invariants: strokes are never in observable state, and `getState()` must stay referentially

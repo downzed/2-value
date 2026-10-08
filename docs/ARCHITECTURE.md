@@ -234,6 +234,10 @@ core/
   GalleryStore.ts   gallery state + orchestration over the IndexedDB repository
   ImageProcessor.ts Worker lifecycle + latest-wins job queue
   decode.ts         pure file → image-js Image, with size limits
+  commands.ts       cross-store operations (openFile, save, export)
+  store.ts          createAppStore() + the app singleton
+  SessionRestorer.ts, UnsavedGuard.ts, KeyboardCommands.ts
+                    app-wide side effects with explicit start()/stop()
 ```
 
 `utils/storage.ts` is the **repository** (`GalleryRepository`): it owns bytes in IndexedDB.
@@ -243,6 +247,19 @@ the state be unit-tested with no IndexedDB and no React.
 `ImageProcessor` is a resource, so it is a class with `start()`/`dispose()` rather than a hook;
 `useImageProcessingWorker` only wires that lifecycle to a component. Each instance owns its own
 worker, which is why exporting an item uses a separate processor from the preview.
+
+`commands.ts` holds the operations that span stores — `openFile`, `saveActiveItemToGallery`,
+`exportOpenItem`. These previously existed as four hooks (`useSaveToGallery`, `useExportItem`,
+`useImageLoader`, and inline gallery logic) purely because **contexts cannot depend on each
+other**: `EditorStore` needed the gallery in order to save, and export needed both plus a worker.
+With a single `AppStore` they are plain methods on one object, mounted from `AppContent`.
+
+The three lifecycle classes cover what is not React state. `KeyboardCommands` deliberately does
+**not** own Ctrl+N/O/S — those still live in `BottomPanel` because they drive its hidden file
+input and status text. Consolidating them means hoisting that status into a store.
+
+**Remaining shortcut registries:** `KeyboardCommands` (undo/redo, Alt+1-4 panels, zoom, vim keys)
+and `BottomPanel` (Ctrl+N/O/S).
 
 `EditorStore` is an external store: `getState()` returns an immutable `EditorState` snapshot and
 `subscribe(listener)` notifies on change. `src/renderer/hooks/useImage.ts` is currently a thin
@@ -269,6 +286,11 @@ Considered and rejected (recorded so the decision is revisitable):
 `useSyncExternalStore` is React's own primitive for wrapping external mutable stores, which is
 exactly what these classes are. The binding is one small file, so a library can be substituted later
 without touching the domain.
+
+The app store is a **module singleton** (`core/store.ts`) rather than context. That removes the
+provider-ordering constraint above, and it is the last reason the two contexts still exist. Tests
+construct their own via `createAppStore()`; `resetAppStore()` is only for tests that genuinely need
+the singleton. Consequence: there can only ever be one editor instance.
 
 ## Open Items (multi-document)
 

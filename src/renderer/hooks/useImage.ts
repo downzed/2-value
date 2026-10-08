@@ -11,8 +11,13 @@ import { EditorStore } from '../core/EditorStore';
  * snapshot is one context value. That is deliberately behaviour-preserving for
  * now — fixing it is what Phase 4 is for.
  */
-export const useImage = () => {
-	const store = useMemo(() => new EditorStore(), []);
+/**
+ * @param injected Optional store. The providers pass the app singleton; tests
+ * omit it and get a fresh store per hook instance.
+ */
+export function useImage(injected?: EditorStore) {
+	const local = useMemo(() => (injected ? null : new EditorStore()), [injected]);
+	const store = injected ?? (local as EditorStore);
 	// Subscribe to the whole snapshot so the wrapper re-renders on any change.
 	const state = useSyncExternalStore(store.subscribe, store.getState);
 	// Must stay referentially stable: Canvas has it in useCallback deps.
@@ -98,7 +103,7 @@ export const useImage = () => {
 		// Blank canvas dimensions for the status bar
 		blankSize: store.blankSize,
 	};
-};
+}
 
 export type { OpenImageMeta, OpenItem, Stroke } from '../core/types';
 

@@ -2,7 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useImageContext } from '../../hooks/ImageContext';
 import { useGalleryContext } from '../../hooks/GalleryContext';
-import { useImageLoader, imageLoadErrorMessage } from '../../hooks/useImageLoader';
+import { decodeErrorMessage } from '../../core/decode';
 import type { GalleryFolder, GalleryImage } from '../../../shared/types';
 import { UNSORTED_FOLDER_NAME } from '../../../shared/types';
 import { UI } from '../../constants/ui';
@@ -15,8 +15,7 @@ import {
 } from '../gallery/FolderContextMenu';
 import { ImageContextMenu } from '../gallery/ImageContextMenu';
 import { OpenItemContextMenu } from '../gallery/OpenItemContextMenu';
-import { useExportItem } from '../../hooks/useExportItem';
-import { useSaveToGallery } from '../../hooks/useSaveToGallery';
+import { useCommands } from '../../react/useCommands';
 import { renderImageThumbnail, renderStrokesThumbnail } from '../../utils/thumbnails';
 import type { OpenItem } from '../../hooks/useImage';
 import { galleryRepository } from '../../utils/storage';
@@ -70,15 +69,11 @@ const GalleryPanel: React.FC = () => {
 		moveImage,
 		copyImage,
 		deleteImage,
-		openGalleryImage,
 		setSelectedFolder,
 		setGallerySearchQuery,
 		clearError,
 	} = useGalleryContext();
-	const { renderItemToBlob, exportOpenItem, exportGalleryImage } = useExportItem();
-	const saveToGallery = useSaveToGallery();
-
-	const { loadFromFile } = useImageLoader();
+	const commands = useCommands();
 
 	const [folderContextMenu, setFolderContextMenu] = useState<FolderContextMenuState>(null);
 	const [imageContextMenu, setImageContextMenu] = useState<ImageContextMenuState>(null);
@@ -219,11 +214,9 @@ const GalleryPanel: React.FC = () => {
 		async (image: GalleryImage) => {
 			try {
 				setImageLoadingId(image.id);
-				const result = await openGalleryImage(image.id);
-				const file = new File([result.blob], result.fileName, { type: result.blob.type || 'image/png' });
-				const outcome = await loadFromFile(file);
+				const outcome = await commands.openGalleryImage(image.id);
 				if (!outcome.ok) {
-					console.error('Failed to open gallery image:', imageLoadErrorMessage(outcome.error));
+					console.error('Failed to open gallery image:', decodeErrorMessage(outcome.error));
 				}
 			} catch (err) {
 				console.error('Failed to open gallery image:', err);
@@ -231,7 +224,7 @@ const GalleryPanel: React.FC = () => {
 				setImageLoadingId(null);
 			}
 		},
-		[openGalleryImage, loadFromFile],
+		[commands],
 	);
 
 	// --- Auto folder (virtual list of currently open items) ---
@@ -274,16 +267,12 @@ const GalleryPanel: React.FC = () => {
 	const handleSaveOpenItem = useCallback(
 		async (item: OpenItem) => {
 			try {
-				const blob = await renderItemToBlob(item);
-				if (!blob) return;
-				// saveToGallery targets the active item, so activate before saving.
-				if (item.id !== activeItemId) activateItem(item.id);
-				await saveToGallery(blob, item.fileName || `${item.label}.png`);
+				await commands.saveOpenItem(item);
 			} catch (err) {
 				console.error('Failed to save open item:', err);
 			}
 		},
-		[activeItemId, activateItem, saveToGallery, renderItemToBlob],
+		[commands],
 	);
 
 	const handleCloseOpenItem = useCallback(
@@ -297,23 +286,23 @@ const GalleryPanel: React.FC = () => {
 	const handleExportOpenItem = useCallback(
 		async (item: OpenItem) => {
 			try {
-				await exportOpenItem(item);
+				await commands.exportOpenItem(item);
 			} catch (err) {
 				console.error('Failed to export open item:', err);
 			}
 		},
-		[exportOpenItem],
+		[commands],
 	);
 
 	const handleExportGalleryImage = useCallback(
 		async (image: GalleryImage) => {
 			try {
-				await exportGalleryImage(image.id, image.fileName);
+				await commands.exportGalleryImage(image.id, image.fileName);
 			} catch (err) {
 				console.error('Failed to export gallery image:', err);
 			}
 		},
-		[exportGalleryImage],
+		[commands],
 	);
 
 	const handleMoveImage = useCallback(

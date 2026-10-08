@@ -1,5 +1,6 @@
 import type React from 'react';
 import { createContext, useContext } from 'react';
+import { getAppStore } from '../core/store';
 import { useImage } from './useImage';
 
 type ImageContextValue = ReturnType<typeof useImage>;
@@ -7,7 +8,7 @@ type ImageContextValue = ReturnType<typeof useImage>;
 const ImageContext = createContext<ImageContextValue | null>(null);
 
 export const ImageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-	const imageState = useImage();
+	const imageState = useImage(getAppStore().editor);
 	return <ImageContext.Provider value={imageState}>{children}</ImageContext.Provider>;
 };
 

@@ -91,3 +91,6 @@ export type DecodeError =
 	| { code: 'DECODE_FAILED'; cause: unknown };
 
 export type DecodeResult = { ok: true; image: Image } | { ok: false; error: DecodeError };
+
+/** Outcome of opening a file: either the item was opened, or why it wasn't. */
+export type LoadFromFileOutcome = { ok: true } | { ok: false; error: DecodeError };
