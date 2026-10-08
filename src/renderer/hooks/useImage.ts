@@ -12,6 +12,13 @@ interface AdjustmentSnapshot {
 
 type FitMode = 'fit' | 'manual';
 
+type CanvasMode = 'image' | 'blank';
+
+interface Viewport {
+	width: number;
+	height: number;
+}
+
 interface ImageState {
 	/**
 	 * Immutable source image loaded once.
@@ -25,6 +32,19 @@ interface ImageState {
 	 */
 	fileName: string;
 	filePath: string;
+
+	/**
+	 * 'image' = a photo is open and flows through the filter worker.
+	 * 'blank' = a blank canvas is open and bypasses the filter worker entirely.
+	 * Mutually exclusive with sourceImage being non-null.
+	 */
+	canvasMode: CanvasMode;
+
+	/**
+	 * Measured size of the canvas stage, reported up by Canvas.tsx.
+	 * A blank canvas sizes its backing store to this.
+	 */
+	viewport: Viewport;
 
 	// Adjustments
 	blur: number;
@@ -74,6 +94,8 @@ function createDefaultImageState() {
 	};
 }
 
+const DEFAULT_VIEWPORT: Viewport = { width: 0, height: 0 };
+
 function getSnapshot(state: ImageState): AdjustmentSnapshot {
 	return { blur: state.blur, threshold: state.threshold, values: state.values };
 }
@@ -91,6 +113,8 @@ export const useImage = () => {
 		sourceImage: null,
 		fileName: '',
 		filePath: '',
+		canvasMode: 'image',
+		viewport: DEFAULT_VIEWPORT,
 		...createDefaultImageState(),
 		panels: { ...DEFAULT_PANELS },
 	});
@@ -99,6 +123,8 @@ export const useImage = () => {
 		sourceImage,
 		fileName,
 		filePath,
+		canvasMode,
+		viewport,
 		blur,
 		threshold,
 		values,
@@ -118,18 +144,22 @@ export const useImage = () => {
 
 	// Load image (already decoded)
 	// Store source once — no clone needed for currentImage/originalImage duplication.
+	// Opening a photo always leaves blank-canvas mode.
 	const loadImage = useCallback(async (image: Image, fileName = '', filePath = '') => {
 		if (timerRef.current) {
 			clearInterval(timerRef.current);
 			timerRef.current = null;
 		}
-		setImageState({
+		setImageState((prev) => ({
 			sourceImage: image,
 			fileName,
 			filePath,
+			canvasMode: 'image' as CanvasMode,
 			...createDefaultImageState(),
 			panels: { ...DEFAULT_PANELS },
-		});
+			// viewport describes the stage, not the document — carry it over
+			viewport: prev.viewport,
+		}));
 	}, []);
 
 	// Reset image (clear all)
@@ -138,13 +168,32 @@ export const useImage = () => {
 			clearInterval(timerRef.current);
 			timerRef.current = null;
 		}
-		setImageState({
+		setImageState((prev) => ({
 			sourceImage: null,
 			fileName: '',
 			filePath: '',
+			canvasMode: 'image' as CanvasMode,
 			...createDefaultImageState(),
 			panels: { ...DEFAULT_PANELS },
-		});
+			viewport: prev.viewport,
+		}));
+	}, []);
+
+	// New blank canvas to draw on. Clears any open photo and its adjustments.
+	const newBlankCanvas = useCallback(() => {
+		if (timerRef.current) {
+			clearInterval(timerRef.current);
+			timerRef.current = null;
+		}
+		setImageState((prev) => ({
+			sourceImage: null,
+			fileName: '',
+			filePath: '',
+			canvasMode: 'blank' as CanvasMode,
+			...createDefaultImageState(),
+			panels: { ...DEFAULT_PANELS },
+			viewport: prev.viewport,
+		}));
 	}, []);
 
 	// Reset controls only (keep image)
@@ -298,6 +347,15 @@ export const useImage = () => {
 		setImageState((prev) => ({ ...prev, fitScale: scale }));
 	}, []);
 
+	// Reported by Canvas.tsx on stage resize. Bails out when unchanged so a
+	// measurement round-trip can't drive a render loop.
+	const setViewport = useCallback((next: Viewport) => {
+		setImageState((prev) => {
+			if (prev.viewport.width === next.width && prev.viewport.height === next.height) return prev;
+			return { ...prev, viewport: next };
+		});
+	}, []);
+
 	// Counter
 	const startCounter = useCallback((duration: number) => {
 		if (timerRef.current) clearInterval(timerRef.current);
@@ -340,6 +398,15 @@ export const useImage = () => {
 		fileName,
 		filePath,
 		hasImage: !!sourceImage,
+
+		// Blank canvas mode (bypasses the filter worker)
+		canvasMode,
+		viewport,
+		hasBlankCanvas: canvasMode === 'blank',
+		// True when there is something on the stage worth saving to PNG.
+		hasCanvas: !!sourceImage || canvasMode === 'blank',
+		newBlankCanvas,
+		setViewport,
 
 		// Actions
 		loadImage,
