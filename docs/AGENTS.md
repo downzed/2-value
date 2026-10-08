@@ -56,8 +56,12 @@ freehand drawing target.
 
 ## Domain Layer
 
-- `core/EditorStore.ts` holds editor state as a class exposing `getState()` / `subscribe()`; it
-  imports no React and is unit-tested in `tests/unit/core/` without rendering anything
+- `core/` classes expose `getState()` / `subscribe()` and import no React, so they are unit-tested in
+  `tests/unit/core/` without rendering anything:
+  - `EditorStore` — open items, active item, per-item adjustments/undo, zoom/panels/timer, dirty
+  - `GalleryStore` — gallery state and orchestration, over the `GalleryRepository` in `utils/storage.ts`
+  - `ImageProcessor` — Worker lifecycle and latest-wins queue
+  - `decode.ts` — pure file → image, with size limits
 - `hooks/useImage.ts` is currently a thin `useSyncExternalStore` binding kept for the Context
   wiring; Phase 4 replaces it with field-level selectors
 - **No Redux** (deliberate): reducers invert the OOP direction, would not replace `GalleryStore`,

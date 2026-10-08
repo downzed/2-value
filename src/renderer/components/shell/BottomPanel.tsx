@@ -4,7 +4,7 @@ import { useImageContext } from '../../hooks/ImageContext';
 import { imageLoadErrorMessage, useImageLoader } from '../../hooks/useImageLoader';
 import { openImageFile } from '../../utils/fileOps';
 import { useSaveToGallery } from '../../hooks/useSaveToGallery';
-import { galleryStore } from '../../utils/storage';
+import { galleryRepository } from '../../utils/storage';
 import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
 import { Icon } from '../shared/Icon';
 
@@ -124,7 +124,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 	const handleCreateFolderInPicker = useCallback(
 		async (name: string) => {
-			const folder = await galleryStore.createFolder(name);
+			const folder = await galleryRepository.createFolder(name);
 			await loadGallery();
 			return folder;
 		},

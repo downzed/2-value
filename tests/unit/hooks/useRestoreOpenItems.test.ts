@@ -15,7 +15,7 @@ vi.mock('../../../src/renderer/hooks/useImageLoader', () => ({
 }));
 
 vi.mock('../../../src/renderer/utils/storage', () => ({
-	galleryStore: { getThumbnailBlob: vi.fn().mockResolvedValue(undefined) },
+	galleryRepository: { getThumbnailBlob: vi.fn().mockResolvedValue(undefined) },
 }));
 
 import { useGalleryContext } from '../../../src/renderer/hooks/GalleryContext';

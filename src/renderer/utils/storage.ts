@@ -62,7 +62,7 @@ export async function generateThumbnailDataUrl(blob: Blob, maxSize = 100): Promi
 	});
 }
 
-export class GalleryStore {
+export class GalleryRepository {
 	private mutationQueue: Promise<void> = Promise.resolve();
 
 	private withMutationLock<T>(fn: () => Promise<T>): Promise<T> {
@@ -506,4 +506,4 @@ export function clearAllRecents(): void {
 	localStorage.removeItem(RECENTS_KEY);
 }
 
-export const galleryStore = new GalleryStore();
+export const galleryRepository = new GalleryRepository();

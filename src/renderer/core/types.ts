@@ -83,3 +83,11 @@ export interface EditorState {
 }
 
 export type Listener = () => void;
+
+/** Why decoding a user-supplied file failed. */
+export type DecodeError =
+	| { code: 'FILE_TOO_LARGE'; fileSize: number; maxBytes: number }
+	| { code: 'TOO_MANY_PIXELS'; pixels: number; maxPixels: number }
+	| { code: 'DECODE_FAILED'; cause: unknown };
+
+export type DecodeResult = { ok: true; image: Image } | { ok: false; error: DecodeError };

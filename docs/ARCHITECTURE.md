@@ -228,10 +228,21 @@ unit-tested directly (`tests/unit/core/`) and reused from a command or worker.
 
 ```
 core/
-  types.ts          EditorState, OpenItem, Stroke, PanelId, …
+  types.ts          EditorState, GalleryState, OpenItem, Stroke, PanelId, …
   EditorStore.ts    open items, active item, per-item adjustments/undo,
                     zoom/panels/viewport/timer, dirty tracking
+  GalleryStore.ts   gallery state + orchestration over the IndexedDB repository
+  ImageProcessor.ts Worker lifecycle + latest-wins job queue
+  decode.ts         pure file → image-js Image, with size limits
 ```
+
+`utils/storage.ts` is the **repository** (`GalleryRepository`): it owns bytes in IndexedDB.
+`core/GalleryStore.ts` owns observable state and orchestration. Keeping those apart is what lets
+the state be unit-tested with no IndexedDB and no React.
+
+`ImageProcessor` is a resource, so it is a class with `start()`/`dispose()` rather than a hook;
+`useImageProcessingWorker` only wires that lifecycle to a component. Each instance owns its own
+worker, which is why exporting an item uses a separate processor from the preview.
 
 `EditorStore` is an external store: `getState()` returns an immutable `EditorState` snapshot and
 `subscribe(listener)` notifies on change. `src/renderer/hooks/useImage.ts` is currently a thin

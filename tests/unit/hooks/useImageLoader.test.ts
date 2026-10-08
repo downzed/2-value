@@ -1,158 +1,67 @@
-import { act, renderHook } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { UI } from '../../../src/renderer/constants/ui';
-import { imageLoadErrorMessage, useImageLoader } from '../../../src/renderer/hooks/useImageLoader';
+import { useImageLoader } from '../../../src/renderer/hooks/useImageLoader';
+import { decodeImageFile } from '../../../src/renderer/core/decode';
 
-// ---------------------------------------------------------------------------
-// Mocks
-// ---------------------------------------------------------------------------
-
-// Mock ImageContext so useImageLoader can be tested standalone
-const mockLoadImage = vi.fn();
 vi.mock('../../../src/renderer/hooks/ImageContext', () => ({
-	useImageContext: () => ({ loadImage: mockLoadImage }),
+	useImageContext: vi.fn(),
 }));
 
-// Mock createImageBitmap used inside decodeBytesToImage
-const mockBitmapClose = vi.fn();
-const mockBitmap = {
-	width: 100,
-	height: 80,
-	close: mockBitmapClose,
-};
-globalThis.createImageBitmap = vi.fn().mockResolvedValue(mockBitmap);
-
-// Mock OffscreenCanvas — must use `function` for proper `new` behaviour in Vitest 4
-const mockGetImageData = vi.fn(() => ({
-	data: new Uint8ClampedArray(100 * 80 * 4),
-}));
-const mockCtx = {
-	drawImage: vi.fn(),
-	getImageData: mockGetImageData,
-};
-globalThis.OffscreenCanvas = vi.fn(function (this: Record<string, unknown>, w: number, h: number) {
-	this.width = w;
-	this.height = h;
-	this.getContext = vi.fn(() => mockCtx);
-}) as unknown as typeof OffscreenCanvas;
-
-// Mock Blob — must use `function` for proper `new` behaviour in Vitest 4
-globalThis.Blob = vi.fn(function (this: Record<string, unknown>) {
-	// empty blob mock
-}) as unknown as typeof Blob;
-
-// Mock image-js Image constructor — must use `function` for proper `new` behaviour in Vitest 4
-vi.mock('image-js', () => {
-	const MockImage = vi.fn(function (this: Record<string, unknown>, width: number, height: number) {
-		this.width = width;
-		this.height = height;
-		this.data = new Uint8ClampedArray(4); // small stub — tests only need width/height
-	});
-	return { Image: MockImage, readImg: vi.fn() };
+vi.mock('../../../src/renderer/core/decode', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('../../../src/renderer/core/decode')>();
+	return { ...actual, decodeImageFile: vi.fn() };
 });
 
-// Helper: create a mock File of a given size
-function makeFile(name: string, size: number): File {
-	const content = new Uint8Array(size);
-	return new File([content], name, { type: 'image/png' });
-}
+import { useImageContext } from '../../../src/renderer/hooks/ImageContext';
 
-// ---------------------------------------------------------------------------
-// Tests
-// ---------------------------------------------------------------------------
+const loadImage = vi.fn();
 
+/**
+ * Decoding itself is tested in tests/unit/core/decode.test.ts. This covers only
+ * what the binding adds: handing the decoded image to the editor store.
+ */
 describe('useImageLoader', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockLoadImage.mockResolvedValue(undefined);
-		(globalThis.createImageBitmap as ReturnType<typeof vi.fn>).mockResolvedValue(mockBitmap);
-		mockGetImageData.mockReturnValue({ data: new Uint8ClampedArray(100 * 80 * 4) });
+		loadImage.mockResolvedValue(undefined);
+		vi.mocked(useImageContext).mockReturnValue({ loadImage } as never);
 	});
 
-	it('returns ok:true when image is within limits', async () => {
-		const { result } = renderHook(() => useImageLoader());
-
-		let outcome: Awaited<ReturnType<typeof result.current.loadFromFile>>;
-		await act(async () => {
-			outcome = await result.current.loadFromFile(makeFile('image.png', 1024));
-		});
-		expect(outcome?.ok).toBe(true);
-		expect(mockLoadImage).toHaveBeenCalledTimes(1);
-		expect(mockBitmapClose).toHaveBeenCalledTimes(1);
-	});
-
-	it('returns FILE_TOO_LARGE error when fileSize exceeds MAX_FILE_BYTES', async () => {
-		const { result } = renderHook(() => useImageLoader());
-
-		let outcome: Awaited<ReturnType<typeof result.current.loadFromFile>>;
-		await act(async () => {
-			outcome = await result.current.loadFromFile(makeFile('big.png', UI.PERF.MAX_FILE_BYTES + 1));
-		});
-		expect(outcome?.ok).toBe(false);
-		if (!outcome?.ok) {
-			expect(outcome?.error.code).toBe('FILE_TOO_LARGE');
-		}
-	});
-
-	it('returns TOO_MANY_PIXELS error when pixel count exceeds MAX_PIXELS', async () => {
-		const hugeBitmap = { ...mockBitmap, width: 10000, height: 5000 };
-		(globalThis.createImageBitmap as ReturnType<typeof vi.fn>).mockResolvedValueOnce(hugeBitmap);
-		mockGetImageData.mockReturnValueOnce({ data: new Uint8ClampedArray(4) });
+	it('opens a decoded file as an item named after the file', async () => {
+		const image = { width: 10, height: 10 };
+		vi.mocked(decodeImageFile).mockResolvedValue({ ok: true, image: image as never });
 
 		const { result } = renderHook(() => useImageLoader());
+		const file = new File(['x'], 'photo.jpg', { type: 'image/jpeg' });
 
-		let outcome: Awaited<ReturnType<typeof result.current.loadFromFile>>;
-		await act(async () => {
-			outcome = await result.current.loadFromFile(makeFile('big.png', 1024));
-		});
-		expect(outcome?.ok).toBe(false);
-		if (!outcome?.ok) {
-			expect(outcome?.error.code).toBe('TOO_MANY_PIXELS');
-		}
-		expect(mockBitmapClose).toHaveBeenCalledTimes(1);
+		const outcome = await result.current.loadFromFile(file);
+
+		expect(outcome).toEqual({ ok: true });
+		expect(loadImage).toHaveBeenCalledWith(image, 'photo.jpg', {});
 	});
 
-	it('returns DECODE_FAILED when decode fails (e.g. bad data)', async () => {
-		// Make createImageBitmap reject to simulate a decode failure
-		(globalThis.createImageBitmap as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('decode error'));
+	it('forwards gallery metadata to the store', async () => {
+		const image = { width: 10, height: 10 };
+		vi.mocked(decodeImageFile).mockResolvedValue({ ok: true, image: image as never });
+
 		const { result } = renderHook(() => useImageLoader());
+		const file = new File(['x'], 'photo.jpg', { type: 'image/jpeg' });
 
-		let outcome: Awaited<ReturnType<typeof result.current.loadFromFile>>;
-		await act(async () => {
-			outcome = await result.current.loadFromFile(makeFile('bad.png', 1024));
-		});
-		expect(outcome?.ok).toBe(false);
-		if (!outcome?.ok) {
-			expect(outcome?.error.code).toBe('DECODE_FAILED');
-		}
+		await result.current.loadFromFile(file, { galleryImageId: 'g1' });
+
+		expect(loadImage).toHaveBeenCalledWith(image, 'photo.jpg', { galleryImageId: 'g1' });
 	});
 
-	it('does not call loadImage when file is too large', async () => {
+	it('passes a decode failure through without opening an item', async () => {
+		const error = { code: 'FILE_TOO_LARGE', fileSize: 1, maxBytes: 2 } as const;
+		vi.mocked(decodeImageFile).mockResolvedValue({ ok: false, error });
+
 		const { result } = renderHook(() => useImageLoader());
-		await act(async () => {
-			await result.current.loadFromFile(makeFile('big.png', UI.PERF.MAX_FILE_BYTES + 100));
-		});
-		expect(mockLoadImage).not.toHaveBeenCalled();
-	});
-});
+		const file = new File(['x'], 'huge.png', { type: 'image/png' });
 
-// ---------------------------------------------------------------------------
-// imageLoadErrorMessage tests
-// ---------------------------------------------------------------------------
+		const outcome = await result.current.loadFromFile(file);
 
-describe('imageLoadErrorMessage', () => {
-	it('formats FILE_TOO_LARGE with MB limit', () => {
-		const msg = imageLoadErrorMessage({ code: 'FILE_TOO_LARGE', fileSize: 30_000_000, maxBytes: 25 * 1024 * 1024 });
-		expect(msg).toContain('25 MB');
-	});
-
-	it('returns message for TOO_MANY_PIXELS', () => {
-		const msg = imageLoadErrorMessage({ code: 'TOO_MANY_PIXELS', pixels: 50_000_000, maxPixels: 40_000_000 });
-		expect(msg).toContain('too large');
-	});
-
-	it('returns message for DECODE_FAILED', () => {
-		const msg = imageLoadErrorMessage({ code: 'DECODE_FAILED', cause: new Error('bad') });
-		expect(msg).toContain('decode');
+		expect(outcome).toEqual({ ok: false, error });
+		expect(loadImage).not.toHaveBeenCalled();
 	});
 });

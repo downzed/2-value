@@ -1,285 +1,69 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useGallery } from '../../../src/renderer/hooks/useGallery';
-import type { GalleryImage } from '../../../src/shared/types';
-import { galleryStore } from '../../../src/renderer/utils/storage';
-
-// ---------------------------------------------------------------------------
-// Mock galleryStore
-// ---------------------------------------------------------------------------
 
 vi.mock('../../../src/renderer/utils/storage', () => ({
-	galleryStore: {
-		getData: vi.fn(),
+	galleryRepository: {
+		getData: vi.fn().mockResolvedValue({ version: 1, folders: [], images: [] }),
+		ensureUnsortedFolder: vi
+			.fn()
+			.mockResolvedValue({ id: 'unsorted', name: 'Unsorted', tags: [], createdAt: 0, sortOrder: 0 }),
 		createFolder: vi.fn(),
 		renameFolder: vi.fn(),
 		deleteFolder: vi.fn(),
 		updateFolderTags: vi.fn(),
-		reorderFolders: vi.fn(),
 		importImage: vi.fn(),
+		updateImageBlob: vi.fn(),
 		moveImage: vi.fn(),
 		copyImage: vi.fn(),
 		deleteImage: vi.fn(),
 		getImageBlob: vi.fn(),
-		getThumbnailBlob: vi.fn(),
-		clearAll: vi.fn(),
-		ensureUnsortedFolder: vi
-			.fn()
-			.mockResolvedValue({ id: 'unsorted', name: 'Unsorted', tags: [], createdAt: 0, sortOrder: 0 }),
-		updateImageBlob: vi.fn(),
 	},
 }));
 
-const mockGetData = vi.mocked(galleryStore.getData);
-const mockSaveToGalleryStore = vi.mocked(galleryStore.updateImageBlob);
-const mockImport = vi.mocked(galleryStore.importImage);
-const mockCreateFolder = vi.mocked(galleryStore.createFolder);
+/**
+ * The domain logic now lives in GalleryStore and is tested in
+ * tests/unit/core/GalleryStore.test.ts. This covers only what the React binding
+ * still does: project the snapshot and keep subscribers up to date.
+ */
+describe('useGallery', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+	});
 
-const makeImage = (id: string, fileName: string, folderId = 'f1'): GalleryImage => ({
-	id,
-	folderId,
-	fileName,
-	width: 100,
-	height: 100,
-	fileSize: 1024,
-	addedAt: Date.now(),
-	source: 'local',
-});
-
-beforeEach(() => {
-	vi.clearAllMocks();
-});
-
-// ---------------------------------------------------------------------------
-// Initial state
-// ---------------------------------------------------------------------------
-
-describe('useGallery – initial state', () => {
-	it('starts with empty folders and images', () => {
+	it('projects the store snapshot', () => {
 		const { result } = renderHook(() => useGallery());
+
 		expect(result.current.folders).toEqual([]);
 		expect(result.current.images).toEqual([]);
-		expect(result.current.filteredImages).toEqual([]);
+		expect(result.current.selectedFolderId).toBe(null);
 		expect(result.current.gallerySearchQuery).toBe('');
 		expect(result.current.loading).toBe(false);
 		expect(result.current.error).toBe(null);
 	});
-});
 
-// ---------------------------------------------------------------------------
-// filteredImages – case-insensitive substring search
-// ---------------------------------------------------------------------------
-
-describe('useGallery – filteredImages', () => {
-	const images = [
-		makeImage('1', 'Sunset.jpg'),
-		makeImage('2', 'sunrise.png'),
-		makeImage('3', 'city-night.jpg'),
-		makeImage('4', 'SUNBURN.jpg'),
-	];
-
-	async function setupWithImages() {
-		mockGetData.mockResolvedValueOnce({ version: 1, folders: [], images });
-		const hook = renderHook(() => useGallery());
-		await act(async () => {
-			await hook.result.current.loadGallery();
-		});
-		return hook;
-	}
-
-	it('returns all images when query is empty', async () => {
-		const { result } = await setupWithImages();
-		expect(result.current.filteredImages).toHaveLength(4);
-	});
-
-	it('returns all images when query is whitespace only', async () => {
-		const { result } = await setupWithImages();
-		act(() => result.current.setGallerySearchQuery('   '));
-		expect(result.current.filteredImages).toHaveLength(4);
-	});
-
-	it('filters case-insensitively by substring', async () => {
-		const { result } = await setupWithImages();
-		act(() => result.current.setGallerySearchQuery('sun'));
-		const names = result.current.filteredImages.map((i) => i.fileName);
-		expect(names).toContain('Sunset.jpg');
-		expect(names).toContain('sunrise.png');
-		expect(names).toContain('SUNBURN.jpg');
-		expect(names).not.toContain('city-night.jpg');
-	});
-
-	it('is case-insensitive for uppercase query', async () => {
-		const { result } = await setupWithImages();
-		act(() => result.current.setGallerySearchQuery('SUN'));
-		expect(result.current.filteredImages).toHaveLength(3);
-	});
-
-	it('returns empty array when no images match', async () => {
-		const { result } = await setupWithImages();
-		act(() => result.current.setGallerySearchQuery('xyznotfound'));
-		expect(result.current.filteredImages).toHaveLength(0);
-	});
-
-	it('trims leading/trailing whitespace from query', async () => {
-		const { result } = await setupWithImages();
-		act(() => result.current.setGallerySearchQuery('  city  '));
-		const names = result.current.filteredImages.map((i) => i.fileName);
-		expect(names).toContain('city-night.jpg');
-		expect(result.current.filteredImages).toHaveLength(1);
-	});
-});
-
-// ---------------------------------------------------------------------------
-// loadGallery – success and error paths
-// ---------------------------------------------------------------------------
-
-describe('useGallery – loadGallery', () => {
-	it('sets loading=true while request is in-flight and false after', async () => {
-		let resolve: (v: unknown) => void = () => {};
-		mockGetData.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+	it('re-renders when the underlying store changes', async () => {
 		const { result } = renderHook(() => useGallery());
 
-		let loadPromise: Promise<void>;
 		act(() => {
-			loadPromise = result.current.loadGallery();
+			result.current.setSelectedFolder('f1');
 		});
-		expect(result.current.loading).toBe(true);
 
-		await act(async () => {
-			resolve({ version: 1, folders: [], images: [] });
-			await loadPromise;
-		});
-		expect(result.current.loading).toBe(false);
+		expect(result.current.selectedFolderId).toBe('f1');
 	});
 
-	it('stores folders and images from the API response', async () => {
-		const folders = [{ id: 'f1', name: 'Nature', tags: [], createdAt: 0, sortOrder: 0 }];
-		const images = [makeImage('1', 'tree.jpg', 'f1')];
-		mockGetData.mockResolvedValueOnce({ version: 1, folders, images });
-		const { result } = renderHook(() => useGallery());
+	it('keeps action identities stable across renders', () => {
+		const { result, rerender } = renderHook(() => useGallery());
+		const first = {
+			loadGallery: result.current.loadGallery,
+			createFolder: result.current.createFolder,
+			setSelectedFolder: result.current.setSelectedFolder,
+		};
 
-		await act(async () => {
-			await result.current.loadGallery();
-		});
+		rerender();
 
-		expect(result.current.folders).toEqual(folders);
-		expect(result.current.images).toEqual(images);
-		expect(result.current.error).toBe(null);
-	});
-
-	it('sets error string on failure', async () => {
-		mockGetData.mockRejectedValueOnce(new Error('network'));
-		const { result } = renderHook(() => useGallery());
-
-		await act(async () => {
-			await result.current.loadGallery();
-		});
-
-		expect(result.current.error).toBe('Failed to load gallery.');
-		expect(result.current.loading).toBe(false);
-	});
-});
-
-// ---------------------------------------------------------------------------
-// createFolder – optimistic error propagation
-// ---------------------------------------------------------------------------
-
-describe('useGallery – createFolder', () => {
-	it('re-throws and sets error when storage call fails', async () => {
-		mockCreateFolder.mockRejectedValueOnce(new Error('duplicate name'));
-		mockGetData.mockResolvedValue({ version: 1, folders: [], images: [] });
-
-		const { result } = renderHook(() => useGallery());
-		await act(async () => {
-			await result.current.loadGallery();
-		});
-
-		let threw = false;
-		await act(async () => {
-			try {
-				await result.current.createFolder('duplicate name');
-			} catch {
-				threw = true;
-			}
-		});
-
-		expect(threw).toBe(true);
-		expect(result.current.error).toBe('duplicate name');
-	});
-});
-
-// ---------------------------------------------------------------------------
-// clearError
-// ---------------------------------------------------------------------------
-
-describe('useGallery – clearError', () => {
-	it('resets error to null', async () => {
-		mockGetData.mockRejectedValueOnce(new Error('boom'));
-		const { result } = renderHook(() => useGallery());
-		await act(async () => {
-			await result.current.loadGallery();
-		});
-		expect(result.current.error).not.toBe(null);
-
-		act(() => result.current.clearError());
-		expect(result.current.error).toBe(null);
-	});
-});
-
-// ---------------------------------------------------------------------------
-// saveImageToGallery
-// ---------------------------------------------------------------------------
-
-describe('useGallery – saveImageToGallery', () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		vi.mocked(galleryStore.ensureUnsortedFolder).mockResolvedValue({
-			id: 'unsorted',
-			name: 'Unsorted',
-			tags: [],
-			createdAt: 0,
-			sortOrder: 0,
-		});
-		mockGetData.mockResolvedValue({ version: 1, folders: [], images: [] });
-	});
-
-	it('overwrites the existing entry rather than creating a duplicate', async () => {
-		mockSaveToGalleryStore.mockResolvedValue(makeImage('g1', 'study.png'));
-		const { result } = renderHook(() => useGallery());
-
-		let id: string | undefined;
-		await act(async () => {
-			id = await result.current.saveImageToGallery(new Blob(['x']), 'study.png', 'g1');
-		});
-
-		expect(mockSaveToGalleryStore).toHaveBeenCalledTimes(1);
-		expect(mockImport).not.toHaveBeenCalled();
-		expect(id).toBe('g1');
-	});
-
-	it('creates an entry in Unsorted when there is no existing one', async () => {
-		mockImport.mockResolvedValue(makeImage('g2', 'study.png', 'unsorted'));
-		const { result } = renderHook(() => useGallery());
-
-		let id: string | undefined;
-		await act(async () => {
-			id = await result.current.saveImageToGallery(new Blob(['x']), 'study.png', null);
-		});
-
-		expect(mockSaveToGalleryStore).not.toHaveBeenCalled();
-		expect(mockImport).toHaveBeenCalledTimes(1);
-		expect(mockImport.mock.calls[0][1]).toBe('unsorted');
-		expect(id).toBe('g2');
-	});
-
-	it('surfaces an error and rethrows when the write fails', async () => {
-		mockSaveToGalleryStore.mockRejectedValue(new Error('quota exceeded'));
-		const { result } = renderHook(() => useGallery());
-
-		await act(async () => {
-			await expect(result.current.saveImageToGallery(new Blob(['x']), 's.png', 'g1')).rejects.toThrow('quota exceeded');
-		});
-
-		expect(result.current.error).toBe('quota exceeded');
+		expect(result.current.loadGallery).toBe(first.loadGallery);
+		expect(result.current.createFolder).toBe(first.createFolder);
+		expect(result.current.setSelectedFolder).toBe(first.setSelectedFolder);
 	});
 });

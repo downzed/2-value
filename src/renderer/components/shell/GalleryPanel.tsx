@@ -19,7 +19,7 @@ import { useExportItem } from '../../hooks/useExportItem';
 import { useSaveToGallery } from '../../hooks/useSaveToGallery';
 import { renderImageThumbnail, renderStrokesThumbnail } from '../../utils/thumbnails';
 import type { OpenItem } from '../../hooks/useImage';
-import { galleryStore } from '../../utils/storage';
+import { galleryRepository } from '../../utils/storage';
 
 type FolderContextMenuState = {
 	folder: GalleryFolder;
@@ -134,7 +134,7 @@ const GalleryPanel: React.FC = () => {
 		Promise.all(
 			newImages.map(async (img) => {
 				try {
-					const blob = await galleryStore.getThumbnailBlob(img.id);
+					const blob = await galleryRepository.getThumbnailBlob(img.id);
 					if (blob && !cancelled) {
 						newUrls[img.id] = URL.createObjectURL(blob);
 					}

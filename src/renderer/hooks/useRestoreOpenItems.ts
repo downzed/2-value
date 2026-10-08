@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useGalleryContext } from './GalleryContext';
 import { useImageContext } from './ImageContext';
 import { useImageLoader } from './useImageLoader';
-import { galleryStore } from '../utils/storage';
+import { galleryRepository } from '../utils/storage';
 
 const STORAGE_KEY = 'image-editor-open-items';
 
@@ -66,9 +66,8 @@ export function useRestoreOpenItems() {
 			for (const galleryImageId of wanted) {
 				try {
 					const { blob, fileName } = await openGalleryImage(galleryImageId);
-					const thumbUrl = await galleryStore
-						.getThumbnailBlob(galleryImageId)
-						.then((b) => (b ? URL.createObjectURL(b) : null));
+					const thumbBlob = await galleryRepository.getThumbnailBlob(galleryImageId);
+					const thumbUrl = thumbBlob ? URL.createObjectURL(thumbBlob) : null;
 					await loadFromFile(new File([blob], fileName), { galleryImageId, thumbUrl });
 				} catch (error) {
 					// Entry deleted or unreadable since the last session — skip it.
