@@ -171,10 +171,39 @@ The app uses React Context + custom hooks for state management, split into two i
 - **Composition:** Assembles Canvas, FloatingImage, FloatingControls, FloatingCounter, BottomPanel
 
 ### BottomPanel.tsx (Status Bar + File Operations)
+- **New:** Calls `newBlankCanvas()` from useImage, starting a blank drawing surface
 - **Open:** Calls `openImageFile()` from fileOps, then `loadFromFile()` from useImageLoader
-- **Save:** Gets canvas blob, calls `saveImageFile()` from fileOps
+- **Save:** Gets canvas blob, calls `saveImageFile()` from fileOps. Enabled when `hasCanvas`
+  (an open image *or* a blank canvas), disabled on a truly empty stage
 - **Display:** File info, status, zoom controls, minimized panel icons
-- **Keybindings:** Ctrl+O / Ctrl+S
+- **Keybindings:** Ctrl+N / Ctrl+O / Ctrl+S
+
+### Blank Canvas Mode
+`canvasMode` in `useImage` is `'image' | 'blank'` and decides what owns the `<canvas>`:
+
+- **`'image'`** — `sourceImage` is set and the surface is painted by the filter worker via
+  `putImageData`. Existing behaviour, unchanged.
+- **`'blank'`** — `sourceImage` is `null` and the surface is a freehand drawing target.
+  Every worker/`putImageData` path in `Canvas.tsx` is gated on `isBlank`, so the pipeline
+  is bypassed entirely and the adjustments panel has nothing to act on.
+
+Mechanics:
+
+- **Sizing:** The backing store is sized to the stage (the white card), so backing store and
+  CSS size are 1:1 and pointer coordinates map directly. `Canvas.tsx` reports the measured
+  size up via `setViewport`; `setViewport` returns the previous state object unchanged when the
+  size matches, so the measurement round-trip can't drive a render loop.
+- **Strokes:** Kept in refs (`strokesRef`), never in state, so painting triggers no re-render.
+  Coordinates are normalized to 0..1, which lets a window resize rescale the drawing instead of
+  smearing or discarding it.
+- **Incremental painting:** `onPointerMove` strokes only the new segment; a full replay happens
+  only on resize or on a new canvas.
+- **`blankCanvasId`:** Incremented by every `newBlankCanvas()` call. `canvasMode` alone cannot
+  signal "New" pressed while *already* blank, which would otherwise keep the old drawing.
+- **Pointer capture:** Taken on `pointerdown` so a drag that leaves the canvas still tracks.
+
+Blank canvases are not importable to the gallery and are not undoable — undo history remains
+scoped to adjustments.
 
 ### GalleryPanel.tsx (Gallery Modal)
 - **Folders only:** No external gallery/explore tab
@@ -200,6 +229,7 @@ Registered in `useKeyboardShortcuts` at the `App` level. All shortcuts use `keyd
 | `Ctrl+0` | Fit to view |
 | `Ctrl++` | Zoom in |
 | `Ctrl+-` | Zoom out |
+| `Ctrl+N` | New blank canvas (see note) |
 | `Ctrl+O` | Open image |
 | `Ctrl+S` | Save image |
 | `h` | Decrease blur (-0.5) |
@@ -207,6 +237,14 @@ Registered in `useKeyboardShortcuts` at the `App` level. All shortcuts use `keyd
 | `j` | Decrease threshold (-1) |
 | `k` | Increase threshold (+1) |
 | `Escape` | Close context menus, folder picker, back from folder view |
+
+> **Note on `Ctrl+N`:** Chrome and Edge reserve `Ctrl+N` for "new window" and will not deliver
+> it to the page in a normal tab. The shortcut works in Firefox, in Chrome's Application mode,
+> and once the app is installed as a PWA. Use the **New** button for a reliable path.
+
+Note that there are **two** shortcut registries, and the file operations are split across both:
+`Ctrl+N` / `Ctrl+O` / `Ctrl+S` are registered in `BottomPanel.tsx` (they need the canvas ref and
+local file state), while the panel toggles, zoom and undo/redo live in `useKeyboardShortcuts.ts`.
 
 ---
 

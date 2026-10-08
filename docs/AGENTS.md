@@ -19,7 +19,7 @@
   - `components/` - Canvas, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
   - `hooks/` - useImage, ImageContext, useGallery, GalleryContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
   - `utils/` - fileOps (file open/save with FSA + fallbacks), storage (IndexedDB wrapper for gallery)
-  - `constants/` - UI constants (filter ranges, presets, history config)
+  - `constants/` - UI constants (filter ranges, presets, history config, blank-canvas brush)
 
 ## Key Implementation Details
 
@@ -33,6 +33,22 @@
 - Gallery images stored in IndexedDB (blobs for full images + thumbnails, metadata in separate stores)
 - Thumbnails generated client-side via OffscreenCanvas + createImageBitmap
 - Shared UI primitives (Icon, PillButton, SectionHeader, SliderRow) used across all panels
+- Two shortcut registries: file ops (`Ctrl+N`/`Ctrl+O`/`Ctrl+S`) in `BottomPanel.tsx`,
+  panel toggles / zoom / undo in `useKeyboardShortcuts.ts`
+- `Ctrl+N` is reserved by Chrome and Edge in a normal tab and will not reach the page;
+  the **New** button is the reliable trigger
+
+## Blank Canvas Mode
+
+`canvasMode` (`'image' | 'blank'`) in `useImage` decides what owns the `<canvas>` in
+`Canvas.tsx`. In `'blank'` mode the filter worker is bypassed entirely and the surface is a
+freehand drawing target.
+
+- Backing store is sized to the stage via `setViewport`, keeping backing store and CSS 1:1
+- Strokes live in refs with 0..1-normalized coords, so painting causes no re-render and a
+  window resize rescales the drawing
+- `blankCanvasId` increments per `newBlankCanvas()` to clear strokes even when already blank
+- `hasCanvas` (image *or* blank) gates the Save button and `Ctrl+S`
 
 ## Image Processing Pipeline
 

@@ -58,6 +58,67 @@ describe('BottomPanel', () => {
 		expect(screen.getByText('Save')).toBeDefined();
 	});
 
+	it('renders a New button', () => {
+		render(<BottomPanelWrapper />);
+		expect(screen.getByText('New')).toBeDefined();
+	});
+
+	it('clicking New starts a blank canvas', () => {
+		const newBlankCanvas = vi.fn();
+		vi.mocked(useImageContext).mockReturnValue(
+			createMockContextValue({ newBlankCanvas }) as ReturnType<typeof useImageContext>,
+		);
+		render(<BottomPanelWrapper />);
+		fireEvent.click(screen.getByText('New'));
+		expect(newBlankCanvas).toHaveBeenCalled();
+	});
+
+	it('Ctrl+N starts a blank canvas without any image loaded', () => {
+		const newBlankCanvas = vi.fn();
+		vi.mocked(useImageContext).mockReturnValue(
+			createMockContextValue({ hasImage: false, hasCanvas: false, newBlankCanvas }) as ReturnType<
+				typeof useImageContext
+			>,
+		);
+		render(<BottomPanelWrapper />);
+		fireEvent.keyDown(window, { key: 'n', ctrlKey: true });
+		expect(newBlankCanvas).toHaveBeenCalled();
+	});
+
+	it('Ctrl+N fires when an image is already open', () => {
+		const newBlankCanvas = vi.fn();
+		vi.mocked(useImageContext).mockReturnValue(
+			createMockContextValue({ hasImage: true, hasCanvas: true, newBlankCanvas }) as ReturnType<typeof useImageContext>,
+		);
+		render(<BottomPanelWrapper />);
+		fireEvent.keyDown(window, { key: 'n', ctrlKey: true });
+		expect(newBlankCanvas).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not fire New on an unrelated shortcut', () => {
+		const newBlankCanvas = vi.fn();
+		vi.mocked(useImageContext).mockReturnValue(
+			createMockContextValue({ newBlankCanvas }) as ReturnType<typeof useImageContext>,
+		);
+		render(<BottomPanelWrapper />);
+		fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+		fireEvent.keyDown(window, { key: 'n' });
+		expect(newBlankCanvas).not.toHaveBeenCalled();
+	});
+
+	it('displays blank canvas dimensions from the stage size', () => {
+		vi.mocked(useImageContext).mockReturnValue(
+			createMockContextValue({
+				canvasMode: 'blank' as const,
+				hasBlankCanvas: true,
+				hasCanvas: true,
+				viewport: { width: 1024, height: 768 },
+			}) as ReturnType<typeof useImageContext>,
+		);
+		render(<BottomPanelWrapper />);
+		expect(screen.getByText('1024 × 768')).toBeDefined();
+	});
+
 	it('Save button is disabled when no image is loaded', () => {
 		render(<BottomPanelWrapper />);
 		const saveBtn = screen.getByText('Save').closest('button');
@@ -66,7 +127,21 @@ describe('BottomPanel', () => {
 
 	it('Save button is enabled when image is loaded', () => {
 		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ hasImage: true }) as ReturnType<typeof useImageContext>,
+			createMockContextValue({ hasImage: true, hasCanvas: true }) as ReturnType<typeof useImageContext>,
+		);
+		render(<BottomPanelWrapper />);
+		const saveBtn = screen.getByText('Save').closest('button');
+		expect(saveBtn?.disabled).toBe(false);
+	});
+
+	it('Save button is enabled for a blank canvas even though no image is loaded', () => {
+		vi.mocked(useImageContext).mockReturnValue(
+			createMockContextValue({
+				hasImage: false,
+				hasCanvas: true,
+				hasBlankCanvas: true,
+				canvasMode: 'blank' as const,
+			}) as ReturnType<typeof useImageContext>,
 		);
 		render(<BottomPanelWrapper />);
 		const saveBtn = screen.getByText('Save').closest('button');

@@ -656,4 +656,176 @@ describe('useImage', () => {
 		expect(result.current.zoom).toBe(1);
 		expect(result.current.fitMode).toBe('fit');
 	});
+
+	describe('blank canvas mode', () => {
+		it('should initialize in image mode with no canvas content', () => {
+			const { result } = renderHook(() => useImage());
+
+			expect(result.current.canvasMode).toBe('image');
+			expect(result.current.hasBlankCanvas).toBe(false);
+			expect(result.current.hasCanvas).toBe(false);
+			expect(result.current.blankCanvasId).toBe(0);
+		});
+
+		it('should start a blank canvas', () => {
+			const { result } = renderHook(() => useImage());
+
+			act(() => {
+				result.current.newBlankCanvas();
+			});
+
+			expect(result.current.canvasMode).toBe('blank');
+			expect(result.current.hasBlankCanvas).toBe(true);
+			expect(result.current.hasCanvas).toBe(true);
+			// Still no raster image — the blank surface bypasses the worker.
+			expect(result.current.currentImage).toBe(null);
+			expect(result.current.hasImage).toBe(false);
+		});
+
+		it('should clear an open image and its filename when starting blank', async () => {
+			const { result } = renderHook(() => useImage());
+
+			await act(async () => {
+				await result.current.loadImage(createMockImage(), 'photo.jpg', '/photo.jpg');
+			});
+			expect(result.current.hasImage).toBe(true);
+
+			act(() => {
+				result.current.newBlankCanvas();
+			});
+
+			expect(result.current.fileName).toBe('');
+			expect(result.current.filePath).toBe('');
+			expect(result.current.hasImage).toBe(false);
+			expect(result.current.canvasMode).toBe('blank');
+		});
+
+		it('should clear adjustment history when starting blank', () => {
+			const { result } = renderHook(() => useImage());
+
+			act(() => {
+				result.current.setBlur(4);
+			});
+			expect(result.current.canUndo).toBe(true);
+
+			act(() => {
+				result.current.newBlankCanvas();
+			});
+
+			expect(result.current.canUndo).toBe(false);
+			expect(result.current.canRedo).toBe(false);
+			expect(result.current.blur).toBe(0);
+		});
+
+		it('should bump blankCanvasId on every call, even while already blank', () => {
+			const { result } = renderHook(() => useImage());
+
+			act(() => {
+				result.current.newBlankCanvas();
+			});
+			expect(result.current.blankCanvasId).toBe(1);
+
+			// Pressing "New" again must still signal a fresh surface.
+			act(() => {
+				result.current.newBlankCanvas();
+			});
+			expect(result.current.blankCanvasId).toBe(2);
+			expect(result.current.canvasMode).toBe('blank');
+		});
+
+		it('should stop a running timer when starting blank', () => {
+			const { result } = renderHook(() => useImage());
+
+			act(() => {
+				result.current.startCounter(10);
+			});
+			expect(result.current.counterRunning).toBe(true);
+
+			act(() => {
+				result.current.newBlankCanvas();
+			});
+
+			expect(result.current.counterRunning).toBe(false);
+			expect(result.current.counter).toBe(0);
+		});
+
+		it('should leave blank mode when an image is loaded', async () => {
+			const { result } = renderHook(() => useImage());
+
+			act(() => {
+				result.current.newBlankCanvas();
+			});
+
+			await act(async () => {
+				await result.current.loadImage(createMockImage(), 'photo.jpg', '');
+			});
+
+			expect(result.current.canvasMode).toBe('image');
+			expect(result.current.hasBlankCanvas).toBe(false);
+			expect(result.current.blankCanvasId).toBe(0);
+			expect(result.current.hasImage).toBe(true);
+			expect(result.current.hasCanvas).toBe(true);
+		});
+
+		it('should leave blank mode on resetImage', () => {
+			const { result } = renderHook(() => useImage());
+
+			act(() => {
+				result.current.newBlankCanvas();
+			});
+			act(() => {
+				result.current.resetImage();
+			});
+
+			expect(result.current.canvasMode).toBe('image');
+			expect(result.current.hasCanvas).toBe(false);
+		});
+	});
+
+	describe('setViewport', () => {
+		it('should store the reported stage size', () => {
+			const { result } = renderHook(() => useImage());
+
+			act(() => {
+				result.current.setViewport({ width: 1024, height: 768 });
+			});
+
+			expect(result.current.viewport).toEqual({ width: 1024, height: 768 });
+		});
+
+		it('should not create a new state object when the size is unchanged', () => {
+			const { result } = renderHook(() => useImage());
+
+			act(() => {
+				result.current.setViewport({ width: 800, height: 600 });
+			});
+			const first = result.current.viewport;
+
+			act(() => {
+				result.current.setViewport({ width: 800, height: 600 });
+			});
+
+			// Identity equality proves the bail-out ran, so a resize observer
+			// round-trip cannot drive a render loop.
+			expect(result.current.viewport).toBe(first);
+		});
+
+		it('should preserve the stage size across loadImage and newBlankCanvas', async () => {
+			const { result } = renderHook(() => useImage());
+
+			act(() => {
+				result.current.setViewport({ width: 1024, height: 768 });
+			});
+
+			await act(async () => {
+				await result.current.loadImage(createMockImage(), 'photo.jpg', '');
+			});
+			expect(result.current.viewport).toEqual({ width: 1024, height: 768 });
+
+			act(() => {
+				result.current.newBlankCanvas();
+			});
+			expect(result.current.viewport).toEqual({ width: 1024, height: 768 });
+		});
+	});
 });

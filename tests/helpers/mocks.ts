@@ -117,17 +117,24 @@ export function setupResizeObserverMock() {
 	const observe = vi.fn();
 	const disconnect = vi.fn();
 	const unobserve = vi.fn();
+	let captured: ResizeObserverCallback | null = null;
 	// Must use `function` constructor so `new ResizeObserver(...)` works
-	const mock = vi.fn(function (this: Record<string, unknown>) {
+	const mock = vi.fn(function (this: Record<string, unknown>, callback: ResizeObserverCallback) {
 		this.observe = observe;
 		this.disconnect = disconnect;
 		this.unobserve = unobserve;
+		captured = callback;
 	});
 	globalThis.ResizeObserver = mock as unknown as typeof ResizeObserver;
+	// Drive the most recently constructed observer's callback the way a browser
+	// would on resize. jsdom never fires these on its own.
+	const emitSize = (width: number, height: number) => {
+		captured?.([{ contentRect: { width, height } } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+	};
 	const restore = () => {
 		globalThis.ResizeObserver = original;
 	};
-	return { mock, observe, disconnect, restore };
+	return { mock, observe, disconnect, emitSize, restore };
 }
 
 // ---------------------------------------------------------------------------
@@ -143,6 +150,19 @@ export function setupCanvasMock() {
 		putImageData,
 		clearRect: vi.fn(),
 		drawImage: vi.fn(),
+		// Blank-canvas brush drawing
+		beginPath: vi.fn(),
+		moveTo: vi.fn(),
+		lineTo: vi.fn(),
+		arc: vi.fn(),
+		stroke: vi.fn(),
+		fill: vi.fn(),
+		fillRect: vi.fn(),
+		strokeStyle: '',
+		fillStyle: '',
+		lineWidth: 0,
+		lineCap: '',
+		lineJoin: '',
 	};
 	HTMLCanvasElement.prototype.getContext = vi.fn(() => ctx) as never;
 	HTMLCanvasElement.prototype.toBlob = toBlob;
@@ -151,6 +171,46 @@ export function setupCanvasMock() {
 		HTMLCanvasElement.prototype.toBlob = originalToBlob;
 	};
 	return { ctx, toBlob, restore };
+}
+
+// ---------------------------------------------------------------------------
+// Pointer capture mock (jsdom doesn't implement the Pointer Capture API)
+// ---------------------------------------------------------------------------
+
+export function setupPointerCaptureMock() {
+	const originalSet = Element.prototype.setPointerCapture;
+	const originalRelease = Element.prototype.releasePointerCapture;
+	const originalHas = Element.prototype.hasPointerCapture;
+
+	const setPointerCapture = vi.fn();
+	const releasePointerCapture = vi.fn();
+	// Default true so endStroke takes the release path, matching a real browser
+	// where capture was taken on pointerdown.
+	const hasPointerCapture = vi.fn(() => true);
+
+	Element.prototype.setPointerCapture = setPointerCapture;
+	Element.prototype.releasePointerCapture = releasePointerCapture;
+	Element.prototype.hasPointerCapture = hasPointerCapture;
+
+	const restore = () => {
+		Element.prototype.setPointerCapture = originalSet;
+		Element.prototype.releasePointerCapture = originalRelease;
+		Element.prototype.hasPointerCapture = originalHas;
+	};
+	return { setPointerCapture, releasePointerCapture, hasPointerCapture, restore };
+}
+
+// ---------------------------------------------------------------------------
+// getBoundingClientRect mock for a canvas (jsdom returns all zeros, which
+// would make pointer -> canvas coordinate mapping meaningless)
+// ---------------------------------------------------------------------------
+
+export function stubBoundingRect(element: Element, rect: Partial<DOMRect>) {
+	const full = { x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, ...rect };
+	element.getBoundingClientRect = () => full as DOMRect;
+	return () => {
+		delete (element as { getBoundingClientRect?: unknown }).getBoundingClientRect;
+	};
 }
 
 // ---------------------------------------------------------------------------

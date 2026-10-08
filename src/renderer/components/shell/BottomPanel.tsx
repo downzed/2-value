@@ -20,6 +20,10 @@ interface BottomPanelProps {
 const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	const {
 		hasImage,
+		hasCanvas,
+		hasBlankCanvas,
+		viewport,
+		newBlankCanvas,
 		currentImage,
 		fileName,
 		panels,
@@ -41,8 +45,20 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	const [errorMsg, setErrorMsg] = useState<string | null>(null);
 	const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
 
-	const width = currentImage?.width ?? '--';
-	const height = currentImage?.height ?? '--';
+	// A blank canvas reports the stage size its backing store was sized to.
+	const blankSize =
+		hasBlankCanvas && viewport.width > 0 && viewport.height > 0
+			? { width: Math.round(viewport.width), height: Math.round(viewport.height) }
+			: null;
+
+	const width = currentImage?.width ?? blankSize?.width ?? '--';
+	const height = currentImage?.height ?? blankSize?.height ?? '--';
+
+	const handleNew = useCallback(() => {
+		setStatus('ready');
+		setErrorMsg(null);
+		newBlankCanvas();
+	}, [newBlankCanvas]);
 
 	const doLoadFromFile = useCallback(
 		async (pending: PendingOpen) => {
@@ -114,7 +130,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	);
 
 	const handleSave = useCallback(async () => {
-		if (!previewCanvasRef.current) return;
+		if (!hasCanvas || !previewCanvasRef.current) return;
 
 		try {
 			setStatus('saving');
@@ -129,21 +145,24 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			setStatus('error');
 			console.error('Failed to save image:', error);
 		}
-	}, [previewCanvasRef, fileName]);
+	}, [previewCanvasRef, fileName, hasCanvas]);
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
+			if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
+				e.preventDefault();
+				handleNew();
+			} else if ((e.ctrlKey || e.metaKey) && e.key === 'o') {
 				e.preventDefault();
 				handleOpen();
 			} else if ((e.ctrlKey || e.metaKey) && e.key === 's') {
 				e.preventDefault();
-				if (hasImage) handleSave();
+				if (hasCanvas) handleSave();
 			}
 		};
 		window.addEventListener('keydown', handleKeyDown);
 		return () => window.removeEventListener('keydown', handleKeyDown);
-	}, [hasImage, handleOpen, handleSave]);
+	}, [hasCanvas, handleNew, handleOpen, handleSave]);
 
 	const statusStyles: Record<Status, { text: string; className: string }> = {
 		ready: { text: 'Ready', className: 'text-emerald-400' },
@@ -165,6 +184,15 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 				{/* File Operations */}
 				<button
 					type='button'
+					onClick={handleNew}
+					className='text-slate-400 hover:text-slate-200 transition-colors mr-4'
+					title='New Canvas (Ctrl+N)'
+				>
+					New
+				</button>
+
+				<button
+					type='button'
 					onClick={handleOpen}
 					className='text-slate-400 hover:text-slate-200 transition-colors mr-4'
 				>
@@ -174,7 +202,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 				<button
 					type='button'
 					onClick={handleSave}
-					disabled={!hasImage}
+					disabled={!hasCanvas}
 					className='text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mr-4'
 				>
 					Save
