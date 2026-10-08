@@ -14,10 +14,21 @@ import {
 	RenameFolderDialog,
 } from '../gallery/FolderContextMenu';
 import { ImageContextMenu } from '../gallery/ImageContextMenu';
+import { OpenItemContextMenu } from '../gallery/OpenItemContextMenu';
+import { useExportItem } from '../../hooks/useExportItem';
+import { useSaveToGallery } from '../../hooks/useSaveToGallery';
+import { renderImageThumbnail, renderStrokesThumbnail } from '../../utils/thumbnails';
+import type { OpenItem } from '../../hooks/useImage';
 import { galleryStore } from '../../utils/storage';
 
 type FolderContextMenuState = {
 	folder: GalleryFolder;
+	x: number;
+	y: number;
+} | null;
+
+type OpenItemContextMenuState = {
+	item: OpenItem;
 	x: number;
 	y: number;
 } | null;
@@ -28,6 +39,12 @@ type ImageContextMenuState = {
 	y: number;
 } | null;
 
+/**
+ * Sentinel folder id for the virtual "Auto" folder. Deliberately not a UUID so
+ * it can never collide with a real gallery folder id.
+ */
+const AUTO_FOLDER_ID = '__auto__';
+
 type DialogState =
 	| { type: 'rename'; folder: GalleryFolder }
 	| { type: 'editTags'; folder: GalleryFolder }
@@ -35,7 +52,8 @@ type DialogState =
 	| null;
 
 const GalleryPanel: React.FC = () => {
-	const { panels, setPanel } = useImageContext();
+	const { panels, setPanel, items, activeItemId, viewport, strokesByItemRef, activateItem, closeItem } =
+		useImageContext();
 	const {
 		folders,
 		images,
@@ -57,11 +75,15 @@ const GalleryPanel: React.FC = () => {
 		setGallerySearchQuery,
 		clearError,
 	} = useGalleryContext();
+	const { renderItemToBlob, exportOpenItem, exportGalleryImage } = useExportItem();
+	const saveToGallery = useSaveToGallery();
 
 	const { loadFromFile } = useImageLoader();
 
 	const [folderContextMenu, setFolderContextMenu] = useState<FolderContextMenuState>(null);
 	const [imageContextMenu, setImageContextMenu] = useState<ImageContextMenuState>(null);
+	const [openItemMenu, setOpenItemMenu] = useState<OpenItemContextMenuState>(null);
+	const [openItemThumbs, setOpenItemThumbs] = useState<Record<string, string>>({});
 	const [dialog, setDialog] = useState<DialogState>(null);
 	const [newFolderMode, setNewFolderMode] = useState(false);
 	const [newFolderName, setNewFolderName] = useState('');
@@ -212,6 +234,88 @@ const GalleryPanel: React.FC = () => {
 		[openGalleryImage, loadFromFile],
 	);
 
+	// --- Auto folder (virtual list of currently open items) ---
+
+	// Lazily generate a preview per open item; blank canvases render their strokes.
+	const ensureOpenItemThumb = useCallback(
+		async (item: OpenItem) => {
+			if (openItemThumbs[item.id]) return;
+			const url =
+				item.kind === 'blank'
+					? await renderStrokesThumbnail(
+							strokesByItemRef.current.get(item.id) ?? [],
+							Math.max(viewport.width, 1),
+							Math.max(viewport.height, 1),
+						)
+					: item.image
+						? await renderImageThumbnail(item.image)
+						: null;
+			if (!url) return;
+			setOpenItemThumbs((prev) => (prev[item.id] ? prev : { ...prev, [item.id]: url }));
+		},
+		[openItemThumbs, strokesByItemRef, viewport.width, viewport.height],
+	);
+
+	// Clicking a row takes the user back to that document.
+	const handleOpenItemClick = useCallback((item: OpenItem) => activateItem(item.id), [activateItem]);
+
+	const handleOpenItemMenu = useCallback(
+		(e: React.MouseEvent, item: OpenItem) => {
+			e.preventDefault();
+			e.stopPropagation();
+			setOpenItemMenu({ item, x: e.clientX, y: e.clientY });
+			void ensureOpenItemThumb(item);
+		},
+		[ensureOpenItemThumb],
+	);
+
+	// Save works on any item, not just the visible one, so a non-active item is
+	// re-rendered offscreen rather than read off the live preview canvas.
+	const handleSaveOpenItem = useCallback(
+		async (item: OpenItem) => {
+			try {
+				const blob = await renderItemToBlob(item);
+				if (!blob) return;
+				// saveToGallery targets the active item, so activate before saving.
+				if (item.id !== activeItemId) activateItem(item.id);
+				await saveToGallery(blob, item.fileName || `${item.label}.png`);
+			} catch (err) {
+				console.error('Failed to save open item:', err);
+			}
+		},
+		[activeItemId, activateItem, saveToGallery, renderItemToBlob],
+	);
+
+	const handleCloseOpenItem = useCallback(
+		(item: OpenItem) => {
+			if (item.dirty && !window.confirm(`Close "${item.label}"? Unsaved changes will be lost.`)) return;
+			closeItem(item.id);
+		},
+		[closeItem],
+	);
+
+	const handleExportOpenItem = useCallback(
+		async (item: OpenItem) => {
+			try {
+				await exportOpenItem(item);
+			} catch (err) {
+				console.error('Failed to export open item:', err);
+			}
+		},
+		[exportOpenItem],
+	);
+
+	const handleExportGalleryImage = useCallback(
+		async (image: GalleryImage) => {
+			try {
+				await exportGalleryImage(image.id, image.fileName);
+			} catch (err) {
+				console.error('Failed to export gallery image:', err);
+			}
+		},
+		[exportGalleryImage],
+	);
+
 	const handleMoveImage = useCallback(
 		async (image: GalleryImage, targetFolderId: string) => {
 			try {
@@ -315,6 +419,46 @@ const GalleryPanel: React.FC = () => {
 		</div>
 	);
 
+	// Grid of currently open items — the contents of the virtual Auto folder.
+	const renderOpenItemsGrid = () => {
+		if (items.length === 0) {
+			return <p className='text-xs text-slate-400 py-4 text-center'>Nothing open</p>;
+		}
+		return (
+			<div
+				className='grid gap-1.5'
+				style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
+			>
+				{items.map((item) => {
+					const isActive = item.id === activeItemId;
+					const thumbUrl = openItemThumbs[item.id];
+					return (
+						<button
+							key={item.id}
+							type='button'
+							className={`relative rounded-lg overflow-hidden border transition-colors cursor-pointer text-left p-0 bg-transparent ${
+								isActive ? 'border-slate-500 ring-1 ring-slate-400' : 'border-slate-200 hover:border-slate-400'
+							}`}
+							onClick={() => handleOpenItemClick(item)}
+							onContextMenu={(e) => handleOpenItemMenu(e, item)}
+							aria-label={`Continue ${item.label}`}
+						>
+							{thumbUrl ? (
+								<img src={thumbUrl} alt={item.label} className='w-full aspect-square object-cover' />
+							) : (
+								<div className='w-full aspect-square bg-slate-100 animate-pulse' />
+							)}
+							<span className='absolute bottom-0 left-0 right-0 text-[9px] text-white bg-black/60 truncate px-1 py-0.5'>
+								{item.label}
+							</span>
+							{item.dirty && <span className='absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-500' />}
+						</button>
+					);
+				})}
+			</div>
+		);
+	};
+
 	// Folder detail view (when a folder is selected)
 	const renderFolderDetail = () => {
 		if (!selectedFolder) return null;
@@ -374,7 +518,28 @@ const GalleryPanel: React.FC = () => {
 					)}
 
 					{/* If a folder is selected, show folder detail view */}
-					{selectedFolderId && !isSearching ? (
+					{selectedFolderId === AUTO_FOLDER_ID && !isSearching ? (
+						<div className='space-y-3'>
+							<div className='flex items-center gap-2'>
+								<button
+									type='button'
+									aria-label='Back to folders'
+									onClick={() => setSelectedFolder(null)}
+									className='text-slate-400 hover:text-slate-600 transition-colors'
+								>
+									<Icon name='arrow-left' size='sm' />
+								</button>
+								<p className='text-xs font-semibold text-slate-700 truncate flex-1'>Auto</p>
+								<span className='text-[10px] text-slate-400'>
+									{items.length} open item{items.length !== 1 ? 's' : ''}
+								</span>
+							</div>
+							<p className='text-[10px] text-slate-400'>
+								Items you currently have open. Click one to continue working on it.
+							</p>
+							{renderOpenItemsGrid()}
+						</div>
+					) : selectedFolderId && !isSearching ? (
 						renderFolderDetail()
 					) : (
 						<>
@@ -417,6 +582,20 @@ const GalleryPanel: React.FC = () => {
 										<p className='text-xs text-slate-400 py-4 text-center'>Loading...</p>
 									) : (
 										<ul className='grid grid-cols-2 gap-2 list-none p-0 m-0'>
+											<li className='relative rounded-lg border border-slate-300 bg-slate-100 hover:border-slate-500 hover:bg-slate-50 transition-colors'>
+												<button
+													type='button'
+													className='w-full text-left p-3 bg-transparent'
+													onClick={() => setSelectedFolder(AUTO_FOLDER_ID)}
+													aria-label='Open Auto folder'
+												>
+													<p className='text-xs font-semibold text-slate-800 truncate'>Auto</p>
+													<p className='text-[10px] text-slate-500 mt-0.5'>
+														{items.length} open item{items.length !== 1 ? 's' : ''}
+													</p>
+												</button>
+											</li>
+
 											{sortedFolders.map((folder) => {
 												const count = folderImageCount.get(folder.id) ?? 0;
 												return (
@@ -530,6 +709,20 @@ const GalleryPanel: React.FC = () => {
 				/>
 			)}
 
+			{/* Open-item context menu (virtual Auto folder) */}
+			{openItemMenu && (
+				<OpenItemContextMenu
+					item={openItemMenu.item}
+					anchorX={openItemMenu.x}
+					anchorY={openItemMenu.y}
+					onCloseMenu={() => setOpenItemMenu(null)}
+					onOpen={handleOpenItemClick}
+					onCloseItem={handleCloseOpenItem}
+					onSave={handleSaveOpenItem}
+					onExport={handleExportOpenItem}
+				/>
+			)}
+
 			{/* Image context menu */}
 			{imageContextMenu && (
 				<ImageContextMenu
@@ -542,6 +735,7 @@ const GalleryPanel: React.FC = () => {
 					onMoveTo={handleMoveImage}
 					onCopyTo={handleCopyImage}
 					onDelete={handleDeleteImage}
+					onExport={handleExportGalleryImage}
 				/>
 			)}
 

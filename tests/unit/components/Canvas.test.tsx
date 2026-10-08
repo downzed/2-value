@@ -40,10 +40,14 @@ function CanvasWrapper() {
 	return <Canvas previewCanvasRef={previewCanvasRef} />;
 }
 
+const BLANK_ID = 'blank-1';
+
 const BLANK = {
 	canvasMode: 'blank' as const,
 	hasBlankCanvas: true,
 	hasCanvas: true,
+	activeItemId: BLANK_ID,
+	blankCanvasId: BLANK_ID,
 };
 
 describe('Canvas', () => {
@@ -175,14 +179,16 @@ describe('Canvas', () => {
 			expect(ctx.stroke).not.toHaveBeenCalled();
 		});
 
-		it('discards committed strokes when a new canvas is created', () => {
-			const renderBlank = (blankCanvasId: number) => {
+		it('starts a distinct canvas with no strokes for each new item', () => {
+			const renderBlank = (activeItemId: string) => {
 				vi.mocked(useImageContext).mockReturnValue(
-					createMockContextValue({ ...BLANK, blankCanvasId }) as ReturnType<typeof useImageContext>,
+					createMockContextValue({ ...BLANK, activeItemId, blankCanvasId: activeItemId }) as ReturnType<
+						typeof useImageContext
+					>,
 				);
 			};
 
-			renderBlank(1);
+			renderBlank(BLANK_ID);
 			const { container, rerender } = render(<CanvasWrapper />);
 			const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 			stubBoundingRect(canvas, { width: 320, height: 320, left: 0, top: 0 });
@@ -194,13 +200,50 @@ describe('Canvas', () => {
 
 			vi.clearAllMocks();
 
-			// Pressing "New" while already blank bumps blankCanvasId: strokes go,
-			// the surface is refilled, and nothing is replayed.
-			renderBlank(2);
+			// Pressing "New" again activates a different item id: that item has no
+			// strokes, so the surface is refilled and nothing is replayed.
+			renderBlank('blank-2');
 			rerender(<CanvasWrapper />);
 
 			expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 320, 320);
 			expect(ctx.stroke).not.toHaveBeenCalled();
+		});
+
+		it('restores each canvas drawing when switching items', () => {
+			// One shared store, as the real hook provides.
+			const strokesByItemRef = { current: new Map<string, number[]>() };
+			const show = (activeItemId: string) =>
+				vi.mocked(useImageContext).mockReturnValue(
+					createMockContextValue({
+						...BLANK,
+						activeItemId,
+						blankCanvasId: activeItemId,
+						strokesByItemRef,
+					}) as ReturnType<typeof useImageContext>,
+				);
+
+			show('canvas-a');
+			const { container, rerender } = render(<CanvasWrapper />);
+			const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+			stubBoundingRect(canvas, { width: 320, height: 320, left: 0, top: 0 });
+
+			// Draw on canvas A.
+			fireEvent.pointerDown(canvas, { button: 0, pointerId: 1, clientX: 0, clientY: 0 });
+			fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 100, clientY: 100 });
+			fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 100, clientY: 100 });
+
+			// Switch to canvas B: it has no strokes, so nothing is replayed.
+			show('canvas-b');
+			rerender(<CanvasWrapper />);
+			vi.clearAllMocks();
+			rerender(<CanvasWrapper />);
+			expect(ctx.stroke).not.toHaveBeenCalled();
+
+			// Switch back to A: its stroke is replayed from the shared store.
+			show('canvas-a');
+			rerender(<CanvasWrapper />);
+			expect(ctx.stroke).toHaveBeenCalled();
+			expect(ctx.lineTo).toHaveBeenCalledWith(100, 100);
 		});
 
 		it('rescales and replays strokes when the stage is resized', () => {

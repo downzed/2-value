@@ -3,6 +3,8 @@ import { useRef } from 'react';
 import { ImageProvider } from '../../hooks/ImageContext';
 import { GalleryProvider } from '../../hooks/GalleryContext';
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
+import { useRestoreOpenItems } from '../../hooks/useRestoreOpenItems';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import BottomPanel from './BottomPanel';
 import GalleryPanel from './GalleryPanel';
 import Canvas from '../Canvas';
@@ -13,6 +15,8 @@ import FloatingImage from '../FloatingImage';
 const AppContent: React.FC = () => {
 	const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 	useKeyboardShortcuts();
+	useUnsavedChangesGuard();
+	useRestoreOpenItems();
 
 	return (
 		<div className='flex flex-col h-screen bg-slate-100'>

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useGalleryContext } from '../../hooks/GalleryContext';
 import { useImageContext } from '../../hooks/ImageContext';
 import { imageLoadErrorMessage, useImageLoader } from '../../hooks/useImageLoader';
-import { openImageFile, saveImageFile } from '../../utils/fileOps';
+import { openImageFile } from '../../utils/fileOps';
+import { useSaveToGallery } from '../../hooks/useSaveToGallery';
 import { galleryStore } from '../../utils/storage';
 import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
 import { Icon } from '../shared/Icon';
@@ -41,6 +42,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	} = useImageContext();
 	const { folders, importImage, loadGallery } = useGalleryContext();
 	const { loadFromFile } = useImageLoader();
+	const saveToGallery = useSaveToGallery();
 	const [status, setStatus] = useState<Status>('ready');
 	const [errorMsg, setErrorMsg] = useState<string | null>(null);
 	const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
@@ -129,6 +131,8 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		[loadGallery],
 	);
 
+	// Saves into the gallery, not to disk. Use "Export as..." on a gallery item
+	// to download a file.
 	const handleSave = useCallback(async () => {
 		if (!hasCanvas || !previewCanvasRef.current) return;
 
@@ -138,14 +142,14 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			const blob = await new Promise<Blob>((resolve, reject) => {
 				canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob returned null'))), 'image/png');
 			});
-			await saveImageFile(blob, fileName || 'image.png');
+			await saveToGallery(blob, fileName || 'image.png');
 			setStatus('saved');
 			setTimeout(() => setStatus('loaded'), 2000);
 		} catch (error) {
 			setStatus('error');
 			console.error('Failed to save image:', error);
 		}
-	}, [previewCanvasRef, fileName, hasCanvas]);
+	}, [previewCanvasRef, fileName, hasCanvas, saveToGallery]);
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {

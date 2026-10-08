@@ -12,6 +12,8 @@ interface ImageContextMenuProps {
 	onMoveTo: (image: GalleryImage, targetFolderId: string) => void;
 	onCopyTo: (image: GalleryImage, targetFolderId: string) => void;
 	onDelete: (image: GalleryImage) => void;
+	/** Download the stored file. Saving/editing happens in the editor, not here. */
+	onExport: (image: GalleryImage) => void;
 }
 
 type SubMenu = 'move' | 'copy' | null;
@@ -26,6 +28,7 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
 	onMoveTo,
 	onCopyTo,
 	onDelete,
+	onExport,
 }) => {
 	const menuRef = useRef<HTMLDivElement>(null);
 	const [subMenu, setSubMenu] = useState<SubMenu>(null);
@@ -128,6 +131,16 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
 					<button
 						type='button'
 						className='w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors'
+						onClick={() => {
+							onExport(image);
+							onClose();
+						}}
+					>
+						Export as...
+					</button>
+					<button
+						type='button'
+						className='w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 transition-colors'
 						onClick={() => {
 							onDelete(image);
 							onClose();

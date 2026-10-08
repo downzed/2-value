@@ -14,10 +14,10 @@
 
 - `src/renderer/` - React frontend
   - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), GalleryPanel (gallery modal)
-  - `components/gallery/` - FolderContextMenu, FolderPickerDialog, ImageContextMenu
+  - `components/gallery/` - FolderContextMenu, FolderPickerDialog, ImageContextMenu, OpenItemContextMenu
   - `components/shared/` - Icon, PillButton, SectionHeader, SliderRow (reusable UI primitives)
   - `components/` - Canvas, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
-  - `hooks/` - useImage, ImageContext, useGallery, GalleryContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
+  - `hooks/` - useImage, ImageContext, useGallery, GalleryContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts, useUnsavedChangesGuard, useRestoreOpenItems
   - `utils/` - fileOps (file open/save with FSA + fallbacks), storage (IndexedDB wrapper for gallery)
   - `constants/` - UI constants (filter ranges, presets, history config, blank-canvas brush)
 
@@ -49,6 +49,21 @@ freehand drawing target.
   window resize rescales the drawing
 - `blankCanvasId` increments per `newBlankCanvas()` to clear strokes even when already blank
 - `hasCanvas` (image *or* blank) gates the Save button and `Ctrl+S`
+- Save writes into the gallery, not to disk; downloading is `Export as...` on a gallery item menu
+- Blank-canvas strokes are held in a `Map<itemId, Stroke[]>` ref exposed via context, keyed by
+  item id so switching items restores the right drawing without copying
+
+## Open Items (multi-document)
+
+- `useImage` keeps a list of `OpenItem`s; `activeItemId` selects which is projected onto the
+  legacy single-document shape, so most consumers are unaffected by the list
+- The gallery shows them under a **virtual "Auto" folder** (derived, never persisted);
+  no separate open-items widget exists
+- Menu-driven Save/Export re-render the item offscreen so a non-active item still works
+- Adjustments, undo/redo and strokes are all per-item; zoom, timer, panels and viewport are global
+- Opening an already-open (and clean) source reactivates it instead of duplicating the row
+- Unsaved work: `dirty` per item, `beforeunload` guard (`useUnsavedChangesGuard`), confirm on
+  close, and `useRestoreOpenItems` reopening only gallery-backed clean items after a reload
 
 ## Image Processing Pipeline
 

@@ -43,7 +43,9 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 	const {
 		currentImage,
 		canvasMode,
-		blankCanvasId,
+		activeItemId,
+		strokesByItemRef,
+		markActiveDirty,
 		blur,
 		threshold,
 		values,
@@ -63,11 +65,20 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 	const [displayImageData, setDisplayImageData] = useState<ImageData | null>(null);
 	const cancelProcessRef = useRef<(() => void) | null>(null);
 
-	// Strokes live in refs, not state, so painting never re-renders the tree.
-	// Normalized coords let a window resize repaint without smearing.
-	const strokesRef = useRef<Stroke[]>([]);
+	// Strokes live in the store's mutable map keyed by item id — never in this
+	// component's state — so painting never re-renders the tree and switching
+	// items restores the correct drawing without copying anything.
 	const drawingRef = useRef<Stroke | null>(null);
-	const lastBlankCanvasIdRef = useRef(blankCanvasId);
+
+	const strokesFor = useCallback((): Stroke[] | null => {
+		if (!isBlank || activeItemId === null) return null;
+		let list = strokesByItemRef.current.get(activeItemId);
+		if (!list) {
+			list = [];
+			strokesByItemRef.current.set(activeItemId, list);
+		}
+		return list;
+	}, [isBlank, activeItemId, strokesByItemRef]);
 
 	const { process } = useImageProcessingWorker();
 
@@ -202,10 +213,10 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 		if (!ctx) return;
 		ctx.fillStyle = UI.CANVAS.BACKGROUND;
 		ctx.fillRect(0, 0, canvas.width, canvas.height);
-		for (const stroke of strokesRef.current) {
+		for (const stroke of strokesByItemRef.current.get(activeItemId ?? '') ?? []) {
 			paintStroke(ctx, stroke, canvas.width, canvas.height);
 		}
-	}, [previewCanvasRef]);
+	}, [previewCanvasRef, strokesByItemRef, activeItemId]);
 
 	// Map a pointer event into 0..1 space over the canvas' rendered box.
 	const toNormalized = useCallback((e: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
@@ -255,7 +266,10 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 			if (e.currentTarget.hasPointerCapture(e.pointerId)) {
 				e.currentTarget.releasePointerCapture(e.pointerId);
 			}
-			strokesRef.current.push(stroke);
+			strokesFor()?.push(stroke);
+			// Unsaved changes: this is the one point per stroke where a re-render
+			// is acceptable (the beforeunload guard and list badges read `dirty`).
+			markActiveDirty();
 
 			// A tap produced no segment during move, so paint the dot now.
 			if (stroke.length < 4) {
@@ -264,7 +278,7 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 				if (ctx && canvas) paintStroke(ctx, stroke, canvas.width, canvas.height);
 			}
 		},
-		[previewCanvasRef],
+		[previewCanvasRef, strokesFor, markActiveDirty],
 	);
 
 	// Report stage size up so the bottom bar can read dimensions and a blank
@@ -280,15 +294,10 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 	}, [isBlank]);
 
 	// Size the backing store to the stage and repaint. Strokes are normalized,
-	// so a window resize rescales them instead of smearing.
-	// A newly created canvas starts empty: blankCanvasId bumps on every
-	// newBlankCanvas(), including while already in blank mode, which canvasMode
-	// alone cannot signal.
+	// so a window resize rescales them instead of smearing. Re-running on
+	// activeItemId is what swaps in the drawing of a newly activated canvas.
 	useEffect(() => {
-		if (!isBlank) {
-			lastBlankCanvasIdRef.current = blankCanvasId;
-			return;
-		}
+		if (!isBlank || activeItemId === null) return;
 		const canvas = previewCanvasRef.current;
 		if (!canvas) return;
 
@@ -300,14 +309,8 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 			canvas.height = height;
 		}
 
-		if (lastBlankCanvasIdRef.current !== blankCanvasId) {
-			lastBlankCanvasIdRef.current = blankCanvasId;
-			strokesRef.current = [];
-			drawingRef.current = null;
-		}
-
 		redrawBlank();
-	}, [isBlank, blankCanvasId, containerSize, redrawBlank, previewCanvasRef]);
+	}, [isBlank, activeItemId, containerSize, redrawBlank, previewCanvasRef]);
 
 	// Compute fit scale (never upscale beyond 100%)
 	const fitScale = useMemo(() => {

@@ -23,10 +23,16 @@ vi.mock('../../../src/renderer/utils/storage', () => ({
 		getImageBlob: vi.fn(),
 		getThumbnailBlob: vi.fn(),
 		clearAll: vi.fn(),
+		ensureUnsortedFolder: vi
+			.fn()
+			.mockResolvedValue({ id: 'unsorted', name: 'Unsorted', tags: [], createdAt: 0, sortOrder: 0 }),
+		updateImageBlob: vi.fn(),
 	},
 }));
 
 const mockGetData = vi.mocked(galleryStore.getData);
+const mockSaveToGalleryStore = vi.mocked(galleryStore.updateImageBlob);
+const mockImport = vi.mocked(galleryStore.importImage);
 const mockCreateFolder = vi.mocked(galleryStore.createFolder);
 
 const makeImage = (id: string, fileName: string, folderId = 'f1'): GalleryImage => ({
@@ -217,5 +223,63 @@ describe('useGallery – clearError', () => {
 
 		act(() => result.current.clearError());
 		expect(result.current.error).toBe(null);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// saveImageToGallery
+// ---------------------------------------------------------------------------
+
+describe('useGallery – saveImageToGallery', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		vi.mocked(galleryStore.ensureUnsortedFolder).mockResolvedValue({
+			id: 'unsorted',
+			name: 'Unsorted',
+			tags: [],
+			createdAt: 0,
+			sortOrder: 0,
+		});
+		mockGetData.mockResolvedValue({ version: 1, folders: [], images: [] });
+	});
+
+	it('overwrites the existing entry rather than creating a duplicate', async () => {
+		mockSaveToGalleryStore.mockResolvedValue(makeImage('g1', 'study.png'));
+		const { result } = renderHook(() => useGallery());
+
+		let id: string | undefined;
+		await act(async () => {
+			id = await result.current.saveImageToGallery(new Blob(['x']), 'study.png', 'g1');
+		});
+
+		expect(mockSaveToGalleryStore).toHaveBeenCalledTimes(1);
+		expect(mockImport).not.toHaveBeenCalled();
+		expect(id).toBe('g1');
+	});
+
+	it('creates an entry in Unsorted when there is no existing one', async () => {
+		mockImport.mockResolvedValue(makeImage('g2', 'study.png', 'unsorted'));
+		const { result } = renderHook(() => useGallery());
+
+		let id: string | undefined;
+		await act(async () => {
+			id = await result.current.saveImageToGallery(new Blob(['x']), 'study.png', null);
+		});
+
+		expect(mockSaveToGalleryStore).not.toHaveBeenCalled();
+		expect(mockImport).toHaveBeenCalledTimes(1);
+		expect(mockImport.mock.calls[0][1]).toBe('unsorted');
+		expect(id).toBe('g2');
+	});
+
+	it('surfaces an error and rethrows when the write fails', async () => {
+		mockSaveToGalleryStore.mockRejectedValue(new Error('quota exceeded'));
+		const { result } = renderHook(() => useGallery());
+
+		await act(async () => {
+			await expect(result.current.saveImageToGallery(new Blob(['x']), 's.png', 'g1')).rejects.toThrow('quota exceeded');
+		});
+
+		expect(result.current.error).toBe('quota exceeded');
 	});
 });
