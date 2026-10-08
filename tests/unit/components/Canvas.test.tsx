@@ -2,8 +2,10 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import Canvas from '../../../src/renderer/components/Canvas';
 import {
-	createMockContextValue,
+	createEditorState,
+	createEditorStoreStub,
 	createMockImage,
+	createOpenItem,
 	setupCanvasMock,
 	setupPointerCaptureMock,
 	setupResizeObserverMock,
@@ -11,8 +13,25 @@ import {
 } from '../../helpers/mocks';
 import { useRef } from 'react';
 
-vi.mock('../../../src/renderer/hooks/ImageContext', () => ({
-	useImageContext: vi.fn(),
+/**
+ * The component reads the singleton store through selectors. The mock runs each
+ * selector against a plain state object and returns a stub store.
+ *
+ * The holders must be hoisted: vi.mock factories run before module-level
+ * `const`s are initialised, so referencing them directly would be undefined.
+ */
+const holders = vi.hoisted(() => ({
+	getEditorState: () => ({}),
+	getEditorStore: () => ({}),
+	getGalleryState: () => ({}),
+	getGalleryStore: () => ({}),
+}));
+
+vi.mock('../../../src/renderer/react/useStore', () => ({
+	useEditorStore: () => holders.getEditorStore(),
+	useGalleryStore: () => holders.getGalleryStore(),
+	useEditorSelector: (selector: (s: never) => unknown) => selector(holders.getEditorState() as never),
+	useGallerySelector: (selector: (s: never) => unknown) => selector(holders.getGalleryState() as never),
 }));
 
 // Hoisted so assertions can reach the worker entry point across the mock boundary.
@@ -32,23 +51,31 @@ vi.mock('../../../src/renderer/utils/imageConversion', () => ({
 	})),
 }));
 
-import { useImageContext } from '../../../src/renderer/hooks/ImageContext';
+type EditorStateLike = ReturnType<typeof createEditorState>;
+let editorState: { current: EditorStateLike };
+let galleryState: { current: { folders: unknown[]; images: unknown[] } };
+let editorStub: ReturnType<typeof createEditorStoreStub>;
+
+/** Shorthand for the common cases: no item open, a blank canvas, or an image. */
+function openImage(width = 100, height = 100) {
+	editorState.current = createEditorState({
+		items: [createOpenItem({ image: createMockImage(width, height), width, height })],
+		activeItemId: 'item-1',
+	});
+}
+
+function openBlank(id = 'blank-1') {
+	editorState.current = createEditorState({
+		items: [createOpenItem({ id, kind: 'blank', label: 'Canvas 1', fileName: '', image: null })],
+		activeItemId: id,
+	});
+}
 
 // Wrapper to provide a previewCanvasRef
 function CanvasWrapper() {
 	const previewCanvasRef = useRef<HTMLCanvasElement>(null);
 	return <Canvas previewCanvasRef={previewCanvasRef} />;
 }
-
-const BLANK_ID = 'blank-1';
-
-const BLANK = {
-	canvasMode: 'blank' as const,
-	hasBlankCanvas: true,
-	hasCanvas: true,
-	activeItemId: BLANK_ID,
-	blankCanvasId: BLANK_ID,
-};
 
 describe('Canvas', () => {
 	let restoreResizeObserver: () => void;
@@ -65,7 +92,13 @@ describe('Canvas', () => {
 		ctx = canvasMock.ctx;
 		restoreCanvas = canvasMock.restore;
 		restorePointerCapture = setupPointerCaptureMock().restore;
-		vi.mocked(useImageContext).mockReturnValue(createMockContextValue() as ReturnType<typeof useImageContext>);
+		editorState = { current: createEditorState() };
+		galleryState = { current: { folders: [], images: [] } };
+		editorStub = createEditorStoreStub();
+		holders.getEditorState = () => editorState.current;
+		holders.getEditorStore = () => editorStub;
+		holders.getGalleryState = () => galleryState.current;
+		holders.getGalleryStore = () => ({});
 	});
 
 	afterEach(() => {
@@ -82,19 +115,13 @@ describe('Canvas', () => {
 	});
 
 	it('does not render the "No image loaded" placeholder when image is provided', () => {
-		const mockImage = createMockImage(100, 100);
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ currentImage: mockImage, hasImage: true }) as ReturnType<typeof useImageContext>,
-		);
+		openImage();
 		render(<CanvasWrapper />);
 		expect(screen.queryByText('No image loaded')).toBeNull();
 	});
 
 	it('renders a canvas element when image is provided', () => {
-		const mockImage = createMockImage(100, 100);
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ currentImage: mockImage, hasImage: true }) as ReturnType<typeof useImageContext>,
-		);
+		openImage();
 		const { container } = render(<CanvasWrapper />);
 		const canvas = container.querySelector('canvas');
 		expect(canvas).not.toBeNull();
@@ -102,14 +129,14 @@ describe('Canvas', () => {
 
 	describe('blank canvas', () => {
 		it('renders a canvas and not the empty state', () => {
-			vi.mocked(useImageContext).mockReturnValue(createMockContextValue(BLANK) as ReturnType<typeof useImageContext>);
+			openBlank();
 			const { container } = render(<CanvasWrapper />);
 			expect(container.querySelector('canvas')).not.toBeNull();
 			expect(screen.queryByText('No image loaded')).toBeNull();
 		});
 
 		it('sizes the backing store to the stage with the MIN_SIZE floor', () => {
-			vi.mocked(useImageContext).mockReturnValue(createMockContextValue(BLANK) as ReturnType<typeof useImageContext>);
+			openBlank();
 			const { container } = render(<CanvasWrapper />);
 			const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 			// containerSize is 0 in jsdom, so the MIN_SIZE floor applies.
@@ -118,29 +145,28 @@ describe('Canvas', () => {
 		});
 
 		it('fills the surface with the background colour on mount', () => {
-			vi.mocked(useImageContext).mockReturnValue(createMockContextValue(BLANK) as ReturnType<typeof useImageContext>);
+			openBlank();
 			render(<CanvasWrapper />);
 			expect(ctx.fillRect).toHaveBeenCalledWith(0, 0, 320, 320);
 		});
 
 		it('reports the measured stage size to context', () => {
 			const setViewport = vi.fn();
-			vi.mocked(useImageContext).mockReturnValue(
-				createMockContextValue({ ...BLANK, setViewport }) as ReturnType<typeof useImageContext>,
-			);
+			Object.assign(editorStub, { setViewport });
+			openBlank();
 			render(<CanvasWrapper />);
 			expect(setViewport).toHaveBeenCalledWith({ width: 0, height: 0 });
 		});
 
 		it('never invokes the filter worker', () => {
-			vi.mocked(useImageContext).mockReturnValue(createMockContextValue(BLANK) as ReturnType<typeof useImageContext>);
+			openBlank();
 			render(<CanvasWrapper />);
 			expect(workerMock).not.toHaveBeenCalled();
 			expect(ctx.putImageData).not.toHaveBeenCalled();
 		});
 
 		it('draws a stroke segment while dragging', () => {
-			vi.mocked(useImageContext).mockReturnValue(createMockContextValue(BLANK) as ReturnType<typeof useImageContext>);
+			openBlank();
 			const { container } = render(<CanvasWrapper />);
 			const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 			stubBoundingRect(canvas, { width: 320, height: 320, left: 0, top: 0 });
@@ -155,7 +181,7 @@ describe('Canvas', () => {
 		});
 
 		it('paints a dot when the pointer is tapped without dragging', () => {
-			vi.mocked(useImageContext).mockReturnValue(createMockContextValue(BLANK) as ReturnType<typeof useImageContext>);
+			openBlank();
 			const { container } = render(<CanvasWrapper />);
 			const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 			stubBoundingRect(canvas, { width: 320, height: 320, left: 0, top: 0 });
@@ -168,7 +194,7 @@ describe('Canvas', () => {
 		});
 
 		it('ignores non-primary buttons', () => {
-			vi.mocked(useImageContext).mockReturnValue(createMockContextValue(BLANK) as ReturnType<typeof useImageContext>);
+			openBlank();
 			const { container } = render(<CanvasWrapper />);
 			const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 			stubBoundingRect(canvas, { width: 320, height: 320, left: 0, top: 0 });
@@ -180,15 +206,9 @@ describe('Canvas', () => {
 		});
 
 		it('starts a distinct canvas with no strokes for each new item', () => {
-			const renderBlank = (activeItemId: string) => {
-				vi.mocked(useImageContext).mockReturnValue(
-					createMockContextValue({ ...BLANK, activeItemId, blankCanvasId: activeItemId }) as ReturnType<
-						typeof useImageContext
-					>,
-				);
-			};
+			const renderBlank = (id: string) => openBlank(id);
 
-			renderBlank(BLANK_ID);
+			renderBlank('blank-1');
 			const { container, rerender } = render(<CanvasWrapper />);
 			const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 			stubBoundingRect(canvas, { width: 320, height: 320, left: 0, top: 0 });
@@ -210,17 +230,8 @@ describe('Canvas', () => {
 		});
 
 		it('restores each canvas drawing when switching items', () => {
-			// One shared store, as the real hook provides.
-			const strokesByItemRef = { current: new Map<string, number[]>() };
-			const show = (activeItemId: string) =>
-				vi.mocked(useImageContext).mockReturnValue(
-					createMockContextValue({
-						...BLANK,
-						activeItemId,
-						blankCanvasId: activeItemId,
-						strokesByItemRef,
-					}) as ReturnType<typeof useImageContext>,
-				);
+			// Both items share the stub's stroke map, as the real store does.
+			const show = (id: string) => openBlank(id);
 
 			show('canvas-a');
 			const { container, rerender } = render(<CanvasWrapper />);
@@ -247,7 +258,7 @@ describe('Canvas', () => {
 		});
 
 		it('rescales and replays strokes when the stage is resized', () => {
-			vi.mocked(useImageContext).mockReturnValue(createMockContextValue(BLANK) as ReturnType<typeof useImageContext>);
+			openBlank();
 			const { container } = render(<CanvasWrapper />);
 			const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 			stubBoundingRect(canvas, { width: 320, height: 320, left: 0, top: 0 });
@@ -271,10 +282,7 @@ describe('Canvas', () => {
 	});
 
 	it('does not draw when the pointer is used in image mode', () => {
-		const mockImage = createMockImage(100, 100);
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ currentImage: mockImage, hasImage: true }) as ReturnType<typeof useImageContext>,
-		);
+		openImage();
 		const { container } = render(<CanvasWrapper />);
 		const canvas = container.querySelector('canvas') as HTMLCanvasElement;
 		stubBoundingRect(canvas, { width: 320, height: 320, left: 0, top: 0 });

@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { GalleryFolder, GalleryImage } from '../../../shared/types';
+import { useMenuPosition } from '../../react/useMenuPosition';
 
 interface ImageContextMenuProps {
 	image: GalleryImage;
@@ -95,11 +96,18 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
 		</div>
 	);
 
+	const position = useMenuPosition(anchorX, anchorY, menuRef);
+
 	return (
 		<div
 			ref={menuRef}
 			className='fixed z-[200] bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[160px]'
-			style={{ left: anchorX, top: anchorY }}
+			// Hidden until measured, so clamping to the viewport does not visibly jump.
+			style={{
+				left: position?.left ?? 0,
+				top: position?.top ?? 0,
+				visibility: position ? 'visible' : 'hidden',
+			}}
 		>
 			{subMenu === null ? (
 				<>

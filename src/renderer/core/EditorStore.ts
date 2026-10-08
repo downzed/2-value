@@ -13,11 +13,16 @@ import type {
 } from './types';
 import type { Image } from 'image-js';
 
+/**
+ * On launch only the gallery is open — it is where you pick what to work on.
+ * The other panels open automatically once an item is loaded (see
+ * FloatingControls / FloatingImage), so they start closed.
+ */
 const DEFAULT_PANELS: Record<PanelId, boolean> = {
-	controls: true,
-	original: true,
-	timer: true,
-	gallery: false,
+	controls: false,
+	original: false,
+	timer: false,
+	gallery: true,
 };
 
 const COUNTER_TICK_MS = 1000;

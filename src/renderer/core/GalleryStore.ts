@@ -19,7 +19,6 @@ export interface OpenImageResult {
 /** The subset of the IndexedDB repository this store needs. */
 export interface GalleryRepositoryPort {
 	getData(): Promise<{ version: 1; folders: GalleryFolder[]; images: GalleryImage[] }>;
-	ensureUnsortedFolder(): Promise<GalleryFolder>;
 	createFolder(name: string, tags?: string[]): Promise<GalleryFolder>;
 	renameFolder(folderId: string, newName: string): Promise<void>;
 	deleteFolder(folderId: string, deleteImages: boolean): Promise<void>;
@@ -108,9 +107,6 @@ export class GalleryStore {
 		try {
 			// No-op only when already loading with no pending error.
 			this.#patch((s) => (s.loading && s.error === null ? s : { ...s, loading: true, error: null }));
-			// Seed `Unsorted` first — a fresh install has no folders at all, and
-			// saved images need somewhere to land.
-			await this.#repository.ensureUnsortedFolder();
 			const data = await this.#repository.getData();
 			if (generation !== this.#loadGeneration) return;
 			this.#patch((s) => ({ ...s, folders: data.folders, images: data.images, loading: false }));
@@ -140,11 +136,14 @@ export class GalleryStore {
 	// Folders
 	// -------------------------------------------------------------------------
 
-	createFolder = async (name: string, tags?: string[]): Promise<void> =>
-		this.#runMutation(
-			() => this.#repository.createFolder(name, tags).then(() => undefined),
-			'Failed to create folder.',
-		);
+	/** Returns the created folder so callers (e.g. the picker) can select it. */
+	createFolder = async (name: string, tags?: string[]): Promise<GalleryFolder> => {
+		let created!: GalleryFolder;
+		await this.#runMutation(async () => {
+			created = await this.#repository.createFolder(name, tags);
+		}, 'Failed to create folder.');
+		return created;
+	};
 
 	renameFolder = async (folderId: string, newName: string): Promise<void> =>
 		this.#runMutation(() => this.#repository.renameFolder(folderId, newName), 'Failed to rename folder.');
@@ -187,21 +186,32 @@ export class GalleryStore {
 	};
 
 	/**
-	 * Writes an image's pixels over an existing gallery entry, or into `Unsorted`
-	 * when the item has no entry yet. Returns the gallery id it now maps to, so
-	 * the caller can relink the open item.
+	 * Writes an image's pixels into the gallery and returns the entry id, so the
+	 * caller can relink the open item.
+	 *
+	 * With an `existingImageId` the entry is overwritten in place, so repeated
+	 * saves keep updating one image instead of piling up copies. Otherwise a new
+	 * entry is created in `folderId` — there is no implicit destination, so the
+	 * caller must choose one.
 	 */
-	saveImageToGallery = async (blob: Blob, fileName: string, existingImageId: string | null): Promise<string> => {
+	saveImageToGallery = async (
+		blob: Blob,
+		fileName: string,
+		existingImageId: string | null,
+		folderId: string | null,
+	): Promise<string> => {
+		if (!existingImageId && !folderId) {
+			throw new Error('A folder is required to save a new image');
+		}
 		let galleryImageId!: string;
 		await this.#runMutation(async () => {
 			if (existingImageId) {
 				galleryImageId = (await this.#repository.updateImageBlob(existingImageId, blob)).id;
 				return;
 			}
-			const unsorted = await this.#repository.ensureUnsortedFolder();
 			const created = await this.#repository.importImage(
 				new File([blob], fileName, { type: blob.type || 'image/png' }),
-				unsorted.id,
+				folderId as string,
 			);
 			galleryImageId = created.id;
 		}, 'Failed to save image.');

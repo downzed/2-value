@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { UI } from '../constants/ui';
-import { useImageContext } from '../hooks/ImageContext';
+import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
@@ -12,23 +12,16 @@ const STORAGE_KEY = 'image-editor-controls-position';
 const DEFAULT_POSITION = { x: 20, y: 100 };
 
 const FloatingControls: React.FC = () => {
-	const {
-		hasImage,
-		blur,
-		threshold,
-		values,
-		setBlur,
-		setThreshold,
-		setValues,
-		resetControls,
-		applyPreset,
-		undo,
-		redo,
-		canUndo,
-		canRedo,
-		panels,
-		setPanel,
-	} = useImageContext();
+	const editor = useEditorStore();
+	const { setBlur, setThreshold, setValues, resetControls, applyPreset, undo, redo, setPanel } = editor;
+
+	const hasImage = useEditorSelector((s) => s.items.some((i) => i.id === s.activeItemId && i.image !== null));
+	const blur = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.blur ?? 0);
+	const threshold = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.threshold ?? 0);
+	const values = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.values ?? 2);
+	const canUndo = useEditorSelector((s) => (s.items.find((i) => i.id === s.activeItemId)?.history.length ?? 0) > 0);
+	const canRedo = useEditorSelector((s) => (s.items.find((i) => i.id === s.activeItemId)?.future.length ?? 0) > 0);
+	const isOpen = useEditorSelector((s) => s.panels.controls);
 
 	const [localBlur, setLocalBlur] = useState(blur);
 	const [localThreshold, setLocalThreshold] = useState(threshold);
@@ -81,7 +74,7 @@ const FloatingControls: React.FC = () => {
 			title='Adjustments'
 			storageKey={STORAGE_KEY}
 			defaultPosition={DEFAULT_POSITION}
-			isOpen={panels.controls}
+			isOpen={isOpen}
 			onClose={handleClose}
 			panelStyle={{ minWidth: '220px' }}
 		>

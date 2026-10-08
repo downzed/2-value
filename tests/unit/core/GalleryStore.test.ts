@@ -81,13 +81,10 @@ describe('GalleryStore', () => {
 			expect(store.getState().loading).toBe(false);
 		});
 
-		it('seeds the Unsorted folder before reading', async () => {
+		it('does not create any folders as a side effect of loading', async () => {
 			await store.loadGallery();
-			expect(repo.ensureUnsortedFolder).toHaveBeenCalledTimes(1);
-			// Order matters: seeding must complete before getData reads folders.
-			expect(vi.mocked(repo.ensureUnsortedFolder).mock.invocationCallOrder[0]).toBeLessThan(
-				vi.mocked(repo.getData).mock.invocationCallOrder[0],
-			);
+			// No implicit "Unsorted" folder: a fresh install starts with none.
+			expect(repo.createFolder).not.toHaveBeenCalled();
 		});
 
 		it('stores folders and images from the repository', async () => {
@@ -311,19 +308,26 @@ describe('GalleryStore', () => {
 			expect(id).toBe('g1');
 		});
 
-		it('creates an entry in Unsorted when there is no existing one', async () => {
-			const id = await store.saveImageToGallery(new Blob(['x'], { type: 'image/png' }), 'study.png', null);
+		it('creates an entry in the chosen folder when there is no existing one', async () => {
+			const id = await store.saveImageToGallery(new Blob(['x'], { type: 'image/png' }), 'study.png', null, 'f1');
 
 			expect(repo.updateImageBlob).not.toHaveBeenCalled();
 			expect(repo.importImage).toHaveBeenCalledTimes(1);
-			expect(vi.mocked(repo.importImage).mock.calls[0][1]).toBe('unsorted');
+			expect(vi.mocked(repo.importImage).mock.calls[0][1]).toBe('f1');
 			expect(id).toBe('g1');
+		});
+
+		it('refuses to create an entry without a destination folder', async () => {
+			await expect(store.saveImageToGallery(new Blob(['x']), 'study.png', null, null)).rejects.toThrow(
+				'A folder is required',
+			);
+			expect(repo.importImage).not.toHaveBeenCalled();
 		});
 
 		it('surfaces an error and re-throws when the write fails', async () => {
 			vi.mocked(repo.updateImageBlob).mockRejectedValue(new Error('quota exceeded'));
 
-			await expect(store.saveImageToGallery(new Blob(['x']), 's.png', 'g1')).rejects.toThrow('quota exceeded');
+			await expect(store.saveImageToGallery(new Blob(['x']), 's.png', 'g1', null)).rejects.toThrow('quota exceeded');
 			expect(store.getState().error).toBe('quota exceeded');
 		});
 	});

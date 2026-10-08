@@ -29,7 +29,7 @@ describe('KeyboardCommands', () => {
 		keyboard.start();
 		keyboard.start();
 		store.togglePanel('controls');
-		expect(store.getState().panels.controls).toBe(false);
+		expect(store.getState().panels.controls).toBe(true);
 	});
 
 	it('toggles panels with Alt+1..4', () => {
@@ -39,14 +39,14 @@ describe('KeyboardCommands', () => {
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: '2', altKey: true }));
 
 		const panels = store.getState().panels;
-		expect(panels.controls).toBe(false);
-		expect(panels.original).toBe(false);
+		expect(panels.controls).toBe(true);
+		expect(panels.original).toBe(true);
 	});
 
 	it('supports Ctrl+digit for panels', () => {
 		keyboard.start();
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: '4', ctrlKey: true }));
-		expect(store.getState().panels.gallery).toBe(true);
+		expect(store.getState().panels.gallery).toBe(false);
 	});
 
 	it('undoes and redoes adjustments', () => {
@@ -142,6 +142,6 @@ describe('KeyboardCommands', () => {
 
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: '1', altKey: true }));
 
-		expect(store.getState().panels.controls).toBe(true);
+		expect(store.getState().panels.controls).toBe(false);
 	});
 });

@@ -142,14 +142,22 @@ describe('Commands', () => {
 			expect(activeItem(editor).dirty).toBe(false);
 		});
 
-		it('creates a new entry when the item has no gallery source', async () => {
+		it('creates a new entry in the chosen folder when the item has no gallery source', async () => {
 			editor.newBlankCanvas();
 
-			await commands.saveActiveItemToGallery(blob, 'canvas.png');
+			await commands.saveActiveItemToGallery(blob, 'canvas.png', 'f1');
 
 			expect(repository.updateImageBlob).not.toHaveBeenCalled();
 			expect(repository.importImage).toHaveBeenCalledTimes(1);
+			expect(vi.mocked(repository.importImage).mock.calls[0][1]).toBe('f1');
 			expect(activeItem(editor).galleryImageId).toBe('g1');
+		});
+
+		it('refuses to save a new entry without a destination folder', async () => {
+			editor.newBlankCanvas();
+
+			await expect(commands.saveActiveItemToGallery(blob, 'canvas.png')).rejects.toThrow('folder is required');
+			expect(repository.importImage).not.toHaveBeenCalled();
 		});
 
 		it('does nothing when no item is open', async () => {

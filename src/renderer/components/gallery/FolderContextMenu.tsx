@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { GalleryFolder } from '../../../shared/types';
-import { UNSORTED_FOLDER_NAME } from '../../../shared/types';
+import { useMenuPosition } from '../../react/useMenuPosition';
 
 interface FolderContextMenuProps {
 	folder: GalleryFolder;
@@ -41,26 +41,29 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
 		};
 	}, [onClose]);
 
-	const isUnsorted = folder.name === UNSORTED_FOLDER_NAME;
+	const position = useMenuPosition(anchorX, anchorY, menuRef);
 
 	return (
 		<div
 			ref={menuRef}
 			className='fixed z-[200] bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[140px]'
-			style={{ left: anchorX, top: anchorY }}
+			// Hidden until measured, so clamping to the viewport does not visibly jump.
+			style={{
+				left: position?.left ?? 0,
+				top: position?.top ?? 0,
+				visibility: position ? 'visible' : 'hidden',
+			}}
 		>
-			{!isUnsorted && (
-				<button
-					type='button'
-					className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
-					onClick={() => {
-						onRename(folder);
-						onClose();
-					}}
-				>
-					Rename
-				</button>
-			)}
+			<button
+				type='button'
+				className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
+				onClick={() => {
+					onRename(folder);
+					onClose();
+				}}
+			>
+				Rename
+			</button>
 			<button
 				type='button'
 				className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
@@ -71,21 +74,17 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
 			>
 				Edit Tags
 			</button>
-			{!isUnsorted && (
-				<>
-					<div className='border-t border-slate-100 my-1' />
-					<button
-						type='button'
-						className='w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors'
-						onClick={() => {
-							onDelete(folder);
-							onClose();
-						}}
-					>
-						Delete
-					</button>
-				</>
-			)}
+			<div className='border-t border-slate-100 my-1' />
+			<button
+				type='button'
+				className='w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors'
+				onClick={() => {
+					onDelete(folder);
+					onClose();
+				}}
+			>
+				Delete
+			</button>
 		</div>
 	);
 };
@@ -119,7 +118,11 @@ export const DeleteFolderDialog: React.FC<DeleteFolderDialogProps> = ({ folder, 
 							/>
 							Delete images permanently
 						</label>
-						{!deleteImages && <p className='text-xs text-slate-400'>Images will be moved to Unsorted.</p>}
+						{!deleteImages && (
+							<p className='text-xs text-slate-400'>
+								Images move to another folder, or are deleted with the folder if it is the last one.
+							</p>
+						)}
 					</div>
 				)}
 				<div className='flex justify-end gap-2'>

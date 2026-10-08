@@ -2,7 +2,6 @@ import type { GalleryData, GalleryFolder, GalleryImage } from '../../shared/type
 
 const DB_NAME = 'image-editor-gallery';
 const DB_VERSION = 1;
-const UNSORTED_FOLDER_NAME = 'Unsorted';
 
 function openDB(): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
@@ -108,35 +107,6 @@ export class GalleryRepository {
 		});
 	}
 
-	/**
-	 * Returns the `Unsorted` folder, creating it if absent.
-	 *
-	 * Reads and writes happen in separate transactions on purpose: issuing the
-	 * `put` inside the `getAll` transaction's `oncomplete` callback silently
-	 * discards the write, since that transaction has already finished.
-	 */
-	async ensureUnsortedFolder(): Promise<GalleryFolder> {
-		return this.withMutationLock(async () => {
-			const folders = await this.idbGetAll<GalleryFolder>('folders');
-			const existing = folders.find((f) => f.name === UNSORTED_FOLDER_NAME);
-			if (existing) return existing;
-
-			const unsorted: GalleryFolder = {
-				id: crypto.randomUUID(),
-				name: UNSORTED_FOLDER_NAME,
-				tags: [],
-				createdAt: Date.now(),
-				sortOrder: 0,
-			};
-			await this.idbPut('folders', unsorted);
-			return unsorted;
-		});
-	}
-
-	async init(): Promise<void> {
-		await this.ensureUnsortedFolder();
-	}
-
 	async getData(): Promise<GalleryData> {
 		const [folders, images] = await Promise.all([
 			this.idbGetAll<GalleryFolder>('folders'),
@@ -165,7 +135,6 @@ export class GalleryRepository {
 			const folders = await this.idbGetAll<GalleryFolder>('folders');
 			const folder = folders.find((f) => f.id === folderId);
 			if (!folder) throw new Error(`Folder ${folderId} not found`);
-			if (folder.name === UNSORTED_FOLDER_NAME) throw new Error('Cannot rename Unsorted folder');
 			await this.idbPut('folders', { ...folder, name: newName });
 		});
 	}
@@ -175,7 +144,6 @@ export class GalleryRepository {
 			const data = await this.getData();
 			const folder = data.folders.find((f) => f.id === folderId);
 			if (!folder) throw new Error(`Folder ${folderId} not found`);
-			if (folder.name === UNSORTED_FOLDER_NAME) throw new Error('Cannot delete Unsorted folder');
 
 			const folderImages = data.images.filter((i) => i.folderId === folderId);
 
@@ -199,14 +167,25 @@ export class GalleryRepository {
 					};
 				});
 			} else {
-				const unsortedFolder = data.folders.find((f) => f.name === UNSORTED_FOLDER_NAME);
-				if (!unsortedFolder) throw new Error('Unsorted folder not found');
-				const unsortedId = unsortedFolder.id;
+				// Keep the images: move them to the next folder by sort order.
+				// With no other folder there is nowhere to put them, so they go
+				// too — an orphaned folderId would leave unreadable entries.
+				const fallback = data.folders.filter((f) => f.id !== folderId).sort((a, b) => a.sortOrder - b.sortOrder)[0];
 				const db = await getDB();
+				const dropImages = !fallback;
 				await new Promise<void>((resolve, reject) => {
-					const tx = db.transaction(['images', 'folders'], 'readwrite');
+					const stores: string[] = dropImages
+						? ['images', 'imageBlobs', 'thumbnailBlobs', 'folders']
+						: ['images', 'folders'];
+					const tx = db.transaction(stores, 'readwrite');
 					for (const img of folderImages) {
-						tx.objectStore('images').put({ ...img, folderId: unsortedId });
+						if (dropImages) {
+							tx.objectStore('images').delete(img.id);
+							tx.objectStore('imageBlobs').delete(img.id);
+							tx.objectStore('thumbnailBlobs').delete(img.id);
+						} else {
+							tx.objectStore('images').put({ ...img, folderId: fallback.id });
+						}
 					}
 					tx.objectStore('folders').delete(folderId);
 					tx.oncomplete = () => {
@@ -472,38 +451,53 @@ export class GalleryRepository {
 	}
 }
 
-const RECENTS_KEY = 'image-editor-recents';
-const RECENTS_MAX = 20;
+/** How many recently opened images the gallery suggests. */
+export const RECENTS_MAX = 5;
 
+const RECENTS_KEY = 'image-editor-recents';
+
+/**
+ * Recently opened gallery images.
+ *
+ * Keyed by gallery image id, not file path: a browser app cannot re-read a file
+ * it exported (the `showSaveFilePicker` handle is discarded), so only gallery
+ * entries can be suggested again.
+ */
 export interface RecentEntry {
-	path: string;
+	galleryImageId: string;
 	fileName: string;
-	thumbnail: string;
 	openedAt: number;
 }
 
 export function getRecents(): RecentEntry[] {
 	try {
 		const raw = localStorage.getItem(RECENTS_KEY);
-		return raw ? (JSON.parse(raw) as RecentEntry[]) : [];
+		if (!raw) return [];
+		const parsed: unknown = JSON.parse(raw);
+		if (!Array.isArray(parsed)) return [];
+		return parsed.filter(
+			(e): e is RecentEntry =>
+				typeof e === 'object' &&
+				e !== null &&
+				typeof (e as RecentEntry).galleryImageId === 'string' &&
+				typeof (e as RecentEntry).fileName === 'string',
+		);
 	} catch {
 		return [];
 	}
 }
 
-export function addRecentEntry(path: string, fileName: string, thumbnail: string): void {
-	const entries = getRecents().filter((e) => e.path !== path);
-	entries.unshift({ path, fileName, thumbnail, openedAt: Date.now() });
+export function addRecentEntry(galleryImageId: string, fileName: string): void {
+	const entries = getRecents().filter((e) => e.galleryImageId !== galleryImageId);
+	entries.unshift({ galleryImageId, fileName, openedAt: Date.now() });
 	localStorage.setItem(RECENTS_KEY, JSON.stringify(entries.slice(0, RECENTS_MAX)));
 }
 
-export function removeRecentEntry(path: string): void {
-	const entries = getRecents().filter((e) => e.path !== path);
-	localStorage.setItem(RECENTS_KEY, JSON.stringify(entries));
+export function removeRecentEntry(galleryImageId: string): void {
+	localStorage.setItem(RECENTS_KEY, JSON.stringify(getRecents().filter((e) => e.galleryImageId !== galleryImageId)));
 }
 
 export function clearAllRecents(): void {
 	localStorage.removeItem(RECENTS_KEY);
 }
-
 export const galleryRepository = new GalleryRepository();

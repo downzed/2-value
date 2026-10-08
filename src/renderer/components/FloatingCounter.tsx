@@ -1,4 +1,4 @@
-import { useImageContext } from '../hooks/ImageContext';
+import { useEditorStore, useEditorSelector } from '../react/useStore';
 import FloatingWidget from './shared/FloatingWidget';
 import { PillButton } from './shared/PillButton';
 
@@ -13,7 +13,12 @@ const PRESETS = [
 ];
 
 const FloatingCounter: React.FC = () => {
-	const { counter, counterRunning, counterDuration, startCounter, stopCounter, panels, setPanel } = useImageContext();
+	const editor = useEditorStore();
+	const { startCounter, stopCounter, setPanel } = editor;
+	const counter = useEditorSelector((s) => s.counter);
+	const counterRunning = useEditorSelector((s) => s.counterRunning);
+	const counterDuration = useEditorSelector((s) => s.counterDuration);
+	const isOpen = useEditorSelector((s) => s.panels.timer);
 
 	const handleClose = () => {
 		setPanel('timer', false);
@@ -30,7 +35,7 @@ const FloatingCounter: React.FC = () => {
 			title='Timer'
 			storageKey={STORAGE_KEY}
 			defaultPosition={DEFAULT_POSITION}
-			isOpen={panels.timer}
+			isOpen={isOpen}
 			onClose={handleClose}
 			panelStyle={{ minWidth: '160px' }}
 		>

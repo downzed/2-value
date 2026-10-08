@@ -1,19 +1,67 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import FloatingCounter from '../../../src/renderer/components/FloatingCounter';
-import { createMockContextValue } from '../../helpers/mocks';
+import { createEditorState, createEditorStoreStub, createOpenItem } from '../../helpers/mocks';
 
-vi.mock('../../../src/renderer/hooks/ImageContext', () => ({
-	useImageContext: vi.fn(),
+/**
+ * The component reads the singleton store through selectors. The mock runs each
+ * selector against a plain state object and returns a stub store.
+ *
+ * The holders must be hoisted: vi.mock factories run before module-level
+ * `const`s are initialised, so referencing them directly would be undefined.
+ */
+const holders = vi.hoisted(() => ({
+	getEditorState: () => ({}),
+	getEditorStore: () => ({}),
+}));
+
+vi.mock('../../../src/renderer/react/useStore', () => ({
+	useEditorStore: () => holders.getEditorStore(),
+	useGalleryStore: () => ({}),
+	useEditorSelector: (selector: (s: never) => unknown) => selector(holders.getEditorState() as never),
+	useGallerySelector: (selector: (s: never) => unknown) => selector({}),
 }));
 
 // FloatingWidget uses useDraggablePanel which uses localStorage (already mocked in setup.ts)
 
-import { useImageContext } from '../../../src/renderer/hooks/ImageContext';
+type EditorStateLike = ReturnType<typeof createEditorState>;
+let editorState: { current: EditorStateLike };
+let editorStub: ReturnType<typeof createEditorStoreStub>;
+
+/** Sets editor state from the legacy flat-field overrides the tests used. */
+function setState(overrides: Record<string, unknown>) {
+	editorState.current = createEditorState(translate(overrides));
+}
+
+/** Maps legacy flat fields onto the item-based EditorState shape. */
+function translate(overrides: Record<string, unknown>): Partial<EditorStateLike> {
+	const { blur, threshold, values, showOriginal, canUndo, canRedo, history, future, ...rest } = overrides;
+	const needsItem =
+		blur !== undefined ||
+		threshold !== undefined ||
+		values !== undefined ||
+		showOriginal !== undefined ||
+		canUndo !== undefined ||
+		canRedo !== undefined;
+	if (!needsItem) return rest as Partial<EditorStateLike>;
+	return {
+		...rest,
+		items: [createOpenItem({ blur, threshold, values, showOriginal })],
+		activeItemId: 'item-1',
+	} as Partial<EditorStateLike>;
+}
+
+/** Applies store-action spies onto the editor stub. */
+function useActions(actions: Record<string, unknown>) {
+	Object.assign(editorStub, actions);
+}
 
 describe('FloatingCounter', () => {
 	beforeEach(() => {
-		vi.mocked(useImageContext).mockReturnValue(createMockContextValue() as ReturnType<typeof useImageContext>);
+		editorState = { current: createEditorState() };
+		editorStub = createEditorStoreStub();
+		holders.getEditorState = () => editorState.current;
+		holders.getEditorStore = () => editorStub;
 	});
 
 	it('renders preset buttons (1m, 5m, 10m, 15m)', () => {
@@ -25,72 +73,47 @@ describe('FloatingCounter', () => {
 	});
 
 	it('renders nothing when panels.timer is false', () => {
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({
-				panels: { controls: true, original: true, timer: false, gallery: false },
-			}) as ReturnType<typeof useImageContext>,
-		);
+		setState({ panels: { controls: true, original: true, timer: false, gallery: false } });
 		const { container } = render(<FloatingCounter />);
 		expect(container.firstChild).toBeNull();
 	});
 
 	it('clicking a preset calls startCounter with the correct duration', async () => {
 		const startCounter = vi.fn();
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ startCounter }) as ReturnType<typeof useImageContext>,
-		);
+		useActions({ startCounter });
 		render(<FloatingCounter />);
 		fireEvent.click(screen.getByText('5m'));
 		expect(startCounter).toHaveBeenCalledWith(300);
 	});
 
 	it('displays countdown in MM:SS format for durations >= 1 minute', () => {
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ counter: 125, counterRunning: true, counterDuration: 300 }) as ReturnType<
-				typeof useImageContext
-			>,
-		);
+		setState({ counter: 125, counterRunning: true, counterDuration: 300 });
 		render(<FloatingCounter />);
 		expect(screen.getByText('2:05')).toBeDefined();
 	});
 
 	it('displays countdown in seconds for durations < 1 minute', () => {
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ counter: 42, counterRunning: true, counterDuration: 60 }) as ReturnType<
-				typeof useImageContext
-			>,
-		);
+		setState({ counter: 42, counterRunning: true, counterDuration: 60 });
 		render(<FloatingCounter />);
 		expect(screen.getByText('42')).toBeDefined();
 	});
 
 	it('shows Stop button when timer is running', () => {
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ counter: 60, counterRunning: true, counterDuration: 60 }) as ReturnType<
-				typeof useImageContext
-			>,
-		);
+		setState({ counter: 60, counterRunning: true, counterDuration: 60 });
 		render(<FloatingCounter />);
 		expect(screen.getByText('Stop')).toBeDefined();
 	});
 
 	it('shows Start button when timer is not running', () => {
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ counter: 0, counterRunning: false, counterDuration: 60 }) as ReturnType<
-				typeof useImageContext
-			>,
-		);
+		setState({ counter: 0, counterRunning: false, counterDuration: 60 });
 		render(<FloatingCounter />);
 		expect(screen.getByText('Start')).toBeDefined();
 	});
 
 	it('Reset button calls stopCounter', async () => {
 		const stopCounter = vi.fn();
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ counter: 30, counterRunning: true, counterDuration: 60, stopCounter }) as ReturnType<
-				typeof useImageContext
-			>,
-		);
+		useActions({ stopCounter });
+		setState({ counter: 30, counterRunning: true, counterDuration: 60 });
 		render(<FloatingCounter />);
 		fireEvent.click(screen.getByText('Reset'));
 		expect(stopCounter).toHaveBeenCalled();
@@ -98,11 +121,8 @@ describe('FloatingCounter', () => {
 
 	it('Start/Stop button toggles: Stop calls stopCounter', async () => {
 		const stopCounter = vi.fn();
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ counter: 60, counterRunning: true, counterDuration: 60, stopCounter }) as ReturnType<
-				typeof useImageContext
-			>,
-		);
+		useActions({ stopCounter });
+		setState({ counter: 60, counterRunning: true, counterDuration: 60 });
 		render(<FloatingCounter />);
 		fireEvent.click(screen.getByText('Stop'));
 		expect(stopCounter).toHaveBeenCalled();
@@ -110,11 +130,8 @@ describe('FloatingCounter', () => {
 
 	it('Start button calls startCounter with counterDuration when not running', async () => {
 		const startCounter = vi.fn();
-		vi.mocked(useImageContext).mockReturnValue(
-			createMockContextValue({ counter: 0, counterRunning: false, counterDuration: 300, startCounter }) as ReturnType<
-				typeof useImageContext
-			>,
-		);
+		useActions({ startCounter });
+		setState({ counter: 0, counterRunning: false, counterDuration: 300 });
 		render(<FloatingCounter />);
 		fireEvent.click(screen.getByText('Start'));
 		expect(startCounter).toHaveBeenCalledWith(300);

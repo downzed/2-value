@@ -44,11 +44,12 @@ describe('EditorStore', () => {
 		expect(s.counter).toBe(0);
 		expect(s.counterRunning).toBe(false);
 		expect(s.counterDuration).toBe(null);
+		// Only the gallery starts open; the rest open once an item is loaded.
 		expect(s.panels).toEqual({
-			controls: true,
-			original: true,
-			timer: true,
-			gallery: false,
+			controls: false,
+			original: false,
+			timer: false,
+			gallery: true,
 		});
 		expect(store.canUndo).toBe(false);
 		expect(store.canRedo).toBe(false);
@@ -363,10 +364,10 @@ describe('EditorStore', () => {
 	it('should toggle panel visibility', () => {
 		const store = new EditorStore();
 		store.togglePanel('controls');
-		expect(store.getState().panels.controls).toBe(false);
+		expect(store.getState().panels.controls).toBe(true);
 
 		store.togglePanel('controls');
-		expect(store.getState().panels.controls).toBe(true);
+		expect(store.getState().panels.controls).toBe(false);
 	});
 
 	it('should set panel visibility directly', () => {
@@ -382,10 +383,10 @@ describe('EditorStore', () => {
 		const store = new EditorStore();
 		store.togglePanel('original');
 		const panels = store.getState().panels;
-		expect(panels.original).toBe(false);
-		expect(panels.controls).toBe(true);
-		expect(panels.timer).toBe(true);
-		expect(panels.gallery).toBe(false);
+		expect(panels.original).toBe(true);
+		expect(panels.controls).toBe(false);
+		expect(panels.timer).toBe(false);
+		expect(panels.gallery).toBe(true);
 	});
 
 	it('should not affect gallery when toggling other panels', () => {
@@ -394,7 +395,7 @@ describe('EditorStore', () => {
 		store.togglePanel('controls');
 
 		expect(store.getState().panels.gallery).toBe(true);
-		expect(store.getState().panels.controls).toBe(false);
+		expect(store.getState().panels.controls).toBe(true);
 	});
 
 	it('should preserve gallery state across loadImage', async () => {
@@ -724,7 +725,7 @@ describe('EditorStore', () => {
 			store.setViewport({ width: 800, height: 600 });
 			listener.mockClear();
 			store.setViewport({ width: 800, height: 600 });
-			store.setPanel('gallery', false);
+			store.setPanel('gallery', true);
 			store.markActiveSaved();
 
 			expect(listener).not.toHaveBeenCalled();

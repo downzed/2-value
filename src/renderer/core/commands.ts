@@ -1,4 +1,5 @@
 import { saveImageFile } from '../utils/fileOps';
+import { addRecentEntry } from '../utils/storage';
 import { renderBlankItemToBlob, renderImageItemToBlob } from '../utils/itemRender';
 import { ImageProcessor } from './ImageProcessor';
 import { decodeImageFile } from './decode';
@@ -45,9 +46,12 @@ export class Commands {
 	/** Opens a gallery entry in the editor, linking it so it stays restorable. */
 	openGalleryImage = async (imageId: string): Promise<LoadFromFileOutcome> => {
 		const { blob, fileName } = await this.#gallery.openGalleryImage(imageId);
-		return this.openFile(new File([blob], fileName, { type: blob.type || 'image/png' }), {
+		const outcome = await this.openFile(new File([blob], fileName, { type: blob.type || 'image/png' }), {
 			galleryImageId: imageId,
 		});
+		// Only record a successful open, so a failed decode is not suggested back.
+		if (outcome.ok) addRecentEntry(imageId, fileName);
+		return outcome;
 	};
 
 	// -------------------------------------------------------------------------
@@ -55,27 +59,34 @@ export class Commands {
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Saves the active item's pixels into the gallery: overwriting its existing
-	 * entry when it has one, otherwise creating one in `Unsorted` and relinking
-	 * the item — which also makes it restorable.
+	 * Saves the active item's pixels into the gallery, overwriting its existing
+	 * entry when it has one.
+	 *
+	 * `folderId` is only needed when the item is not gallery-backed yet — the
+	 * caller must choose a destination, since there is no implicit one.
 	 */
-	saveActiveItemToGallery = async (blob: Blob, fileName: string): Promise<void> => {
+	saveActiveItemToGallery = async (blob: Blob, fileName: string, folderId: string | null = null): Promise<void> => {
 		const activeItemId = this.#editor.getState().activeItemId;
 		if (activeItemId === null) return;
 		const item = this.#editor.activeItem;
 		if (!item) return;
 
-		const galleryImageId = await this.#gallery.saveImageToGallery(blob, fileName, item.galleryImageId);
+		const galleryImageId = await this.#gallery.saveImageToGallery(
+			blob,
+			fileName,
+			item.galleryImageId,
+			item.galleryImageId ? null : folderId,
+		);
 		this.#editor.linkGalleryImage(activeItemId, galleryImageId);
 		this.#editor.markActiveSaved();
 	};
 
 	/** Saves any open item, activating it first because saving targets the active document. */
-	saveOpenItem = async (item: OpenItem): Promise<void> => {
+	saveOpenItem = async (item: OpenItem, folderId: string | null = null): Promise<void> => {
 		const blob = await this.renderItemToBlob(item);
 		if (!blob) return;
 		if (this.#editor.getState().activeItemId !== item.id) this.#editor.activateItem(item.id);
-		await this.saveActiveItemToGallery(blob, item.fileName || `${item.label}.png`);
+		await this.saveActiveItemToGallery(blob, item.fileName || `${item.label}.png`, folderId);
 	};
 
 	// -------------------------------------------------------------------------
