@@ -35,6 +35,7 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
 	return (
 		<div
 			ref={menuRef}
+			role='menu'
 			className='fixed z-[200] bg-white border border-slate-200 rounded-lg shadow-lg py-1 min-w-[140px]'
 			// Hidden until measured, so clamping to the viewport does not visibly jump.
 			style={{

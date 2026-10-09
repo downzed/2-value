@@ -176,3 +176,123 @@ describe('Modal focus management', () => {
 		expect(document.activeElement).not.toBe(trigger);
 	});
 });
+
+describe('Modal focus trap', () => {
+	/** A dialog with three controls, plus a control behind the backdrop. */
+	function ThreeButtons() {
+		return (
+			<>
+				<button type='button'>Behind the dialog</button>
+				<Modal title='Rename'>
+					<input aria-label='First' />
+					<input aria-label='Second' />
+					<button type='button'>Confirm</button>
+				</Modal>
+			</>
+		);
+	}
+
+	/** Tab is not natively simulated by jsdom, so drive the handler directly. */
+	function pressTab(target: Element, shiftKey = false) {
+		const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+		target.dispatchEvent(event);
+		return event;
+	}
+
+	it('wraps from the last control back to the first', () => {
+		render(<ThreeButtons />);
+		const confirm = screen.getByText('Confirm');
+		confirm.focus();
+
+		pressTab(confirm);
+
+		expect(document.activeElement).toBe(screen.getByLabelText('First'));
+	});
+
+	it('wraps backwards from the first control to the last', () => {
+		render(<ThreeButtons />);
+		const first = screen.getByLabelText('First');
+		first.focus();
+
+		pressTab(first, true);
+
+		expect(document.activeElement).toBe(screen.getByText('Confirm'));
+	});
+
+	it('steps forward normally between controls', () => {
+		render(<ThreeButtons />);
+		const first = screen.getByLabelText('First');
+		first.focus();
+
+		const event = pressTab(first);
+
+		// Not a wrap point, so the browser's own tab handling is left alone.
+		expect(event.defaultPrevented).toBe(false);
+	});
+
+	it('moves focus in when Tab arrives while the card itself has focus', () => {
+		render(<ThreeButtons />);
+		const card = screen.getByRole('dialog');
+		card.focus();
+		expect(document.activeElement).toBe(card);
+
+		pressTab(card);
+
+		// Focus was "before" the first control, so Tab steps in rather than wrapping.
+		expect(event_defaultPreventedOf(card)).toBe(false);
+	});
+
+	it('keeps focus on the card when the dialog has no focusable children', () => {
+		render(<Modal title='Empty'>nothing to focus</Modal>);
+		const card = screen.getByRole('dialog');
+		card.focus();
+
+		pressTab(card);
+
+		expect(document.activeElement).toBe(card);
+	});
+
+	it('never lets focus reach a control behind the dialog', () => {
+		render(<ThreeButtons />);
+		const behind = screen.getByText('Behind the dialog');
+		behind.focus();
+
+		// Even if focus were somehow outside, the trap keeps the cycle internal.
+		pressTab(screen.getByText('Confirm'));
+
+		expect(document.activeElement).not.toBe(behind);
+	});
+
+	it('skips disabled controls when cycling', () => {
+		render(
+			<Modal title='T'>
+				<button type='button'>Only</button>
+			</Modal>,
+		);
+		const only = screen.getByText('Only');
+		only.focus();
+
+		pressTab(only);
+
+		expect(document.activeElement).toBe(only);
+	});
+
+	it('ignores keys other than Tab', () => {
+		render(<ThreeButtons />);
+		const confirm = screen.getByText('Confirm');
+		confirm.focus();
+
+		const event = new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true });
+		confirm.dispatchEvent(event);
+
+		expect(event.defaultPrevented).toBe(false);
+		expect(document.activeElement).toBe(confirm);
+	});
+});
+
+/** Helper kept out of the test body to keep the trap assertions readable. */
+function event_defaultPreventedOf(el: Element): boolean {
+	const event = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+	el.dispatchEvent(event);
+	return event.defaultPrevented;
+}
