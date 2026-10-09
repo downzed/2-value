@@ -527,7 +527,7 @@ const GalleryPanel: React.FC = () => {
 	return (
 		<>
 			<div
-				className='fixed top-0 right-0 bottom-8 bg-white border-l border-slate-200 shadow-xl z-50 flex flex-col'
+				className='fixed top-8 right-0 bottom-0 bg-white border-l border-slate-200 shadow-xl z-50 flex flex-col'
 				style={{ width: UI.GALLERY.PANEL_WIDTH }}
 			>
 				{/* Header */}

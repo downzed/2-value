@@ -5,7 +5,7 @@ import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
 
 const STORAGE_KEY = 'image-editor-original-position';
-const DEFAULT_POSITION = { x: 20, y: 20 };
+const DEFAULT_POSITION = { x: 20, y: 52 };
 
 const FloatingImage: React.FC = () => {
 	const editor = useEditorStore();

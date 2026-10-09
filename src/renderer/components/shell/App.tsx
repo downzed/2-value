@@ -37,13 +37,14 @@ const AppContent: React.FC = () => {
 
 	return (
 		<div className='flex flex-col h-screen bg-slate-100'>
+			{/* Menu / status bar sits above the stage. */}
+			<BottomPanel previewCanvasRef={previewCanvasRef} />
 			<div className='flex-1 flex flex-col overflow-hidden'>
 				<Canvas previewCanvasRef={previewCanvasRef} />
 				<FloatingImage />
 				<FloatingControls />
 				<FloatingCounter />
 				<GalleryPanel />
-				<BottomPanel previewCanvasRef={previewCanvasRef} />
 			</div>
 		</div>
 	);

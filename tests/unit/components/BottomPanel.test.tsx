@@ -47,6 +47,11 @@ function BottomPanelWrapper() {
 	return <BottomPanel previewCanvasRef={previewCanvasRef} />;
 }
 
+/** Opens the File dropdown and returns its menu items. */
+function openFileMenu() {
+	fireEvent.click(screen.getByRole('button', { name: 'File' }));
+}
+
 type EditorStateLike = ReturnType<typeof createEditorState>;
 let editorState: { current: EditorStateLike };
 let galleryState: { current: ReturnType<typeof createGalleryState> };
@@ -93,23 +98,48 @@ describe('BottomPanel', () => {
 		holders.getCommands = () => commands;
 	});
 
-	it('renders Open and Save buttons', () => {
+	it('exposes New, Open, Save and Export under the File menu', () => {
 		render(<BottomPanelWrapper />);
+		openFileMenu();
+		expect(screen.getByText('New')).toBeDefined();
 		expect(screen.getByText('Open')).toBeDefined();
 		expect(screen.getByText('Save')).toBeDefined();
+		expect(screen.getByText('Export as...')).toBeDefined();
 	});
 
-	it('renders a New button', () => {
+	it('describes Save and Export as...', () => {
 		render(<BottomPanelWrapper />);
-		expect(screen.getByText('New')).toBeDefined();
+		openFileMenu();
+		expect(screen.getByText('Write to the gallery')).toBeDefined();
+		expect(screen.getByText('Download a PNG or JPEG')).toBeDefined();
 	});
 
-	it('clicking New starts a blank canvas', () => {
+	it('shows the File menu items only when opened', () => {
+		render(<BottomPanelWrapper />);
+		expect(screen.queryByText('Export as...')).toBeNull();
+	});
+
+	it('renders a File menu button', () => {
+		render(<BottomPanelWrapper />);
+		expect(screen.getByRole('button', { name: 'File' })).toBeDefined();
+	});
+
+	it('choosing New starts a blank canvas', () => {
 		const newBlankCanvas = vi.fn();
 		useActions({ newBlankCanvas });
 		render(<BottomPanelWrapper />);
+		openFileMenu();
 		fireEvent.click(screen.getByText('New'));
 		expect(newBlankCanvas).toHaveBeenCalled();
+	});
+
+	it('closes the File menu after choosing an item', () => {
+		const newBlankCanvas = vi.fn();
+		useActions({ newBlankCanvas });
+		render(<BottomPanelWrapper />);
+		openFileMenu();
+		fireEvent.click(screen.getByText('New'));
+		expect(screen.queryByText('Export as...')).toBeNull();
 	});
 
 	it('Ctrl+N starts a blank canvas without any image loaded', () => {
@@ -143,24 +173,45 @@ describe('BottomPanel', () => {
 		expect(screen.getByText('1024 × 768')).toBeDefined();
 	});
 
-	it('Save button is disabled when no image is loaded', () => {
+	it('Save is disabled when no image is loaded', () => {
 		render(<BottomPanelWrapper />);
-		const saveBtn = screen.getByText('Save').closest('button');
-		expect(saveBtn?.disabled).toBe(true);
+		openFileMenu();
+		expect(screen.getByText('Save').closest('button')?.disabled).toBe(true);
 	});
 
-	it('Save button is enabled when image is loaded', () => {
+	it('Export as... is disabled when no image is loaded', () => {
+		render(<BottomPanelWrapper />);
+		openFileMenu();
+		expect(screen.getByText('Export as...').closest('button')?.disabled).toBe(true);
+	});
+
+	it('Save is enabled when image is loaded', () => {
 		withItem(imageItem());
 		render(<BottomPanelWrapper />);
-		const saveBtn = screen.getByText('Save').closest('button');
-		expect(saveBtn?.disabled).toBe(false);
+		openFileMenu();
+		expect(screen.getByText('Save').closest('button')?.disabled).toBe(false);
 	});
 
-	it('Save button is enabled for a blank canvas even though no image is loaded', () => {
+	it('Export as... is enabled when image is loaded', () => {
+		withItem(imageItem());
+		render(<BottomPanelWrapper />);
+		openFileMenu();
+		expect(screen.getByText('Export as...').closest('button')?.disabled).toBe(false);
+	});
+
+	it('Export as... exports the active item', () => {
+		withItem(imageItem());
+		render(<BottomPanelWrapper />);
+		openFileMenu();
+		fireEvent.click(screen.getByText('Export as...'));
+		expect(commands.exportOpenItem).toHaveBeenCalledWith(expect.objectContaining({ id: 'item-1' }));
+	});
+
+	it('Save is enabled for a blank canvas even though no image is loaded', () => {
 		withItem(blankItem());
 		render(<BottomPanelWrapper />);
-		const saveBtn = screen.getByText('Save').closest('button');
-		expect(saveBtn?.disabled).toBe(false);
+		openFileMenu();
+		expect(screen.getByText('Save').closest('button')?.disabled).toBe(false);
 	});
 
 	it('displays file name when image is loaded', () => {
@@ -175,12 +226,11 @@ describe('BottomPanel', () => {
 		expect(screen.getByText('800 × 600')).toBeDefined();
 	});
 
-	it('Open button exists and is clickable', async () => {
+	it('Open from the File menu starts the open flow', async () => {
 		render(<BottomPanelWrapper />);
-		const openBtn = screen.getByText('Open').closest('button');
-		expect(openBtn).toBeDefined();
+		openFileMenu();
 		await act(async () => {
-			fireEvent.click(openBtn as HTMLButtonElement);
+			fireEvent.click(screen.getByText('Open'));
 		});
 		// Status changes to 'loading' when open is triggered
 		expect(screen.getByText('Loading...')).toBeDefined();
@@ -191,20 +241,36 @@ describe('BottomPanel', () => {
 		expect(screen.getByText('Ready')).toBeDefined();
 	});
 
-	it('shows minimized controls icon when controls panel is closed', () => {
-		setState({ panels: { controls: false, original: true, timer: true, gallery: false } });
+	it('always shows all four panel toggles', () => {
+		// Closed panels, so this proves nothing is conditionally hidden.
+		setState({ panels: { controls: false, original: false, timer: false, gallery: false } });
 		render(<BottomPanelWrapper />);
-		const btn = screen.getByTitle('Show Adjustments (Alt+1)');
-		expect(btn).toBeDefined();
+		expect(screen.getByTitle('Adjustments (Alt+1)')).toBeDefined();
+		expect(screen.getByTitle('Original (Alt+2)')).toBeDefined();
+		expect(screen.getByTitle('Timer (Alt+3)')).toBeDefined();
+		expect(screen.getByTitle('Gallery (Alt+4)')).toBeDefined();
 	});
 
-	it('clicking minimized controls icon calls setPanel to reopen it', () => {
-		const setPanel = vi.fn();
-		useActions({ setPanel });
-		setState({ panels: { controls: false, original: true, timer: true, gallery: false } });
+	it('keeps the gallery toggle visible while the gallery panel is open', () => {
+		setState({ panels: { controls: false, original: false, timer: false, gallery: true } });
 		render(<BottomPanelWrapper />);
-		fireEvent.click(screen.getByTitle('Show Adjustments (Alt+1)'));
-		expect(setPanel).toHaveBeenCalledWith('controls', true);
+		expect(screen.getByTitle('Gallery (Alt+4)')).toBeDefined();
+	});
+
+	it('marks a panel toggle as pressed while its panel is open', () => {
+		setState({ panels: { controls: true, original: false, timer: false, gallery: false } });
+		render(<BottomPanelWrapper />);
+		expect(screen.getByTitle('Adjustments (Alt+1)').getAttribute('aria-pressed')).toBe('true');
+		expect(screen.getByTitle('Gallery (Alt+4)').getAttribute('aria-pressed')).toBe('false');
+	});
+
+	it('clicking a panel toggle flips that panel', () => {
+		const togglePanel = vi.fn();
+		useActions({ togglePanel });
+		setState({ panels: { controls: false, original: false, timer: false, gallery: false } });
+		render(<BottomPanelWrapper />);
+		fireEvent.click(screen.getByTitle('Gallery (Alt+4)'));
+		expect(togglePanel).toHaveBeenCalledWith('gallery');
 	});
 
 	it('shows zoom controls when image is loaded', () => {

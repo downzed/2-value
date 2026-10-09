@@ -9,7 +9,7 @@ import { SectionHeader } from './shared/SectionHeader';
 import { SliderRow } from './shared/SliderRow';
 
 const STORAGE_KEY = 'image-editor-controls-position';
-const DEFAULT_POSITION = { x: 20, y: 100 };
+const DEFAULT_POSITION = { x: 20, y: 132 };
 
 const FloatingControls: React.FC = () => {
 	const editor = useEditorStore();
