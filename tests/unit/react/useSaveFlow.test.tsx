@@ -104,3 +104,35 @@ describe('useSaveFlow', () => {
 		expect(screen.queryByText('Skip')).toBeNull();
 	});
 });
+
+describe('FolderPickerDialog card structure', () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+		holders.getFolders = () => [REF_FOLDER];
+		holders.getGalleryStore = () => ({ createFolder: vi.fn(), loadGallery: vi.fn() });
+	});
+
+	/** Renders the dialog open. */
+	function renderOpen() {
+		render(<Wrapper hasEntry={false} />);
+		fireEvent.click(screen.getByText('Trigger save'));
+	}
+
+	it('renders exactly one card, not a card nested inside Modal', () => {
+		renderOpen();
+
+		// `Modal` owns the card. A second copy inside it doubled the shadow, the
+		// padding and the fixed width, and squeezed the content box.
+		const cards = document.querySelectorAll('.shadow-2xl');
+		expect(cards).toHaveLength(1);
+	});
+
+	it('does not set the card width twice', () => {
+		renderOpen();
+
+		// `w-[360px]` on both the Modal card and an inner div made the content box
+		// narrower than every sibling dialog gets.
+		const widthClasses = document.querySelectorAll('.w-\\[360px\\]');
+		expect(widthClasses).toHaveLength(1);
+	});
+});
