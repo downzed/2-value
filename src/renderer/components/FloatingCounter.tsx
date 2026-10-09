@@ -1,4 +1,5 @@
 import { useEditorStore, useEditorSelector } from '../react/useStore';
+import { selectCounter, selectCounterDuration, selectCounterRunning, selectTimerOpen } from '../core/selectors';
 import FloatingWidget from './shared/FloatingWidget';
 import { PillButton } from './shared/PillButton';
 
@@ -15,10 +16,10 @@ const PRESETS = [
 const FloatingCounter: React.FC = () => {
 	const editor = useEditorStore();
 	const { startCounter, stopCounter, setPanel } = editor;
-	const counter = useEditorSelector((s) => s.counter);
-	const counterRunning = useEditorSelector((s) => s.counterRunning);
-	const counterDuration = useEditorSelector((s) => s.counterDuration);
-	const isOpen = useEditorSelector((s) => s.panels.timer);
+	const counter = useEditorSelector(selectCounter);
+	const counterRunning = useEditorSelector(selectCounterRunning);
+	const counterDuration = useEditorSelector(selectCounterDuration);
+	const isOpen = useEditorSelector(selectTimerOpen);
 
 	const handleClose = () => {
 		setPanel('timer', false);

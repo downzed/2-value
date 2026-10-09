@@ -5,6 +5,7 @@ import {
 	selectCanRedo,
 	selectCanUndo,
 	selectHasImage,
+	selectControlsOpen,
 	selectThreshold,
 	selectValues,
 } from '../core/selectors';
@@ -31,7 +32,7 @@ const FloatingControls: React.FC = () => {
 	const values = useEditorSelector(selectValues);
 	const canUndo = useEditorSelector(selectCanUndo);
 	const canRedo = useEditorSelector(selectCanRedo);
-	const isOpen = useEditorSelector((s) => s.panels.controls);
+	const isOpen = useEditorSelector(selectControlsOpen);
 
 	const [localBlur, setLocalBlur] = useState(blur);
 	const [localThreshold, setLocalThreshold] = useState(threshold);

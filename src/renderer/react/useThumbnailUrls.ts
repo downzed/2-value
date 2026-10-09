@@ -8,9 +8,6 @@ import type { GalleryImage } from '../../shared/types';
  * to be worth isolating: only newly-seen images are fetched, and images that
  * disappear from `images` have their URLs revoked through a functional state
  * update so the revoke cannot be lost to a stale closure.
- *
- * In-flight fetches are cancelled on cleanup, and any URL they had already
- * created is revoked there rather than being committed to state.
  */
 export function useThumbnailUrls(
 	images: GalleryImage[],
@@ -18,6 +15,10 @@ export function useThumbnailUrls(
 ): Record<string, string> {
 	const [urls, setUrls] = useState<Record<string, string>>({});
 	const prevImageIdsRef = useRef<string[]>([]);
+	// Mirror of `urls` for the unmount cleanup, which runs outside the setter.
+	const urlsRef = useRef<Record<string, string>>({});
+
+	urlsRef.current = urls;
 
 	useEffect(() => {
 		const prevIds = new Set(prevImageIdsRef.current);
@@ -41,6 +42,10 @@ export function useThumbnailUrls(
 		if (newImages.length === 0) return;
 
 		let cancelled = false;
+		// Set once the URLs below reach state. `loadGallery` replaces `images` with
+		// a fresh array on every load, so this effect's cleanup fires on every
+		// gallery mutation. It must not revoke URLs that are still on screen.
+		let committed = false;
 		const newUrls: Record<string, string> = {};
 
 		Promise.all(
@@ -56,6 +61,7 @@ export function useThumbnailUrls(
 			}),
 		).then(() => {
 			if (!cancelled) {
+				committed = true;
 				prevImageIdsRef.current = images.map((i) => i.id);
 				setUrls((prev) => ({ ...prev, ...newUrls }));
 			}
@@ -63,11 +69,24 @@ export function useThumbnailUrls(
 
 		return () => {
 			cancelled = true;
+			// Committed URLs are still referenced by state; revoking them here would
+			// blank every thumbnail after the first mutation. Those are revoked when
+			// their image disappears, or on unmount.
+			if (committed) return;
 			for (const url of Object.values(newUrls)) {
 				URL.revokeObjectURL(url);
 			}
 		};
 	}, [images, getThumbnailBlob]);
+
+	// Unmount is the one moment every remaining URL is guaranteed dead.
+	useEffect(() => {
+		return () => {
+			for (const url of Object.values(urlsRef.current)) {
+				URL.revokeObjectURL(url);
+			}
+		};
+	}, []);
 
 	return urls;
 }

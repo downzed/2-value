@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { selectFolders } from '../core/selectors';
 import { useGallerySelector, useGalleryStore } from './useStore';
 
 /**
@@ -15,7 +16,7 @@ import { useGallerySelector, useGalleryStore } from './useStore';
  */
 export function useSaveFlow() {
 	const gallery = useGalleryStore();
-	const folders = useGallerySelector((s) => s.folders);
+	const folders = useGallerySelector(selectFolders);
 
 	/** The save to run once a folder has been chosen. */
 	const [pending, setPending] = useState<((folderId: string) => Promise<void>) | null>(null);

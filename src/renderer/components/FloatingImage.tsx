@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { selectActiveImage, selectShowOriginal } from '../core/selectors';
+import { selectActiveImage, selectOriginalOpen, selectShowOriginal } from '../core/selectors';
 import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { imageToImageData } from '../utils/imageConversion';
 import FloatingWidget from './shared/FloatingWidget';
@@ -14,7 +14,7 @@ const FloatingImage: React.FC = () => {
 	const { toggleShowOriginal, setPanel } = editor;
 	const originalImage = useEditorSelector(selectActiveImage);
 	const showOriginal = useEditorSelector(selectShowOriginal);
-	const isOpen = useEditorSelector((s) => s.panels.original);
+	const isOpen = useEditorSelector(selectOriginalOpen);
 	const [showKey, setShowKey] = useState(0);
 	const originalCanvasRef = useRef<HTMLCanvasElement>(null);
 
