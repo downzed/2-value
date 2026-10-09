@@ -1,6 +1,7 @@
 import type { Image } from 'image-js';
 import type { GalleryFolder, GalleryImage } from '../../shared/types';
-import type { EditorState, OpenItem } from './types';
+import type { GalleryState } from './GalleryStore';
+import type { EditorState, FitMode, OpenItem, PanelId, Viewport } from './types';
 
 /**
  * Named selectors for `EditorState`.
@@ -49,6 +50,55 @@ export const selectCanRedo = (s: EditorState): boolean => (selectActiveItem(s)?.
 
 /** Zoom resolves through fit mode; `zoom` only applies when the user has zoomed. */
 export const selectEffectiveZoom = (s: EditorState): number => (s.fitMode === 'fit' ? s.fitScale : s.zoom);
+
+// ---------------------------------------------------------------------------
+// Direct state reads
+//
+// Trivial accessors, but named so components never write an inline
+// `(s) => s.field` closure. Two reasons: the definition lives in one place, and
+// the subscription no longer depends on a fresh function identity per render.
+//
+// These return objects, not primitives — `items`, `panels`, `folders` and
+// `images` are references. That is safe only because the stores preserve
+// identity: `updateActive` returns the same array when nothing changed, and
+// `#patch` is a no-op on equality. `panels` is rebuilt solely by `togglePanel` /
+// `setPanel`, which are genuine changes. See AUDIT.md.
+// ---------------------------------------------------------------------------
+
+export const selectItems = (s: EditorState): OpenItem[] => s.items;
+export const selectActiveItemId = (s: EditorState): string | null => s.activeItemId;
+export const selectViewport = (s: EditorState): Viewport => s.viewport;
+export const selectZoom = (s: EditorState): number => s.zoom;
+export const selectFitMode = (s: EditorState): FitMode => s.fitMode;
+export const selectPanels = (s: EditorState): Record<PanelId, boolean> => s.panels;
+export const selectCounter = (s: EditorState): number => s.counter;
+export const selectCounterRunning = (s: EditorState): boolean => s.counterRunning;
+export const selectCounterDuration = (s: EditorState): number | null => s.counterDuration;
+
+/**
+ * Per-panel open flags, one selector each.
+ *
+ * These are separate named functions rather than a `selectPanelOpen(panel)`
+ * factory on purpose: `useSelected` memoises its snapshot getter on the
+ * selector's identity, so a curried factory would build a new function on every
+ * render and re-read the store each time. Three of the four panels are read by
+ * exactly one component, so the explicitness costs nothing.
+ */
+export const selectControlsOpen = (s: EditorState): boolean => s.panels.controls;
+export const selectOriginalOpen = (s: EditorState): boolean => s.panels.original;
+export const selectTimerOpen = (s: EditorState): boolean => s.panels.timer;
+export const selectGalleryOpen = (s: EditorState): boolean => s.panels.gallery;
+
+// ---------------------------------------------------------------------------
+// Gallery selectors
+// ---------------------------------------------------------------------------
+
+export const selectFolders = (s: GalleryState): GalleryFolder[] => s.folders;
+export const selectImages = (s: GalleryState): GalleryImage[] => s.images;
+export const selectSelectedFolderId = (s: GalleryState): string | null => s.selectedFolderId;
+export const selectGallerySearchQuery = (s: GalleryState): string => s.gallerySearchQuery;
+export const selectGalleryLoading = (s: GalleryState): boolean => s.loading;
+export const selectGalleryError = (s: GalleryState): string | null => s.error;
 
 // ---------------------------------------------------------------------------
 // Gallery helpers

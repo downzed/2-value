@@ -4,34 +4,27 @@ A fresh review of the tree at commit `38d0cfa`, written after the previous findi
 retired. That document recorded a completed refactor; its line-level references had drifted and it
 had become history rather than guidance, so it was deleted rather than patched.
 
-**Baseline:** 401 tests / 31 files passing, 0 type errors, `yarn build` green.
+**Baseline when written:** 401 tests / 31 files passing, 0 type errors, `yarn build` green.
+**Now:** 419 tests / 32 files.
 
-This document lists **only problems that still exist**. Nothing here is a summary of completed work.
+This document lists **problems that still exist**, plus anything fixed since it was written. Nothing
+here is a summary of earlier refactoring work.
 
 ---
 
-## Fix first
+## Fixed in this pass
 
-### 1. Gallery thumbnails break after every mutation (HIGH, pre-existing)
+### 1. ~~Gallery thumbnails break after every mutation~~ — **FIXED**
 
-`src/renderer/react/useThumbnailUrls.ts:64-69`
+**Status: fixed.** `src/renderer/react/useThumbnailUrls.ts`
 
-```ts
-return () => {
-    cancelled = true;
-    for (const url of Object.values(newUrls)) {
-        URL.revokeObjectURL(url);
-    }
-};
-```
-
-The effect's cleanup revokes **every URL it created**, including those already committed to state.
-`GalleryStore.loadGallery` replaces the `images` array with a fresh identity on every load, and
-`#runMutation` calls it after each write — so on the next render React tears down the previous
-effect and revokes URLs that are still sitting in `urls`. Every thumbnail goes dead after creating
+The effect's cleanup used to revoke **every URL it created**, including those already committed to
+state. `GalleryStore.loadGallery` replaces the `images` array with a fresh identity on every load,
+and `#runMutation` calls it after each write — so on the next render React tore down the previous
+effect and revoked URLs that were still sitting in `urls`. Every thumbnail went dead after creating
 a folder, renaming, moving an image, or deleting anything.
 
-Reproduced, not inferred:
+Reproduced before fixing, not inferred:
 
 ```
 AssertionError: expected [ 'blob:0' ] to not include 'blob:0'
@@ -39,15 +32,16 @@ AssertionError: expected [ 'blob:0' ] to not include 'blob:0'
 
 (`result.current.a` was still `blob:0` while `revokeObjectURL('blob:0')` had already been called.)
 
-**This is not a regression.** The identical logic lived in `GalleryPanel.tsx:180-185` before the hook
-was extracted in `a1c1191`; the move was verbatim. It has been latent since the gallery panel shipped
-and was never covered by a test — `GalleryPanel.test.tsx` only ever sets `images` once, before
-mount, so the cleanup path never runs.
+**This was not a regression.** The identical logic lived in `GalleryPanel.tsx:180-185` before the
+hook was extracted in `a1c1191`; the move was verbatim. It survived because no test ever changed
+`images` after mount, so the cleanup path never ran.
 
-The fix needs a decision: revoking must distinguish URLs that reached state (revoke later, on
-removal) from ones that never did (revoke now). A `Map<id, url>` ref, or clearing `newUrls` on
-commit, both work. Whichever is chosen, it needs a test that **changes `images` after mount** —
-that is the whole reason this survived.
+The fix tracks whether the URLs in flight actually reached state. If they did, cleanup leaves them
+alone — they are revoked when their image disappears, or on unmount, which a second effect now
+handles. Only URLs that never became visible are revoked immediately.
+
+`tests/unit/react/useThumbnailUrls.test.tsx` now has **10 tests**, including the two that failed
+before the fix and one asserting nothing leaks when a fetch is cancelled mid-flight.
 
 ---
 
@@ -124,10 +118,11 @@ fallback with a near-identical comment, same stride-2 loop. `thumbnails.ts` docu
 "shared by the hover preview and the export path so both look identical"; the live editing surface
 is a third copy that is not shared.
 
-### 9. `selectHasImage` re-implemented inline (MEDIUM)
+### 9. ~~`selectHasImage` re-implemented inline~~ — **FIXED**
 
-`selectors.ts:40` defines it; `TopPanel.tsx:51` re-derives the same thing from state. That undercuts
-the stated purpose of `selectors.ts`. `FloatingControls.tsx:28` uses the selector correctly.
+`TopPanel.tsx` re-derived `selectHasImage` from state instead of using the selector in
+`selectors.ts`. It now uses `selectHasImage`, and every other inline selector is gone too — see
+*Conventions decided* below.
 
 ### 10. `Stroke` declared three times (LOW)
 
@@ -189,10 +184,11 @@ becomes active, then passes **that same blank** to `saveOpenItem`. The `activate
 reached, and `renderItemToBlob` returns `null` in jsdom so `saveActiveItemToGallery` is never called.
 **The test passes if `saveOpenItem`'s body is replaced with `return;`.**
 
-### 19. `useThumbnailUrls` has no test — which is why finding 1 survived (HIGH)
+### 19. ~~`useThumbnailUrls` has no test~~ — **FIXED**
 
-The hook is only exercised via `GalleryPanel.test.tsx`, which sets `images` once before mount. No
-test changes `images` afterwards, so the cleanup path — the entire bug — never runs.
+This is why finding 1 survived: the hook was only exercised via `GalleryPanel.test.tsx`, which sets
+`images` once before mount, so the cleanup path never ran. Fixed alongside finding 1 —
+`tests/unit/react/useThumbnailUrls.test.tsx` now has 10 tests, two of which failed before the fix.
 
 ### 20. KeyboardCommands vim tests (MEDIUM)
 
@@ -259,17 +255,65 @@ Two modules are materially under-tested:
 
 ## Verified clean — do not re-audit
 
-- **Typecheck, lint, format, and the 401-test suite are green.**
+- **Typecheck, lint, format, and the test suite are green** (419 tests / 32 files).
 - **`<button>` consolidation held.** `rg '<button' src` returns exactly one element
   (`Button.tsx:67`) plus its doc comment, and `FileMenu.tsx:56` — a menu trigger that legitimately
   needs `ref` + `aria-haspopup` + `aria-expanded`. No component duplicates wrapper logic.
-- **`constants/ui.ts`** — all 24 constants have real consumers.
-- **`core/selectors.ts`** — all 17 exports have consumers.
+- **Constants and selectors have consumers.** All 24 `ui.ts` constants and all 30 exports of
+  `core/selectors.ts` are referenced.
+- **Selector subscription soundness — but note the mechanism.** Not every selector returns a
+  primitive: `selectItems`, `selectPanels`, `selectViewport`, `selectFolders` and `selectImages` all
+  return references. `Object.is` stays sound only because the stores preserve identity —
+  `updateActive` returns the same array when nothing changed (`EditorStore.ts:73`) and `#patch` is a
+  no-op on equality. `panels` is rebuilt only by `togglePanel`/`setPanel`, which are real changes.
+  **This is a load-bearing invariant, not an accident:** a mutator that rebuilt an
+  untouched array or object would re-render every subscriber on every notification.
+- **No inline selector anywhere in `src/`.** `rg 'use(Editor|Gallery)Selector\(\(' src` returns
+  nothing; all 49 subscriptions are named — 48 in `components/`, 1 in `useSaveFlow.ts`. This was
+  missed twice: first by searching only `components/`, which left `useSaveFlow.ts` writing
+  `(s) => s.folders`, then again by a variant matching `useEditorSelector` but not
+  `useGallerySelector`. Search `src/`, and match both names.
 - **No runtime import cycle.** `core/` → `utils/` and `utils/` → `core/` both exist and are acyclic
   today, but `utils/itemRender.ts:3` is a *type-only* edge into `core/` that would become a runtime
   cycle the moment it stopped importing a type. Worth an ESLint rule or a comment.
 - **`react/` does not import `components/`** — `useSaveFlow.ts` returns props, `SaveFolderPrompt.tsx`
   renders them.
 - **`UnsavedGuard`, `KeyboardCommands`, `ImageProcessor`, `GalleryStore`, `useStore`, `Button`,
-  `FileMenu`, `useDismissable`, `useDebouncedCallback`, `GridTile`** — genuinely substantive tests.
+  `FileMenu`, `useDismissable`, `useDebouncedCallback`, `GridTile`, `useThumbnailUrls`** — genuinely
+  substantive tests.
 - **Every `Button` without a `label`** has text content or an `<img alt>`. No nameless button.
+
+---
+
+## Conventions decided
+
+**Selectors live in `core/selectors.ts`; actions stay store methods.**
+
+Selectors are named exports, so components never write an inline `(s) => s.field` closure. Two
+reasons, not just tidiness: the definition lives in one place, and `useSelected` memoises its
+snapshot getter on the selector's identity, so a fresh closure each render costs a store re-read.
+Per-panel flags are four separate constants rather than a `selectPanelOpen(panel)` factory for the
+same reason — the factory would rebuild its inner function on every render.
+
+Actions deliberately stay methods on `EditorStore`/`GalleryStore`/`Commands`, destructured at the
+call site. They are already stable, tree-shakeable and type-safe, and a separate `useActions()`
+layer would add indirection without removing any duplication. This is a decision, not an oversight.
+
+---
+
+## Tickets
+
+Every remaining finding is tracked as a GitHub issue, labelled `audit` plus a group
+(`audit/a11y`, `audit/dead-code`, `audit/test`, `audit/bug`) and a wave.
+
+**Wave 1 — highest value (7):** #35 #36 #37 #38 #47 #48 #49
+
+**Wave 2 — the bulk (15):** #39 #40 #41 #42 #43 #45 #50 #53 #54 #55 #57 #58 #59 #60
+
+**Wave 3 — polish and long-tail (10):** #44 #46 #51 #52 #56 #61 #62 #63 #64 #65
+
+Total 31 issues.
+
+Waves are a recommendation, not a hard order. Within wave 2, #39 (focus trap) should follow #37/#38
+since a trap needs somewhere to put focus; #45 (stroke renderer) should precede #46 (Stroke type) and
+the #60 render tests, which need the shared module tested first.

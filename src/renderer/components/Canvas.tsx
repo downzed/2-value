@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UI } from '../constants/ui';
 import {
 	selectActiveImage,
+	selectActiveItemId,
 	selectBlur,
+	selectFitMode,
 	selectIsBlank,
 	selectShowOriginal,
 	selectThreshold,
 	selectValues,
+	selectZoom,
 } from '../core/selectors';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useEditorStore, useEditorSelector } from '../react/useStore';
@@ -54,14 +57,14 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 	const { strokesByItem, setZoom, setFitScale, setViewport, markActiveDirty } = editor;
 
 	// Reactive slices. Only these re-render this component.
-	const activeItemId = useEditorSelector((s) => s.activeItemId);
+	const activeItemId = useEditorSelector(selectActiveItemId);
 	const blur = useEditorSelector(selectBlur);
 	const threshold = useEditorSelector(selectThreshold);
 	const values = useEditorSelector(selectValues);
 	const showOriginal = useEditorSelector(selectShowOriginal);
 	const currentImage = useEditorSelector(selectActiveImage);
-	const zoom = useEditorSelector((s) => s.zoom);
-	const fitMode = useEditorSelector((s) => s.fitMode);
+	const zoom = useEditorSelector(selectZoom);
+	const fitMode = useEditorSelector(selectFitMode);
 
 	// A blank canvas is a drawing surface and bypasses the filter worker entirely.
 	const isBlank = useEditorSelector(selectIsBlank);

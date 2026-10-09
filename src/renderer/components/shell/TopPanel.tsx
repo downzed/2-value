@@ -4,10 +4,19 @@ import {
 	selectActiveFileName,
 	selectActiveImage,
 	selectActiveItem,
+	selectCounter,
+	selectCounterDuration,
+	selectCounterRunning,
 	selectEffectiveZoom,
+	selectFitMode,
+	selectFolders,
 	selectHasCanvas,
 	selectHasGalleryEntry,
+	selectHasImage,
 	selectIsBlank,
+	selectPanels,
+	selectViewport,
+	selectZoom,
 } from '../../core/selectors';
 import { openImageFile } from '../../utils/fileOps';
 import { useCommands } from '../../react/useCommands';
@@ -48,23 +57,23 @@ const TopPanel: React.FC<TopPanelProps> = ({ previewCanvasRef }) => {
 	// Reactive slices: editor state, then gallery state. Splitting these means a
 	// gallery reload no longer re-renders the status bar's zoom readout, and a
 	// slider drag does not touch the folder list.
-	const hasImage = useEditorSelector((s) => s.items.some((i) => i.id === s.activeItemId && i.image !== null));
+	const hasImage = useEditorSelector(selectHasImage);
 	const hasCanvas = useEditorSelector(selectHasCanvas);
 	const hasBlankCanvas = useEditorSelector(selectIsBlank);
-	const viewport = useEditorSelector((s) => s.viewport);
+	const viewport = useEditorSelector(selectViewport);
 	const currentImage = useEditorSelector(selectActiveImage);
 	const fileName = useEditorSelector(selectActiveFileName);
 	const hasGalleryEntry = useEditorSelector(selectHasGalleryEntry);
 	const activeItem = useEditorSelector(selectActiveItem);
-	const panels = useEditorSelector((s) => s.panels);
-	const counter = useEditorSelector((s) => s.counter);
-	const counterRunning = useEditorSelector((s) => s.counterRunning);
-	const counterDuration = useEditorSelector((s) => s.counterDuration);
-	const zoom = useEditorSelector((s) => s.zoom);
-	const fitMode = useEditorSelector((s) => s.fitMode);
+	const panels = useEditorSelector(selectPanels);
+	const counter = useEditorSelector(selectCounter);
+	const counterRunning = useEditorSelector(selectCounterRunning);
+	const counterDuration = useEditorSelector(selectCounterDuration);
+	const zoom = useEditorSelector(selectZoom);
+	const fitMode = useEditorSelector(selectFitMode);
 	const effectiveZoom = useEditorSelector(selectEffectiveZoom);
 
-	const folders = useGallerySelector((s) => s.folders);
+	const folders = useGallerySelector(selectFolders);
 	const [status, setStatus] = useState<Status>('ready');
 	const [errorMsg, setErrorMsg] = useState<string | null>(null);
 	const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);

@@ -2,7 +2,20 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorSelector, useGallerySelector, useEditorStore, useGalleryStore } from '../../react/useStore';
 import { decodeErrorMessage } from '../../core/decode';
-import { byNewestFirst, bySortOrder, filterImages } from '../../core/selectors';
+import {
+	byNewestFirst,
+	bySortOrder,
+	filterImages,
+	selectActiveItemId,
+	selectFolders,
+	selectGalleryError,
+	selectGalleryLoading,
+	selectGallerySearchQuery,
+	selectImages,
+	selectItems,
+	selectPanels,
+	selectSelectedFolderId,
+} from '../../core/selectors';
 import type { GalleryFolder, GalleryImage } from '../../../shared/types';
 import { UI } from '../../constants/ui';
 import { Icon } from '../shared/Icon';
@@ -66,16 +79,16 @@ const GalleryPanel: React.FC = () => {
 	// Reactive slices. Editor state is only needed for the Opened Items listing;
 	// everything else comes from the gallery store, so a filter slider no longer
 	// re-renders the folder list.
-	const items = useEditorSelector((s) => s.items);
-	const activeItemId = useEditorSelector((s) => s.activeItemId);
-	const panels = useEditorSelector((s) => s.panels);
+	const items = useEditorSelector(selectItems);
+	const activeItemId = useEditorSelector(selectActiveItemId);
+	const panels = useEditorSelector(selectPanels);
 
-	const folders = useGallerySelector((s) => s.folders);
-	const images = useGallerySelector((s) => s.images);
-	const selectedFolderId = useGallerySelector((s) => s.selectedFolderId);
-	const gallerySearchQuery = useGallerySelector((s) => s.gallerySearchQuery);
-	const loading = useGallerySelector((s) => s.loading);
-	const error = useGallerySelector((s) => s.error);
+	const folders = useGallerySelector(selectFolders);
+	const images = useGallerySelector(selectImages);
+	const selectedFolderId = useGallerySelector(selectSelectedFolderId);
+	const gallerySearchQuery = useGallerySelector(selectGallerySearchQuery);
+	const loading = useGallerySelector(selectGalleryLoading);
+	const error = useGallerySelector(selectGalleryError);
 
 	// Search matches file names across every folder, not just the selected one.
 	const filteredImages = useMemo(() => filterImages(images, gallerySearchQuery), [images, gallerySearchQuery]);
