@@ -1,4 +1,5 @@
 import type { Image } from 'image-js';
+import type { GalleryFolder, GalleryImage } from '../../shared/types';
 import type { EditorState, OpenItem } from './types';
 
 /**
@@ -48,3 +49,28 @@ export const selectCanRedo = (s: EditorState): boolean => (selectActiveItem(s)?.
 
 /** Zoom resolves through fit mode; `zoom` only applies when the user has zoomed. */
 export const selectEffectiveZoom = (s: EditorState): number => (s.fitMode === 'fit' ? s.fitScale : s.zoom);
+
+// ---------------------------------------------------------------------------
+// Gallery helpers
+//
+// Pure functions rather than state selectors: they take their inputs directly so
+// the store getter and the component can share one implementation. `core` has no
+// dependency on `utils`, so `storage.ts` is free to import from here too.
+// ---------------------------------------------------------------------------
+
+/** Orders folders by their stored position. Pass a copy; `sort` is in place. */
+export const bySortOrder = (a: GalleryFolder, b: GalleryFolder): number => a.sortOrder - b.sortOrder;
+
+/** Most recently added first, which is the order every image grid renders. */
+export const byNewestFirst = (a: GalleryImage, b: GalleryImage): number => b.addedAt - a.addedAt;
+
+/**
+ * Filters images by a search query. Matches file names only, across every
+ * folder rather than the selected one. A blank query returns the input array
+ * unchanged so callers can rely on referential equality for memoisation.
+ */
+export function filterImages(images: GalleryImage[], query: string): GalleryImage[] {
+	const q = query.trim().toLowerCase();
+	if (!q) return images;
+	return images.filter((img) => img.fileName.toLowerCase().includes(q));
+}

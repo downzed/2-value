@@ -66,7 +66,7 @@ function setState(overrides: Partial<EditorStateLike>) {
 
 /** A single open image item, for tests about dimensions, names and zoom. */
 function imageItem(overrides: Record<string, unknown> = {}) {
-	return createOpenItem({ image: createMockImage(800, 600) as never, width: 800, height: 600, ...overrides });
+	return createOpenItem({ image: createMockImage(800, 600) as never, ...overrides });
 }
 
 /** A single open blank canvas item. */

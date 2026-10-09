@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useMemo, useRef, useState } from 'react';
 import { useDismissable } from '../../react/useDismissable';
+import { bySortOrder } from '../../core/selectors';
 import Modal from '../shared/Modal';
 import type { GalleryFolder } from '../../../shared/types';
 import { NewFolderForm } from './NewFolderForm';
@@ -25,7 +26,7 @@ export const FolderPickerDialog: React.FC<FolderPickerDialogProps> = ({
 	const [newFolderMode, setNewFolderMode] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
 
-	const sorted = useMemo(() => [...folders].sort((a, b) => a.sortOrder - b.sortOrder), [folders]);
+	const sorted = useMemo(() => [...folders].sort(bySortOrder), [folders]);
 
 	useDismissable(rootRef, onSkip);
 

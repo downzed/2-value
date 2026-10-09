@@ -31,7 +31,6 @@ export const UI = {
 	},
 	OPEN_ITEMS: {
 		THUMB_SIZE: 160, // longest edge of the hover preview, in px
-		ROW_HEIGHT: 28,
 	},
 	PERF: {
 		MAX_FILE_BYTES: 25 * 1024 * 1024, // hard stop (25MB input file)
@@ -42,7 +41,5 @@ export const UI = {
 	GALLERY: {
 		PANEL_WIDTH: 380,
 		THUMBNAIL_COLS: 3,
-		SUGGESTION_COUNT: 6,
-		CACHE_TTL_MS: 3 * 60 * 1000, // 3 minutes
 	},
 };

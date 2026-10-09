@@ -1,4 +1,5 @@
 import type { GalleryData, GalleryFolder, GalleryImage } from '../../shared/types';
+import { bySortOrder } from '../core/selectors';
 
 const DB_NAME = 'image-editor-gallery';
 const DB_VERSION = 1;
@@ -170,7 +171,7 @@ export class GalleryRepository {
 				// Keep the images: move them to the next folder by sort order.
 				// With no other folder there is nowhere to put them, so they go
 				// too — an orphaned folderId would leave unreadable entries.
-				const fallback = data.folders.filter((f) => f.id !== folderId).sort((a, b) => a.sortOrder - b.sortOrder)[0];
+				const fallback = data.folders.filter((f) => f.id !== folderId).sort(bySortOrder)[0];
 				const db = await getDB();
 				const dropImages = !fallback;
 				await new Promise<void>((resolve, reject) => {

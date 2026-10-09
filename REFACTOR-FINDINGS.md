@@ -5,7 +5,8 @@ bindings). Verified against the tree at commit `9077283` — note `shell/BottomP
 subsequently renamed to `shell/TopPanel.tsx` in the working tree.
 
 **Baseline at time of writing:** 281 tests passing, 0 type errors, `yarn build` green.
-**Status:** Tier 0 and Tier 1 complete. Tier 2 and Tier 3 still open.
+**Status:** Tiers 0, 1 and 2 complete (2.3 deferred by choice). Tier 3 still open.
+**Current:** 320 tests across 24 files, 0 type errors.
 
 **How to read the tiers**
 
@@ -13,8 +14,16 @@ subsequently renamed to `shell/TopPanel.tsx` in the working tree.
 | --- | --- |
 | **0** | Real bugs. **Done.** |
 | **1** | High payoff-per-effort deduplication. No behaviour change. **Done.** |
-| **2** | Consistency and dead code. Cheap, mechanical. |
+| **2** | Consistency and dead code. Cheap, mechanical. **Done** (except 2.3, deferred). |
 | **3** | Structural. Large, review-heavy. |
+
+Additions made during the Tier 2 pass, alongside the findings above:
+
+- **B1 — Shared `<button>` components** (user request). Two new components in
+  `components/shared/` absorb the hand-rolled button markup that was duplicated across
+  `shell/TopPanel.tsx` and `FloatingControls.tsx`. See *Shared buttons* below.
+- **B2 — Shared gallery helpers.** `bySortOrder`, `byNewestFirst` and `filterImages` moved into
+  `core/selectors.ts`, which unifies the duplication found in 2.2 and 2.5.
 
 Dependency between tiers: **do Tier 1 before Tier 2's dead-getter cleanup.** Several
 `EditorStore` getters look dead only because components re-derive the same value via inline
@@ -179,11 +188,11 @@ click. `ImageContextMenu` keeps its submenu behaviour by passing
 sits unread. Fixed by 1.1 (`selectEffectiveZoom`), after which the getter becomes redundant.
 `EditorStore.effectiveZoom` is now genuinely dead and can be removed (see 2.8).
 
-### 2.2 Gallery search filter duplicated; the tested copy is the dead one (MEDIUM)
+### 2.2 Gallery search filter duplicated; the tested copy is the dead one (MEDIUM) — **DONE**
 
-`GalleryStore.filteredImages` (`core/GalleryStore.ts:95-99`) holds the logic and has **eight
-passing assertions** (`tests/unit/core/GalleryStore.test.ts`). **No component uses it.**
-`shell/GalleryPanel.tsx:76-80` ships an untested `useMemo` copy, character-for-character
+`GalleryStore.filteredImages` (`core/GalleryStore.ts:95-99`) held the logic and had **eight
+passing assertions** (`tests/unit/core/GalleryStore.test.ts`). **No component used it.**
+`shell/GalleryPanel.tsx:76-80` shipped an untested `useMemo` copy, character-for-character
 equivalent:
 
 ```ts
@@ -192,10 +201,13 @@ if (!q) return images;
 return images.filter((img) => img.fileName.toLowerCase().includes(q));
 ```
 
-Either subscribe to the getter or delete it — right now the tested implementation is dead and the
-shipped one is unverified.
+Resolved by extracting a pure `filterImages(images, query)` into `core/selectors.ts`, called by
+both the store getter and the component. The getter is still unread by components (they subscribe
+to `images` + `gallerySearchQuery` and filter in a `useMemo`), but both paths now run the same
+tested code, so the duplication is gone rather than merely relocated. `filterImages` returns its
+input array unchanged for a blank query, which keeps the component's memoisation cheap.
 
-### 2.3 Counter time formatted two ways (LOW — deferred by choice)
+### 2.3 Counter time formatted two ways (LOW — deferred by choice, **not done**)
 
 `FloatingCounter.tsx:27-31` renders `5:00`; `shell/TopPanel.tsx:203-205` renders `5m`. Same
 concept, same data, inconsistent output. Reconciling this needs a product decision (see
@@ -206,12 +218,15 @@ concept, same data, inconsistent output. Reconciling this needs a product decisi
 `Canvas.tsx:59` named the selector `isBlank`; `shell/TopPanel.tsx:37` named the identical
 selector `hasBlankCanvas`. Resolved by 1.1: both now use `selectIsBlank`.
 
-### 2.5 Folder sort comparator at three sites (LOW)
+### 2.5 Folder sort comparator at three sites (LOW) — **DONE**
 
-`[...folders].sort((a, b) => a.sortOrder - b.sortOrder)` at `shell/GalleryPanel.tsx:386` and
-`gallery/FolderPickerDialog.tsx:28`; inlined after a `filter` at `gallery/ImageContextMenu.tsx:61`.
+`[...folders].sort((a, b) => a.sortOrder - b.sortOrder)` appeared at `shell/GalleryPanel.tsx:386`
+and `gallery/FolderPickerDialog.tsx:28`, inlined after a `filter` at `gallery/ImageContextMenu.tsx:61`,
+and once more in `utils/storage.ts:173` (the delete-folder fallback, which survived the site survey).
+Extracted `bySortOrder` and `byNewestFirst` into `core/selectors.ts`; all four sites now import them.
+`core` has no dependency on `utils`, so `storage.ts` importing from it stays acyclic.
 
-### 2.6 Dead constants (LOW — 3 lines)
+### 2.6 Dead constants (LOW — 3 lines) — **DONE**
 
 | Constant | Location | References |
 | --- | --- | --- |
@@ -219,55 +234,103 @@ selector `hasBlankCanvas`. Resolved by 1.1: both now use `selectIsBlank`.
 | `GALLERY.SUGGESTION_COUNT` | `constants/ui.ts:45` | 1 (the definition) |
 | `GALLERY.CACHE_TTL_MS` | `constants/ui.ts:46` | 1 (the definition) |
 
-The latter two are Pexels-suggestion leftovers from the Electron era. Delete all three.
+The latter two are Pexels-suggestion leftovers from the Electron era. All three deleted.
 
-### 2.7 Dead icon paths (LOW)
+### 2.7 Dead icon paths (LOW) — **DONE**
 
-`shared/Icon.tsx` defines 14 paths; 10 are used. `refresh`, `trash`, `folder` and `layers` have
-**zero** `name=` references. Pexels-era leftovers.
+`shared/Icon.tsx` defined 14 paths; 10 were used. `refresh`, `trash`, `folder` and `layers` had
+**zero** `name=` references. Pexels-era leftovers; all four deleted.
 
-### 2.8 Dead store getters (LOW — now actionable, Tier 1 is done)
+### 2.8 Dead store getters (LOW — now actionable, Tier 1 is done) — **DONE**
 
 Verified: **no component reads any of these**; they are read only by `core/` classes, or not at all.
-Tier 1 has now landed, so these are genuinely dead rather than merely bypassed and can be deleted.
+Tier 1 has now landed, so these were genuinely dead rather than merely bypassed.
 
-| Getter | `core/EditorStore.ts` | Read by |
+| Getter | Read by | Outcome |
 | --- | --- | --- |
-| `effectiveZoom` | 216 | nothing |
-| `canvasMode` | 171 | nothing |
-| `currentImage` | 176 | nothing |
-| `blankSize` | 220 | nothing |
-| `hasCanvas` | 192 | nothing |
-| `hasBlankCanvas` | 188 | **nothing at all** |
-| `restorableItemIds` | 201 | tests only (removed with `SessionRestorer`) |
-| `resetImage` | 341 | tests only |
-| `hasImage`, `canUndo`, `canRedo`, `activeItem`, `hasDirtyItems` | — | `core/KeyboardCommands.ts`, `core/UnsavedGuard.ts`, `core/commands.ts` |
+| `effectiveZoom` | nothing | deleted |
+| `canvasMode` | nothing | deleted |
+| `currentImage` | nothing | deleted |
+| `blankSize` | nothing | deleted |
+| `hasCanvas` | nothing | deleted |
+| `hasBlankCanvas` | **nothing at all** | deleted |
+| `restorableItemIds` | tests only (removed with `SessionRestorer`) | deleted |
+| `hasImage`, `canUndo`, `canRedo`, `activeItem`, `hasDirtyItems`, `fileName` | `core/KeyboardCommands.ts`, `core/UnsavedGuard.ts`, `core/commands.ts` | **kept** |
 
-`EditorStore.effectiveZoom` is now the only one with a `select*` twin (`selectEffectiveZoom`); the
-rest are either unread or superseded by a named selector that reads the item directly.
+`EditorStore.effectiveZoom` was the only one with a `select*` twin (`selectEffectiveZoom`); the rest
+were either unread or superseded by a named selector that reads the item directly.
 
-### 2.9 Unused `OpenItem` fields (LOW)
+**`resetImage` was deliberately kept.** It also has no production caller, but three tests exercise
+it as the "close everything" path, and deleting it would drop that coverage rather than remove dead
+weight. Left as a judgement call rather than a silent deletion.
 
-`core/types.ts:31-32` `width` / `height` are written (`EditorStore.ts:274-275`, `:303-304`) but
+Tests that only asserted on a deleted getter were rewritten against the remaining public surface
+(`store.activeItem`, `store.hasImage`, `activeItem(store).kind`) so they still cover real behaviour.
+The two `blankSize` tests were dropped outright: `shell/TopPanel.tsx` already computes the blank
+dimensions from `viewport` inline, so there was nothing left for them to cover.
+
+### 2.9 Unused `OpenItem` fields (LOW) — **DONE**
+
+`core/types.ts:31-32` `width` / `height` were written (`EditorStore.ts:274-275`, `:303-304`) but
 never read — `TopPanel.tsx:65-66` and `Canvas.tsx:346` read `currentImage?.width` instead. The
-stored dimensions are dead weight that will go stale silently. `thumbUrl` (`:37`) is likewise
+stored dimensions were dead weight that would go stale silently. `thumbUrl` (`:37`) was likewise
 written and never read (`GalleryPanel.tsx` uses its own `openItemThumbs` map), and
-`linkGalleryImage`'s `thumbUrl` parameter (`EditorStore.ts:365`) has no caller passing it.
+`linkGalleryImage`'s `thumbUrl` parameter (`EditorStore.ts:365`) had no caller passing it.
 
-### 2.10 Dead test helpers and duplicate mocks (LOW)
+All three fields and the extra parameter removed, along with `OpenImageMeta.thumbUrl`.
 
-`tests/helpers/mocks.ts` exports three helpers that **no test imports**: `setupIndexedDBMock`
-(~83 lines), `setupURLMock`, `setupImageDataMock`.
+### 2.10 Dead test helpers and duplicate mocks (LOW) — **DONE**
 
-Three separate `createMockImage` definitions exist with different shapes:
-`tests/helpers/mocks.ts:239`, `tests/unit/core/EditorStore.test.ts:5`, and an ad-hoc one in
-`tests/unit/core/ImageProcessor.test.ts:11`. One parameterised factory would do.
+`tests/helpers/mocks.ts` exported three helpers that **no test imports**: `setupIndexedDBMock`
+(~83 lines, pulling in two `MockIDB*` classes), `setupURLMock`, `setupImageDataMock`. All deleted,
+along with the classes only they referenced.
 
-### 2.11 Stale exported types (LOW)
+Two `createMockImage` definitions existed with different shapes:
+`tests/helpers/mocks.ts:239` and `tests/unit/core/EditorStore.test.ts:5` (the third, in
+`ImageProcessor.test.ts`, had already been removed in an earlier phase). `EditorStore.test.ts` now
+imports the shared factory. The local copy's `clone: () => ({})` was never called anywhere, so
+nothing was lost. `OpenItemContextMenu.test.tsx` also had a hand-rolled `makeItem` duplicating
+`createOpenItem`; it now uses the shared helper.
 
-`src/shared/types.ts:1-8` exports `UNSORTED_FOLDER_NAME` and a
-`RecentEntry { path, thumbnail, openedAt }` — both unreferenced, and **`RecentEntry` shadows a
-live, incompatible `RecentEntry`** in `utils/storage.ts:466-470`.
+### 2.11 Stale exported types (LOW) — **DONE**
+
+`src/shared/types.ts:1-8` exported `UNSORTED_FOLDER_NAME` and a
+`RecentEntry { path, thumbnail, openedAt }` — both unreferenced, and **`RecentEntry` shadowed a
+live, incompatible `RecentEntry`** in `utils/storage.ts:466-470`. Both deleted.
+
+---
+
+## Shared buttons (B1)
+
+`<button>` markup was hand-rolled at seven call sites, differing only in class strings and icon.
+Two components in `components/shared/` now own it, alongside the existing `PillButton` and
+`SliderRow`.
+
+### `SegmentedControl<T>`
+
+A row of mutually exclusive buttons. Two copies existed: the 2/3 value toggle in
+`FloatingControls.tsx` (on a white panel) and Fit / 1:1 / 2× in the status bar (on the slate bar).
+Same structure, different colours and padding, so the component takes `tone: 'light' | 'dark'` and
+drives all four class differences rather than each call site re-deriving them.
+
+Generic over `T extends string | number` so the number toggle passes `setValues` directly and the
+zoom presets pass a string union. The zoom group allows `''` to mean "no preset active" (the user
+can zoom to e.g. 150%), so its call site is `SegmentedControl<ZoomPreset | ''>`.
+
+Each button carries `aria-pressed`. No wrapper `role` — Biome's a11y rule rejects `role='group'`
+in favour of `<fieldset>`, which would be wrong for a toggle row.
+
+### `IconToggle`
+
+A square icon button with an on/off state. The four panel toggles in `TopPanel.tsx`
+(Adjustments / Original / Timer / Gallery) were four near-identical 8-line blocks differing only in
+icon, title and active state.
+
+Takes an optional `badge` for the timer's remaining-seconds pill, and only adds `relative`
+positioning when one is present — the other three buttons have no need for it.
+
+Tests: `tests/unit/components/SegmentedControl.test.tsx` (8),
+`tests/unit/components/IconToggle.test.tsx` (7).
 
 ---
 

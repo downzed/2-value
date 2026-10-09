@@ -1,4 +1,5 @@
 import type { GalleryFolder, GalleryImage } from '../../shared/types';
+import { filterImages } from './selectors';
 import type { Listener } from './types';
 
 export interface GalleryState {
@@ -93,9 +94,7 @@ export class GalleryStore {
 
 	/** Search matches file names across every folder, not just the selected one. */
 	get filteredImages(): GalleryImage[] {
-		const q = this.#state.gallerySearchQuery.trim().toLowerCase();
-		if (!q) return this.#state.images;
-		return this.#state.images.filter((img) => img.fileName.toLowerCase().includes(q));
+		return filterImages(this.#state.images, this.#state.gallerySearchQuery);
 	}
 
 	// -------------------------------------------------------------------------

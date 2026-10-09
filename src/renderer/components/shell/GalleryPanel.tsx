@@ -2,6 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorSelector, useGallerySelector, useEditorStore, useGalleryStore } from '../../react/useStore';
 import { decodeErrorMessage } from '../../core/decode';
+import { byNewestFirst, bySortOrder, filterImages } from '../../core/selectors';
 import type { GalleryFolder, GalleryImage } from '../../../shared/types';
 import { UI } from '../../constants/ui';
 import { Icon } from '../shared/Icon';
@@ -75,11 +76,7 @@ const GalleryPanel: React.FC = () => {
 	const error = useGallerySelector((s) => s.error);
 
 	// Search matches file names across every folder, not just the selected one.
-	const filteredImages = useMemo(() => {
-		const q = gallerySearchQuery.trim().toLowerCase();
-		if (!q) return images;
-		return images.filter((img) => img.fileName.toLowerCase().includes(q));
-	}, [images, gallerySearchQuery]);
+	const filteredImages = useMemo(() => filterImages(images, gallerySearchQuery), [images, gallerySearchQuery]);
 
 	const {
 		loadGallery,
@@ -377,7 +374,7 @@ const GalleryPanel: React.FC = () => {
 
 	// Memoised derived structures to avoid O(n) work on every render.
 	// Must be called before any early return to satisfy the Rules of Hooks.
-	const sortedFolders = useMemo(() => [...folders].sort((a, b) => a.sortOrder - b.sortOrder), [folders]);
+	const sortedFolders = useMemo(() => [...folders].sort(bySortOrder), [folders]);
 	const folderNameMap = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
 	const folderImageCount = useMemo(
 		() =>
@@ -391,7 +388,7 @@ const GalleryPanel: React.FC = () => {
 	// Images for the currently selected folder
 	const selectedFolderImages = useMemo(() => {
 		if (!selectedFolderId) return [];
-		return images.filter((img) => img.folderId === selectedFolderId).sort((a, b) => b.addedAt - a.addedAt);
+		return images.filter((img) => img.folderId === selectedFolderId).sort(byNewestFirst);
 	}, [images, selectedFolderId]);
 
 	const selectedFolder = useMemo(
