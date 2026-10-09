@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UI } from '../constants/ui';
+import {
+	selectActiveImage,
+	selectBlur,
+	selectIsBlank,
+	selectShowOriginal,
+	selectThreshold,
+	selectValues,
+} from '../core/selectors';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { useImageProcessingWorker } from '../hooks/useImageProcessingWorker';
@@ -47,16 +55,16 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 
 	// Reactive slices. Only these re-render this component.
 	const activeItemId = useEditorSelector((s) => s.activeItemId);
-	const blur = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.blur ?? 0);
-	const threshold = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.threshold ?? 0);
-	const values = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.values ?? 2);
-	const showOriginal = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.showOriginal ?? false);
-	const currentImage = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.image ?? null);
+	const blur = useEditorSelector(selectBlur);
+	const threshold = useEditorSelector(selectThreshold);
+	const values = useEditorSelector(selectValues);
+	const showOriginal = useEditorSelector(selectShowOriginal);
+	const currentImage = useEditorSelector(selectActiveImage);
 	const zoom = useEditorSelector((s) => s.zoom);
 	const fitMode = useEditorSelector((s) => s.fitMode);
 
 	// A blank canvas is a drawing surface and bypasses the filter worker entirely.
-	const isBlank = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.kind === 'blank');
+	const isBlank = useEditorSelector(selectIsBlank);
 
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });

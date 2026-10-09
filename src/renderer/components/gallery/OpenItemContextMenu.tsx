@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react';
+import { useRef } from 'react';
 import type { OpenItem } from '../../core/types';
+import { useDismissable } from '../../react/useDismissable';
 import { useMenuPosition } from '../../react/useMenuPosition';
 
 interface OpenItemContextMenuProps {
@@ -32,20 +33,7 @@ const OpenItemContextMenu: React.FC<OpenItemContextMenuProps> = ({
 }) => {
 	const menuRef = useRef<HTMLDivElement>(null);
 
-	useEffect(() => {
-		const handleMouseDown = (e: MouseEvent) => {
-			if (menuRef.current && !menuRef.current.contains(e.target as Node)) onCloseMenu();
-		};
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') onCloseMenu();
-		};
-		document.addEventListener('mousedown', handleMouseDown);
-		document.addEventListener('keydown', handleKeyDown);
-		return () => {
-			document.removeEventListener('mousedown', handleMouseDown);
-			document.removeEventListener('keydown', handleKeyDown);
-		};
-	}, [onCloseMenu]);
+	useDismissable(menuRef, onCloseMenu);
 
 	const itemClass = 'w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors';
 

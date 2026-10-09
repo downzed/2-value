@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
 import { UI } from '../constants/ui';
+import {
+	selectBlur,
+	selectCanRedo,
+	selectCanUndo,
+	selectHasImage,
+	selectThreshold,
+	selectValues,
+} from '../core/selectors';
 import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import FloatingWidget from './shared/FloatingWidget';
@@ -15,12 +23,12 @@ const FloatingControls: React.FC = () => {
 	const editor = useEditorStore();
 	const { setBlur, setThreshold, setValues, resetControls, applyPreset, undo, redo, setPanel } = editor;
 
-	const hasImage = useEditorSelector((s) => s.items.some((i) => i.id === s.activeItemId && i.image !== null));
-	const blur = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.blur ?? 0);
-	const threshold = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.threshold ?? 0);
-	const values = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.values ?? 2);
-	const canUndo = useEditorSelector((s) => (s.items.find((i) => i.id === s.activeItemId)?.history.length ?? 0) > 0);
-	const canRedo = useEditorSelector((s) => (s.items.find((i) => i.id === s.activeItemId)?.future.length ?? 0) > 0);
+	const hasImage = useEditorSelector(selectHasImage);
+	const blur = useEditorSelector(selectBlur);
+	const threshold = useEditorSelector(selectThreshold);
+	const values = useEditorSelector(selectValues);
+	const canUndo = useEditorSelector(selectCanUndo);
+	const canRedo = useEditorSelector(selectCanRedo);
 	const isOpen = useEditorSelector((s) => s.panels.controls);
 
 	const [localBlur, setLocalBlur] = useState(blur);

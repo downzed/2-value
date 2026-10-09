@@ -1,6 +1,7 @@
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { GalleryFolder, GalleryImage } from '../../../shared/types';
+import { useDismissable } from '../../react/useDismissable';
 import { useMenuPosition } from '../../react/useMenuPosition';
 
 interface ImageContextMenuProps {
@@ -34,28 +35,8 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
 	const menuRef = useRef<HTMLDivElement>(null);
 	const [subMenu, setSubMenu] = useState<SubMenu>(null);
 
-	useEffect(() => {
-		const handleClickOutside = (e: MouseEvent) => {
-			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-				onClose();
-			}
-		};
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') {
-				if (subMenu) {
-					setSubMenu(null);
-				} else {
-					onClose();
-				}
-			}
-		};
-		document.addEventListener('mousedown', handleClickOutside);
-		document.addEventListener('keydown', handleKeyDown);
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside);
-			document.removeEventListener('keydown', handleKeyDown);
-		};
-	}, [onClose, subMenu]);
+	// Escape peels back one level at a time before dismissing the menu.
+	useDismissable(menuRef, () => (subMenu ? setSubMenu(null) : onClose()));
 
 	// Folders the image can be moved/copied to (exclude current folder)
 	const targetFolders = folders.filter((f) => f.id !== image.folderId).sort((a, b) => a.sortOrder - b.sortOrder);

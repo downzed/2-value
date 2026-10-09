@@ -5,13 +5,14 @@ bindings). Verified against the tree at commit `9077283` — note `shell/BottomP
 subsequently renamed to `shell/TopPanel.tsx` in the working tree.
 
 **Baseline at time of writing:** 281 tests passing, 0 type errors, `yarn build` green.
+**Status:** Tier 0 and Tier 1 complete. Tier 2 and Tier 3 still open.
 
 **How to read the tiers**
 
 | Tier | Meaning |
 | --- | --- |
-| **0** | Real bugs. Fixed as part of the audit pass. |
-| **1** | High payoff-per-effort deduplication. No behaviour change. |
+| **0** | Real bugs. **Done.** |
+| **1** | High payoff-per-effort deduplication. No behaviour change. **Done.** |
 | **2** | Consistency and dead code. Cheap, mechanical. |
 | **3** | Structural. Large, review-heavy. |
 
@@ -54,7 +55,7 @@ excess/missing arguments are tolerated, which is exactly the class of drift that
 
 ## Tier 1 — High-payoff deduplication
 
-### 1.1 Active-item lookup repeated 19 times (HIGH)
+### 1.1 Active-item lookup repeated 19 times (HIGH) — **DONE**
 
 `s.items.find((i) => i.id === s.activeItemId)?.<field> ?? <default>` appears **19 times**:
 
@@ -94,7 +95,11 @@ individual fields off it (37, 39, 40, 42) — five subscriptions that always chu
 Collapsing onto `selectActiveItem` makes it one. Named selectors also avoid re-creating inline
 selector closures on every render, which `useSelected` currently tolerates but pays a re-read for.
 
-### 1.2 New-folder form duplicated (HIGH)
+**Result:** `src/renderer/core/selectors.ts` now defines 15 named selectors; the 19 inline
+lookups are gone. `selectEffectiveZoom` also retired the third `fitMode === 'fit' ? …` copy
+(see 2.1, which is therefore also resolved).
+
+### 1.2 New-folder form duplicated (HIGH) — **DONE**
 
 `gallery/FolderPickerDialog.tsx:85-145` and `shell/GalleryPanel.tsx:699-752` are near-identical.
 The three-line reset appears four times across the two files:
@@ -109,7 +114,11 @@ at `FolderPickerDialog.tsx:106-110`, `:123-127` and `GalleryPanel.tsx:717-721`, 
 
 **Fix.** Extract `NewFolderForm({ onCreate })`, ~55 lines. Both sites render it.
 
-### 1.3 Grid-tile markup triplicated (MEDIUM)
+**Result:** `components/gallery/NewFolderForm.tsx` owns the name/error/in-flight state. The
+extraction also fixed a latent bug: the gallery's copy had no `disabled={creating}` guard, so
+double-submitting could create two folders; the picker's did.
+
+### 1.3 Grid-tile markup triplicated (MEDIUM) — **DONE**
 
 `shell/GalleryPanel.tsx` has three tile shapes with identical repeated class strings:
 
@@ -127,7 +136,11 @@ ordering, so a style tweak to one tile will not reach the others.
 **Fix.** One `GridTile({ src, alt, caption, badge?, selected?, loading?, onClick, onContextMenu })`,
 ~30 lines, removes ~90 and a whole class of drift.
 
-### 1.4 Six hand-rolled dismissal blocks in three patterns (MEDIUM)
+**Result:** `components/gallery/GridTile.tsx` exports `TileGrid` (the repeated column layout) and
+`GridTile`. All three grids now render through it, and the recents placeholder pulses like the
+other two.
+
+### 1.4 Six hand-rolled dismissal blocks in three patterns (MEDIUM) — **DONE**
 
 `useMenuPosition` was already extracted and used by all four menus. The **dismissal** half is
 still hand-rolled, inconsistently:
@@ -150,15 +163,21 @@ and `FolderPickerDialog.tsx:63-64`.
 collapses the first four patterns; a `<Modal width>` wrapper (~10 lines) covers the backdrop.
 ~80 lines removed, and the picker gains backdrop dismissal as a side effect.
 
+**Result:** `react/useDismissable.ts` + `components/shared/Modal.tsx`. Zero hand-rolled
+`mousedown` listeners remain in `components/`, and the folder picker now dismisses on a backdrop
+click. `ImageContextMenu` keeps its submenu behaviour by passing
+`() => (subMenu ? setSubMenu(null) : onClose())`.
+
 ---
 
 ## Tier 2 — Consistency and dead code
 
-### 2.1 Effective zoom computed in three places (MEDIUM)
+### 2.1 Effective zoom computed in three places (MEDIUM) — **DONE via 1.1**
 
 `fitMode === 'fit' ? fitScale : zoom` appears at `Canvas.tsx:317`, `Canvas.tsx:330`,
 `shell/TopPanel.tsx:52` — while the `EditorStore.effectiveZoom` getter at `core/EditorStore.ts:216`
 sits unread. Fixed by 1.1 (`selectEffectiveZoom`), after which the getter becomes redundant.
+`EditorStore.effectiveZoom` is now genuinely dead and can be removed (see 2.8).
 
 ### 2.2 Gallery search filter duplicated; the tested copy is the dead one (MEDIUM)
 
@@ -182,10 +201,10 @@ shipped one is unverified.
 concept, same data, inconsistent output. Reconciling this needs a product decision (see
 *Open questions*), so it was deliberately left alone.
 
-### 2.4 Naming inconsistency (LOW)
+### 2.4 Naming inconsistency (LOW) — **DONE via 1.1**
 
-`Canvas.tsx:59` names the selector `isBlank`; `shell/TopPanel.tsx:37` names the identical
-selector `hasBlankCanvas`. A named selector (1.1) removes this by construction.
+`Canvas.tsx:59` named the selector `isBlank`; `shell/TopPanel.tsx:37` named the identical
+selector `hasBlankCanvas`. Resolved by 1.1: both now use `selectIsBlank`.
 
 ### 2.5 Folder sort comparator at three sites (LOW)
 
@@ -207,9 +226,10 @@ The latter two are Pexels-suggestion leftovers from the Electron era. Delete all
 `shared/Icon.tsx` defines 14 paths; 10 are used. `refresh`, `trash`, `folder` and `layers` have
 **zero** `name=` references. Pexels-era leftovers.
 
-### 2.8 Dead store getters (LOW — do after Tier 1)
+### 2.8 Dead store getters (LOW — now actionable, Tier 1 is done)
 
 Verified: **no component reads any of these**; they are read only by `core/` classes, or not at all.
+Tier 1 has now landed, so these are genuinely dead rather than merely bypassed and can be deleted.
 
 | Getter | `core/EditorStore.ts` | Read by |
 | --- | --- | --- |
@@ -223,8 +243,8 @@ Verified: **no component reads any of these**; they are read only by `core/` cla
 | `resetImage` | 341 | tests only |
 | `hasImage`, `canUndo`, `canRedo`, `activeItem`, `hasDirtyItems` | — | `core/KeyboardCommands.ts`, `core/UnsavedGuard.ts`, `core/commands.ts` |
 
-Not one React component reads a getter; every one re-derives through a selector. That is the root
-cause of 1.1.
+`EditorStore.effectiveZoom` is now the only one with a `select*` twin (`selectEffectiveZoom`); the
+rest are either unread or superseded by a named selector that reads the item directly.
 
 ### 2.9 Unused `OpenItem` fields (LOW)
 
@@ -346,5 +366,6 @@ unnoticed. Fixed as part of this pass.
 
 1. **Counter time format** (2.3) — standardise on `5:00` everywhere, or keep the compact `5m` badge
    in the status bar and make the difference intentional?
-2. **`GalleryPanel` split** (3.1) — worth doing as one pass, or incrementally: extract
-   `NewFolderForm` and `GridTile` first (Tier 1, already planned), then split the file?
+2. **`GalleryPanel` split** (3.1) — the two Tier 1 extractions are done, so the file is down to
+   ~723 lines with `NewFolderForm` and `GridTile` out. Still open: the thumbnail-URL lifecycle and
+   the remaining grid renderers. Worth doing as one pass, or leaving until it actually hurts?

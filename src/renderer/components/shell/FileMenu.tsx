@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useDismissable } from '../../react/useDismissable';
 import { useMenuPosition } from '../../react/useMenuPosition';
 
 export interface FileMenuItem {
@@ -31,6 +32,8 @@ const FileMenu: React.FC<FileMenuProps> = ({ items }) => {
 	// read on click rather than during render, where it would be a layout read.
 	const position = useMenuPosition(anchor?.left ?? 0, anchor?.bottom ?? 0, menuRef);
 
+	const close = useCallback(() => setAnchor(null), []);
+
 	const toggle = () => {
 		setAnchor((prev) => {
 			if (prev) return null;
@@ -39,27 +42,7 @@ const FileMenu: React.FC<FileMenuProps> = ({ items }) => {
 		});
 	};
 
-	useEffect(() => {
-		if (!anchor) return;
-		const handleMouseDown = (e: MouseEvent) => {
-			const target = e.target as Node;
-			if (menuRef.current?.contains(target)) return;
-			if (buttonRef.current?.contains(target)) return;
-			setAnchor(null);
-		};
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') {
-				setAnchor(null);
-				buttonRef.current?.focus();
-			}
-		};
-		document.addEventListener('mousedown', handleMouseDown);
-		document.addEventListener('keydown', handleKeyDown);
-		return () => {
-			document.removeEventListener('mousedown', handleMouseDown);
-			document.removeEventListener('keydown', handleKeyDown);
-		};
-	}, [anchor]);
+	useDismissable(menuRef, close, { ignoreRef: buttonRef, refocusRef: buttonRef });
 
 	const run = (item: FileMenuItem) => {
 		if (item.disabled) return;

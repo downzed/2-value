@@ -1,5 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { decodeErrorMessage } from '../../core/decode';
+import {
+	selectActiveFileName,
+	selectActiveImage,
+	selectActiveItem,
+	selectEffectiveZoom,
+	selectHasCanvas,
+	selectHasGalleryEntry,
+	selectIsBlank,
+} from '../../core/selectors';
 import { openImageFile } from '../../utils/fileOps';
 import { useCommands } from '../../react/useCommands';
 import { useSaveFlow } from '../../react/useSaveFlow';
@@ -32,23 +41,20 @@ const TopPanel: React.FC<TopPanelProps> = ({ previewCanvasRef }) => {
 	// gallery reload no longer re-renders the status bar's zoom readout, and a
 	// slider drag does not touch the folder list.
 	const hasImage = useEditorSelector((s) => s.items.some((i) => i.id === s.activeItemId && i.image !== null));
-	const hasCanvas = useEditorSelector((s) => s.activeItemId !== null);
-	const hasBlankCanvas = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.kind === 'blank');
+	const hasCanvas = useEditorSelector(selectHasCanvas);
+	const hasBlankCanvas = useEditorSelector(selectIsBlank);
 	const viewport = useEditorSelector((s) => s.viewport);
-	const currentImage = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.image ?? null);
-	const fileName = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.fileName ?? '');
-	const hasGalleryEntry = useEditorSelector(
-		(s) => (s.items.find((i) => i.id === s.activeItemId)?.galleryImageId ?? null) !== null,
-	);
-	const activeItem = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId) ?? null);
+	const currentImage = useEditorSelector(selectActiveImage);
+	const fileName = useEditorSelector(selectActiveFileName);
+	const hasGalleryEntry = useEditorSelector(selectHasGalleryEntry);
+	const activeItem = useEditorSelector(selectActiveItem);
 	const panels = useEditorSelector((s) => s.panels);
 	const counter = useEditorSelector((s) => s.counter);
 	const counterRunning = useEditorSelector((s) => s.counterRunning);
 	const counterDuration = useEditorSelector((s) => s.counterDuration);
 	const zoom = useEditorSelector((s) => s.zoom);
 	const fitMode = useEditorSelector((s) => s.fitMode);
-	const fitScale = useEditorSelector((s) => s.fitScale);
-	const effectiveZoom = fitMode === 'fit' ? fitScale : zoom;
+	const effectiveZoom = useEditorSelector(selectEffectiveZoom);
 
 	const folders = useGallerySelector((s) => s.folders);
 	const [status, setStatus] = useState<Status>('ready');
