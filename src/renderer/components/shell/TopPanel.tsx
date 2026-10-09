@@ -14,6 +14,7 @@ import { useCommands } from '../../react/useCommands';
 import { useSaveFlow } from '../../react/useSaveFlow';
 import { useEditorSelector, useEditorStore, useGallerySelector, useGalleryStore } from '../../react/useStore';
 import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
+import { SaveFolderPrompt } from '../gallery/SaveFolderPrompt';
 import FileMenu from './FileMenu';
 import { Icon } from '../shared/Icon';
 import { IconToggle } from '../shared/IconToggle';
@@ -37,7 +38,7 @@ const TopPanel: React.FC<TopPanelProps> = ({ previewCanvasRef }) => {
 	const editor = useEditorStore();
 	const gallery = useGalleryStore();
 	const commands = useCommands();
-	const { requestSave, dialog: saveDialog } = useSaveFlow();
+	const { requestSave, prompt: savePrompt } = useSaveFlow();
 
 	// Non-reactive actions.
 	const { newBlankCanvas, togglePanel, setFitMode, setZoom, zoomIn, zoomOut } = editor;
@@ -327,7 +328,7 @@ const TopPanel: React.FC<TopPanelProps> = ({ previewCanvasRef }) => {
 				<span className={statusStyles[status].className}>{statusStyles[status].text}</span>
 			</div>
 
-			{saveDialog}
+			<SaveFolderPrompt prompt={savePrompt} />
 
 			{/* Folder Picker Dialog */}
 			{pendingOpen && (

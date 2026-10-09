@@ -40,6 +40,7 @@ function makeRepository(): GalleryRepositoryPort {
 		copyImage: vi.fn(),
 		deleteImage: vi.fn(),
 		getImageBlob: vi.fn().mockResolvedValue(blob),
+		getThumbnailBlob: vi.fn().mockResolvedValue(blob),
 	};
 }
 
@@ -244,6 +245,32 @@ describe('Commands', () => {
 
 			await expect(commands.renderItemToBlob(item)).resolves.toBeNull();
 			vi.unstubAllGlobals();
+		});
+	});
+
+	describe('renderItemPreview', () => {
+		it('returns null for a blank canvas when OffscreenCanvas is unavailable', async () => {
+			editor.newBlankCanvas();
+			editor.setViewport({ width: 100, height: 100 });
+
+			await expect(commands.renderItemPreview(activeItem(editor))).resolves.toBeNull();
+		});
+
+		it('returns null for an item with no image', async () => {
+			await editor.loadImage({ width: 10, height: 10 } as never, 'a.png');
+			const item = { ...activeItem(editor), image: null } as never;
+
+			await expect(commands.renderItemPreview(item)).resolves.toBeNull();
+		});
+
+		it('reads the strokes and viewport the caller would otherwise have to', async () => {
+			editor.newBlankCanvas();
+			editor.setViewport({ width: 0, height: 0 });
+			const item = activeItem(editor);
+
+			// A zero viewport must still reach the renderer rather than divide by
+			// zero, which is what the Math.max guards in the command exist for.
+			await expect(commands.renderItemPreview(item)).resolves.toBeNull();
 		});
 	});
 

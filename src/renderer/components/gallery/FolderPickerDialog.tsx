@@ -6,7 +6,7 @@ import Modal from '../shared/Modal';
 import type { GalleryFolder } from '../../../shared/types';
 import { NewFolderForm } from './NewFolderForm';
 
-interface FolderPickerDialogProps {
+export interface FolderPickerDialogProps {
 	folders: GalleryFolder[];
 	onSelect: (folderId: string) => void;
 	onSkip: () => void;

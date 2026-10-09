@@ -1,6 +1,7 @@
 import { saveImageFile } from '../utils/fileOps';
 import { addRecentEntry } from '../utils/storage';
 import { renderBlankItemToBlob, renderImageItemToBlob } from '../utils/itemRender';
+import { renderImageThumbnail, renderStrokesThumbnail } from '../utils/thumbnails';
 import { ImageProcessor } from './ImageProcessor';
 import { decodeImageFile } from './decode';
 import type { EditorStore } from './EditorStore';
@@ -115,6 +116,28 @@ export class Commands {
 			{ blur: item.blur, threshold: item.threshold, values: item.values },
 			this.#exportProcessor.process,
 		);
+	};
+
+	/**
+	 * Renders a downscaled preview of an open item to a data URL.
+	 *
+	 * Same kind/image dispatch as `renderItemToBlob`, but it returns a thumbnail
+	 * rather than a full-size blob and does not run the filter worker: previews
+	 * show the decoded image as opened, not its current adjustments.
+	 *
+	 * This lives here rather than in `GalleryPanel` so the panel never has to
+	 * read `strokesByItem`, which must stay out of selectors and snapshots.
+	 */
+	renderItemPreview = async (item: OpenItem): Promise<string | null> => {
+		if (item.kind === 'blank') {
+			const { viewport } = this.#editor.getState();
+			return renderStrokesThumbnail(
+				this.#editor.strokesByItem.get(item.id) ?? [],
+				Math.max(viewport.width, 1),
+				Math.max(viewport.height, 1),
+			);
+		}
+		return item.image ? renderImageThumbnail(item.image) : null;
 	};
 
 	/** Downloads an open item as a file. */

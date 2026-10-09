@@ -1,6 +1,6 @@
 import type { Image } from 'image-js';
 import { UI } from '../constants/ui';
-import type { ProcessParams } from '../hooks/useImageProcessingWorker';
+import type { ProcessParams } from '../core/ImageProcessor';
 import { renderStrokes } from './thumbnails';
 
 const PNG = 'image/png';

@@ -16,12 +16,12 @@ import { ImageContextMenu } from '../gallery/ImageContextMenu';
 import { GridTile, TileGrid } from '../gallery/GridTile';
 import { NewFolderForm } from '../gallery/NewFolderForm';
 import { OpenItemContextMenu } from '../gallery/OpenItemContextMenu';
+import { RecentSuggestions } from '../gallery/RecentSuggestions';
+import { SaveFolderPrompt } from '../gallery/SaveFolderPrompt';
 import { useCommands } from '../../react/useCommands';
+import { useThumbnailUrls } from '../../react/useThumbnailUrls';
 import { useSaveFlow } from '../../react/useSaveFlow';
-import { renderImageThumbnail, renderStrokesThumbnail } from '../../utils/thumbnails';
 import type { OpenItem } from '../../core/types';
-import { getRecents, RECENTS_MAX } from '../../utils/storage';
-import { galleryRepository } from '../../utils/storage';
 
 type FolderContextMenuState = {
 	folder: GalleryFolder;
@@ -57,15 +57,14 @@ const GalleryPanel: React.FC = () => {
 	const editor = useEditorStore();
 	const gallery = useGalleryStore();
 	const commands = useCommands();
-	const { requestSave, dialog: saveDialog } = useSaveFlow();
-	const { setPanel, activateItem, closeItem, strokesByItem } = editor;
+	const { requestSave, prompt: savePrompt } = useSaveFlow();
+	const { setPanel, activateItem, closeItem } = editor;
 
-	// Reactive slices. Editor state is only needed for the Auto folder listing;
+	// Reactive slices. Editor state is only needed for the Opened Items listing;
 	// everything else comes from the gallery store, so a filter slider no longer
 	// re-renders the folder list.
 	const items = useEditorSelector((s) => s.items);
 	const activeItemId = useEditorSelector((s) => s.activeItemId);
-	const viewport = useEditorSelector((s) => s.viewport);
 	const panels = useEditorSelector((s) => s.panels);
 
 	const folders = useGallerySelector((s) => s.folders);
@@ -90,6 +89,7 @@ const GalleryPanel: React.FC = () => {
 		setSelectedFolder,
 		setGallerySearchQuery,
 		clearError,
+		getThumbnailBlob,
 	} = gallery;
 
 	const [folderContextMenu, setFolderContextMenu] = useState<FolderContextMenuState>(null);
@@ -101,8 +101,7 @@ const GalleryPanel: React.FC = () => {
 	const [newFolderMode, setNewFolderMode] = useState(false);
 	const [imageLoadingId, setImageLoadingId] = useState<string | null>(null);
 	const newFolderInputRef = useRef<HTMLInputElement>(null);
-	const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
-	const prevImageIdsRef = useRef<string[]>([]);
+	const thumbnailUrls = useThumbnailUrls(images, getThumbnailBlob);
 
 	useEffect(() => {
 		if (panels.gallery) {
@@ -111,76 +110,13 @@ const GalleryPanel: React.FC = () => {
 		}
 	}, [panels.gallery, loadGallery, clearError]);
 
-	// Suggestions for what to open next, shown only while nothing is open.
-	// Entries whose gallery image has since been deleted are filtered out.
-	const recentEntries = useMemo(
-		() =>
-			items.length === 0
-				? getRecents()
-						.filter((entry) => images.some((i) => i.id === entry.galleryImageId))
-						.slice(0, RECENTS_MAX)
-				: [],
-		[images, items],
-	);
-
-	const showRecents = recentEntries.length > 0 && gallerySearchQuery.trim().length === 0;
+	/* Recents render through RecentSuggestions; it decides for itself when to show. */
 
 	useEffect(() => {
 		if (newFolderMode) {
 			newFolderInputRef.current?.focus();
 		}
 	}, [newFolderMode]);
-
-	// Load thumbnail blobs from IndexedDB when images change
-	useEffect(() => {
-		const prevIds = new Set(prevImageIdsRef.current);
-		const newImages = images.filter((i) => !prevIds.has(i.id));
-		const removedIds = prevImageIdsRef.current.filter((id) => !images.some((i) => i.id === id));
-
-		// Revoke URLs for removed images via functional state update
-		if (removedIds.length > 0) {
-			setThumbnailUrls((prev) => {
-				const next = { ...prev };
-				for (const id of removedIds) {
-					if (next[id]) {
-						URL.revokeObjectURL(next[id]);
-						delete next[id];
-					}
-				}
-				return next;
-			});
-		}
-
-		if (newImages.length === 0) return;
-
-		let cancelled = false;
-		const newUrls: Record<string, string> = {};
-
-		Promise.all(
-			newImages.map(async (img) => {
-				try {
-					const blob = await galleryRepository.getThumbnailBlob(img.id);
-					if (blob && !cancelled) {
-						newUrls[img.id] = URL.createObjectURL(blob);
-					}
-				} catch {
-					// thumbnail unavailable
-				}
-			}),
-		).then(() => {
-			if (!cancelled) {
-				prevImageIdsRef.current = images.map((i) => i.id);
-				setThumbnailUrls((prev) => ({ ...prev, ...newUrls }));
-			}
-		});
-
-		return () => {
-			cancelled = true;
-			for (const url of Object.values(newUrls)) {
-				URL.revokeObjectURL(url);
-			}
-		};
-	}, [images]);
 
 	const handleFolderContextMenu = (e: React.MouseEvent, folder: GalleryFolder) => {
 		e.preventDefault();
@@ -264,23 +200,16 @@ const GalleryPanel: React.FC = () => {
 	// --- Auto folder (virtual list of currently open items) ---
 
 	// Lazily generate a preview per open item; blank canvases render their strokes.
+	// The command reads the strokes internally, so this component never touches
+	// `strokesByItem`.
 	const ensureOpenItemThumb = useCallback(
 		async (item: OpenItem) => {
 			if (openItemThumbs[item.id]) return;
-			const url =
-				item.kind === 'blank'
-					? await renderStrokesThumbnail(
-							strokesByItem.get(item.id) ?? [],
-							Math.max(viewport.width, 1),
-							Math.max(viewport.height, 1),
-						)
-					: item.image
-						? await renderImageThumbnail(item.image)
-						: null;
+			const url = await commands.renderItemPreview(item);
 			if (!url) return;
 			setOpenItemThumbs((prev) => (prev[item.id] ? prev : { ...prev, [item.id]: url }));
 		},
-		[openItemThumbs, strokesByItem, viewport.width, viewport.height],
+		[commands, openItemThumbs],
 	);
 
 	// Clicking a row takes the user back to that document.
@@ -547,29 +476,18 @@ const GalleryPanel: React.FC = () => {
 								)}
 							</div>
 
-							{/* Recent suggestions, shown when nothing is open yet */}
-							{showRecents && (
-								<div className='mb-4 space-y-1.5'>
-									<p className='text-[10px] font-medium text-slate-500 uppercase tracking-wide'>Recent</p>
-									<TileGrid>
-										{recentEntries.map((entry) => (
-											<GridTile
-												key={entry.galleryImageId}
-												src={thumbnailUrls[entry.galleryImageId]}
-												alt={entry.fileName}
-												ariaLabel={`Open ${entry.fileName}`}
-												title={entry.fileName}
-												caption={entry.fileName}
-												onClick={() => {
-													void commands.openGalleryImage(entry.galleryImageId);
-												}}
-											/>
-										))}
-									</TileGrid>
-								</div>
+							{/* Search results or folder grid */}
+							{isSearching ? null : (
+								<RecentSuggestions
+									images={images}
+									openItemCount={items.length}
+									thumbnailUrls={thumbnailUrls}
+									onOpen={(id) => {
+										void commands.openGalleryImage(id);
+									}}
+								/>
 							)}
 
-							{/* Search results or folder grid */}
 							{isSearching ? (
 								<div className='space-y-2'>
 									<p className='text-[10px] text-slate-400'>
@@ -666,7 +584,7 @@ const GalleryPanel: React.FC = () => {
 				/>
 			)}
 
-			{saveDialog}
+			<SaveFolderPrompt prompt={savePrompt} />
 
 			{/* Open-item context menu (virtual Opened Items folder) */}
 			{openItemMenu && (

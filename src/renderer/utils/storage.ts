@@ -44,24 +44,6 @@ async function generateThumbnail(blob: Blob, maxWidth = 200): Promise<Blob> {
 	return thumbnailBlob;
 }
 
-export async function generateThumbnailDataUrl(blob: Blob, maxSize = 100): Promise<string> {
-	const bitmap = await createImageBitmap(blob);
-	const scale = maxSize / Math.max(bitmap.width, bitmap.height);
-	const width = Math.round(bitmap.width * scale);
-	const height = Math.round(bitmap.height * scale);
-	const canvas = new OffscreenCanvas(width, height);
-	const ctx = canvas.getContext('2d');
-	if (!ctx) throw new Error('Could not get 2d context from OffscreenCanvas');
-	ctx.drawImage(bitmap, 0, 0, width, height);
-	const thumbnailBlob = await canvas.convertToBlob({ type: 'image/png' });
-	bitmap.close();
-	return new Promise((resolve) => {
-		const reader = new FileReader();
-		reader.onloadend = () => resolve(reader.result as string);
-		reader.readAsDataURL(thumbnailBlob);
-	});
-}
-
 export class GalleryRepository {
 	private mutationQueue: Promise<void> = Promise.resolve();
 
@@ -74,38 +56,54 @@ export class GalleryRepository {
 		return result;
 	}
 
-	private async idbGetAll<T>(storeName: string): Promise<T[]> {
+	/**
+	 * Runs `fn` inside one IndexedDB transaction and resolves once it commits.
+	 *
+	 * `fn` issues its requests and optionally returns one whose `result` becomes
+	 * the resolved value, which is only readable after `oncomplete`. Every site
+	 * used to hand-roll this same promise plus `db.close()` pair; the connection
+	 * is closed here on both paths so no caller can leak one.
+	 *
+	 * The transaction must not be awaited inside `fn` — IndexedDB commits as soon
+	 * as the microtask queue drains, so requests have to be issued synchronously.
+	 */
+	private async withTx<T>(
+		stores: string | string[],
+		mode: IDBTransactionMode,
+		fn: (tx: IDBTransaction) => IDBRequest<T> | undefined,
+	): Promise<T | undefined> {
 		const db = await getDB();
-		return new Promise((resolve, reject) => {
-			const tx = db.transaction(storeName, 'readonly');
-			const store = tx.objectStore(storeName);
-			const request = store.getAll();
+		return new Promise<T | undefined>((resolve, reject) => {
+			const tx = db.transaction(stores, mode);
+			const request = fn(tx);
 			tx.oncomplete = () => {
-				resolve(request.result as T[]);
 				db.close();
+				resolve(request?.result);
 			};
 			tx.onerror = () => {
-				reject(tx.error);
 				db.close();
+				reject(tx.error);
 			};
 		});
 	}
 
+	private async idbGetAll<T>(storeName: string): Promise<T[]> {
+		const result = await this.withTx<T[]>(storeName, 'readonly', (tx) => tx.objectStore(storeName).getAll());
+		return result ?? [];
+	}
+
 	private async idbPut(storeName: string, value: unknown): Promise<void> {
-		const db = await getDB();
-		return new Promise((resolve, reject) => {
-			const tx = db.transaction(storeName, 'readwrite');
-			const store = tx.objectStore(storeName);
-			store.put(value);
-			tx.oncomplete = () => {
-				resolve();
-				db.close();
-			};
-			tx.onerror = () => {
-				reject(tx.error);
-				db.close();
-			};
+		await this.withTx(storeName, 'readwrite', (tx) => {
+			tx.objectStore(storeName).put(value);
 		});
+	}
+
+	/** Reads one `{ imageId, blob }` record's bytes; both blob stores share the shape. */
+	private async idbGetBlob(storeName: string, imageId: string): Promise<Blob | undefined> {
+		const record = await this.withTx<{ blob?: Blob }>(storeName, 'readonly', (tx) =>
+			tx.objectStore(storeName).get(imageId),
+		);
+		return record?.blob;
 	}
 
 	async getData(): Promise<GalleryData> {
@@ -149,36 +147,24 @@ export class GalleryRepository {
 			const folderImages = data.images.filter((i) => i.folderId === folderId);
 
 			if (deleteImages) {
-				const db = await getDB();
-				await new Promise<void>((resolve, reject) => {
-					const tx = db.transaction(['images', 'imageBlobs', 'thumbnailBlobs', 'folders'], 'readwrite');
+				await this.withTx(['images', 'imageBlobs', 'thumbnailBlobs', 'folders'], 'readwrite', (tx) => {
 					for (const img of folderImages) {
 						tx.objectStore('images').delete(img.id);
 						tx.objectStore('imageBlobs').delete(img.id);
 						tx.objectStore('thumbnailBlobs').delete(img.id);
 					}
 					tx.objectStore('folders').delete(folderId);
-					tx.oncomplete = () => {
-						resolve();
-						db.close();
-					};
-					tx.onerror = () => {
-						reject(tx.error);
-						db.close();
-					};
 				});
 			} else {
 				// Keep the images: move them to the next folder by sort order.
 				// With no other folder there is nowhere to put them, so they go
 				// too — an orphaned folderId would leave unreadable entries.
 				const fallback = data.folders.filter((f) => f.id !== folderId).sort(bySortOrder)[0];
-				const db = await getDB();
 				const dropImages = !fallback;
-				await new Promise<void>((resolve, reject) => {
-					const stores: string[] = dropImages
-						? ['images', 'imageBlobs', 'thumbnailBlobs', 'folders']
-						: ['images', 'folders'];
-					const tx = db.transaction(stores, 'readwrite');
+				const stores: string[] = dropImages
+					? ['images', 'imageBlobs', 'thumbnailBlobs', 'folders']
+					: ['images', 'folders'];
+				await this.withTx(stores, 'readwrite', (tx) => {
 					for (const img of folderImages) {
 						if (dropImages) {
 							tx.objectStore('images').delete(img.id);
@@ -189,14 +175,6 @@ export class GalleryRepository {
 						}
 					}
 					tx.objectStore('folders').delete(folderId);
-					tx.oncomplete = () => {
-						resolve();
-						db.close();
-					};
-					tx.onerror = () => {
-						reject(tx.error);
-						db.close();
-					};
 				});
 			}
 		});
@@ -248,20 +226,10 @@ export class GalleryRepository {
 				source: 'local',
 			};
 
-			const db = await getDB();
-			await new Promise<void>((resolve, reject) => {
-				const tx = db.transaction(['images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite');
+			await this.withTx(['images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite', (tx) => {
 				tx.objectStore('images').put(image);
 				tx.objectStore('imageBlobs').put({ imageId: id, blob: file });
 				tx.objectStore('thumbnailBlobs').put({ imageId: id, blob: thumbnailBlob });
-				tx.oncomplete = () => {
-					resolve();
-					db.close();
-				};
-				tx.onerror = () => {
-					reject(tx.error);
-					db.close();
-				};
 			});
 
 			return image;
@@ -292,20 +260,10 @@ export class GalleryRepository {
 				addedAt: Date.now(),
 			};
 
-			const db = await getDB();
-			await new Promise<void>((resolve, reject) => {
-				const tx = db.transaction(['images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite');
+			await this.withTx(['images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite', (tx) => {
 				tx.objectStore('images').put(updated);
 				tx.objectStore('imageBlobs').put({ imageId, blob });
 				tx.objectStore('thumbnailBlobs').put({ imageId, blob: thumbnailBlob });
-				tx.oncomplete = () => {
-					resolve();
-					db.close();
-				};
-				tx.onerror = () => {
-					reject(tx.error);
-					db.close();
-				};
 			});
 
 			return updated;
@@ -336,20 +294,8 @@ export class GalleryRepository {
 				throw new Error(`Folder ${targetFolderId} not found`);
 			}
 
-			const db = await getDB();
-			const sourceBlobReq = await new Promise<Blob | undefined>((resolve, reject) => {
-				const tx = db.transaction('imageBlobs', 'readonly');
-				const req = tx.objectStore('imageBlobs').get(imageId);
-				tx.oncomplete = () => resolve(req.result?.blob);
-				tx.onerror = () => reject(tx.error);
-			});
-
-			const sourceThumbReq = await new Promise<Blob | undefined>((resolve, reject) => {
-				const tx = db.transaction('thumbnailBlobs', 'readonly');
-				const req = tx.objectStore('thumbnailBlobs').get(imageId);
-				tx.oncomplete = () => resolve(req.result?.blob);
-				tx.onerror = () => reject(tx.error);
-			});
+			const sourceBlobReq = await this.idbGetBlob('imageBlobs', imageId);
+			const sourceThumbReq = await this.idbGetBlob('thumbnailBlobs', imageId);
 
 			const newId = crypto.randomUUID();
 			const newImage: GalleryImage = {
@@ -359,19 +305,10 @@ export class GalleryRepository {
 				addedAt: Date.now(),
 			};
 
-			await new Promise<void>((resolve, reject) => {
-				const tx = db.transaction(['images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite');
+			await this.withTx(['images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite', (tx) => {
 				tx.objectStore('images').put(newImage);
 				if (sourceBlobReq) tx.objectStore('imageBlobs').put({ imageId: newId, blob: sourceBlobReq });
 				if (sourceThumbReq) tx.objectStore('thumbnailBlobs').put({ imageId: newId, blob: sourceThumbReq });
-				tx.oncomplete = () => {
-					resolve();
-					db.close();
-				};
-				tx.onerror = () => {
-					reject(tx.error);
-					db.close();
-				};
 			});
 
 			return newImage;
@@ -380,73 +317,29 @@ export class GalleryRepository {
 
 	async deleteImage(imageId: string): Promise<void> {
 		return this.withMutationLock(async () => {
-			const db = await getDB();
-			await new Promise<void>((resolve, reject) => {
-				const tx = db.transaction(['images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite');
+			await this.withTx(['images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite', (tx) => {
 				tx.objectStore('images').delete(imageId);
 				tx.objectStore('imageBlobs').delete(imageId);
 				tx.objectStore('thumbnailBlobs').delete(imageId);
-				tx.oncomplete = () => {
-					resolve();
-					db.close();
-				};
-				tx.onerror = () => {
-					reject(tx.error);
-					db.close();
-				};
 			});
 		});
 	}
 
 	async getImageBlob(imageId: string): Promise<Blob | undefined> {
-		const db = await getDB();
-		return new Promise((resolve, reject) => {
-			const tx = db.transaction('imageBlobs', 'readonly');
-			const request = tx.objectStore('imageBlobs').get(imageId);
-			tx.oncomplete = () => {
-				resolve(request.result?.blob);
-				db.close();
-			};
-			tx.onerror = () => {
-				reject(tx.error);
-				db.close();
-			};
-		});
+		return this.idbGetBlob('imageBlobs', imageId);
 	}
 
 	async getThumbnailBlob(imageId: string): Promise<Blob | undefined> {
-		const db = await getDB();
-		return new Promise((resolve, reject) => {
-			const tx = db.transaction('thumbnailBlobs', 'readonly');
-			const request = tx.objectStore('thumbnailBlobs').get(imageId);
-			tx.oncomplete = () => {
-				resolve(request.result?.blob);
-				db.close();
-			};
-			tx.onerror = () => {
-				reject(tx.error);
-				db.close();
-			};
-		});
+		return this.idbGetBlob('thumbnailBlobs', imageId);
 	}
 
 	async clearAll(): Promise<void> {
 		return this.withMutationLock(async () => {
-			const db = await getDB();
-			await new Promise<void>((resolve, reject) => {
-				const tx = db.transaction(['folders', 'images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite');
+			await this.withTx(['folders', 'images', 'imageBlobs', 'thumbnailBlobs'], 'readwrite', (tx) => {
 				tx.objectStore('folders').clear();
 				tx.objectStore('images').clear();
 				tx.objectStore('imageBlobs').clear();
 				tx.objectStore('thumbnailBlobs').clear();
-				tx.oncomplete = () => {
-					resolve();
-					db.close();
-				};
-				tx.onerror = () => {
-					reject(tx.error);
-					db.close();
-				};
 			});
 		});
 	}

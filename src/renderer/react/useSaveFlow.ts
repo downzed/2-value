@@ -1,5 +1,4 @@
 import { useCallback, useState } from 'react';
-import { FolderPickerDialog } from '../components/gallery/FolderPickerDialog';
 import { useGallerySelector, useGalleryStore } from './useStore';
 
 /**
@@ -8,6 +7,11 @@ import { useGallerySelector, useGalleryStore } from './useStore';
  * There is no implicit destination folder, so an item that is not already
  * gallery-backed has to be told where it goes. Shared by the status bar and the
  * gallery's opened-items menu so both behave identically.
+ *
+ * This module deliberately knows nothing about components: it returns `prompt`,
+ * a props object for `FolderPickerDialog` (or null when nothing is pending), which
+ * the caller renders via `<SaveFolderPrompt>`. That keeps `react/` free of a
+ * `components/` edge and lets this file stay `.ts`.
  */
 export function useSaveFlow() {
 	const gallery = useGalleryStore();
@@ -44,19 +48,19 @@ export function useSaveFlow() {
 
 	const cancel = useCallback(() => setPending(null), []);
 
-	const dialog = pending ? (
-		<FolderPickerDialog
-			folders={folders}
-			skipLabel='Cancel'
-			onSelect={(folderId) => {
-				const run = pending;
-				setPending(null);
-				void run(folderId);
-			}}
-			onSkip={cancel}
-			onCreateFolder={createFolder}
-		/>
-	) : null;
+	const prompt = pending
+		? {
+				folders,
+				skipLabel: 'Cancel',
+				onSelect: (folderId: string) => {
+					const run = pending;
+					setPending(null);
+					void run(folderId);
+				},
+				onSkip: cancel,
+				onCreateFolder: createFolder,
+			}
+		: null;
 
-	return { requestSave, cancel, dialog };
+	return { requestSave, cancel, prompt };
 }

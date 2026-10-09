@@ -30,6 +30,7 @@ export interface GalleryRepositoryPort {
 	copyImage(imageId: string, targetFolderId: string): Promise<GalleryImage>;
 	deleteImage(imageId: string): Promise<void>;
 	getImageBlob(imageId: string): Promise<Blob | undefined>;
+	getThumbnailBlob(imageId: string): Promise<Blob | undefined>;
 }
 
 function createInitialState(): GalleryState {
@@ -231,6 +232,9 @@ export class GalleryStore {
 
 	/** Reads a gallery image's stored bytes, for exporting to a file. */
 	getImageBlob = (imageId: string): Promise<Blob | undefined> => this.#repository.getImageBlob(imageId);
+
+	/** Reads a gallery image's thumbnail bytes, for the grid previews. */
+	getThumbnailBlob = (imageId: string): Promise<Blob | undefined> => this.#repository.getThumbnailBlob(imageId);
 
 	/** Reads an image's bytes plus its metadata, for opening it in the editor. */
 	openGalleryImage = async (imageId: string): Promise<OpenImageResult> => {

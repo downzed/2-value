@@ -5,8 +5,8 @@ bindings). Verified against the tree at commit `9077283` — note `shell/BottomP
 subsequently renamed to `shell/TopPanel.tsx` in the working tree.
 
 **Baseline at time of writing:** 281 tests passing, 0 type errors, `yarn build` green.
-**Status:** Tiers 0, 1 and 2 complete (2.3 deferred by choice). Tier 3 still open.
-**Current:** 320 tests across 24 files, 0 type errors.
+**Status:** All four tiers complete. Only 2.3 (counter time format) remains, deferred by choice.
+**Current:** 350 tests across 25 files, 0 type errors.
 
 **How to read the tiers**
 
@@ -15,7 +15,7 @@ subsequently renamed to `shell/TopPanel.tsx` in the working tree.
 | **0** | Real bugs. **Done.** |
 | **1** | High payoff-per-effort deduplication. No behaviour change. **Done.** |
 | **2** | Consistency and dead code. Cheap, mechanical. **Done** (except 2.3, deferred). |
-| **3** | Structural. Large, review-heavy. |
+| **3** | Structural. Large, review-heavy. **Done.** |
 
 Additions made during the Tier 2 pass, alongside the findings above:
 
@@ -334,55 +334,77 @@ Tests: `tests/unit/components/SegmentedControl.test.tsx` (8),
 
 ---
 
-## Tier 3 — Structural
+## Tier 3 — Structural — **DONE**
 
-### 3.1 `GalleryPanel.tsx` is 826 lines with no test file (HIGH)
+### 3.1 `GalleryPanel.tsx` is 826 lines with no test file (HIGH) — **DONE**
 
-Largest file in the repo by 2× (next is `EditorStore.ts` at 547). It has five separable concerns:
+Largest file in the repo by 2× (next is `EditorStore.ts` at 547). It had five separable concerns:
 
-- thumbnail URL lifecycle with `revokeObjectURL` bookkeeping — `:136-185`
-- recents query — `:118-128`
-- new-folder form (duplicated, see 1.2) — `:699-752`
-- Opened Items virtual folder — `:553-573`
-- three grid renderers — `:413-452`, `:455-492`, `:589-631`
+| Concern | Outcome |
+| --- | --- |
+| thumbnail URL lifecycle with `revokeObjectURL` bookkeeping | → `react/useThumbnailUrls.ts` |
+| recents query | → `gallery/RecentSuggestions.tsx` |
+| new-folder form (duplicated, see 1.2) | → `gallery/NewFolderForm.tsx` (Tier 1) |
+| three grid renderers | → `gallery/GridTile.tsx` (Tier 1) |
+| Opened Items virtual folder | left in place; covered by tests instead |
 
-`tests/unit/components/` covers Canvas, FileMenu, FloatingCounter, FloatingImage,
-OpenItemContextMenu and TopPanel. **There is no `GalleryPanel.test.tsx`** — three duplicated grid
-renderers, three context menus and three dialogs are entirely untested.
+**826 → 638 lines**, and `tests/unit/components/GalleryPanel.test.tsx` now exists with **26 tests**
+covering visibility, the folder list (ordering, per-folder counts, pluralisation), folder detail,
+search (cross-folder filtering, result counts, override of an open folder), Opened Items, and
+thumbnail loading. That was the HIGH-priority half of this finding — three grid renderers, three
+context menus and three dialogs had been entirely untested.
 
-### 3.2 Cross-domain work leaking into components (MEDIUM)
+Two behaviours worth recording because the tests pin them down:
 
-`GalleryPanel.tsx` holds the editor store (`strokesByItem` at `:58`) purely to render a preview,
-duplicating `Commands.renderItemToBlob`'s dispatch (`core/commands.ts:103-118`) with a thumbnail
-instead of a blob. This makes the panel touch `strokesByItem`, which `EditorStore.ts:152`
-explicitly warns must never enter a snapshot or selector.
+- `GridTile` renders a placeholder `<div>`, not an `<img>`, when a thumbnail is missing, so
+  assertions go through the tile's `aria-label` rather than `alt` text.
+- Open-item previews load **lazily on the row's context menu**, not on render. Rendering a tile with
+  no `src` is expected, not a bug.
 
-**Fix.** Add `Commands.renderItemPreview(item)`; the panel then drops the `strokesByItem`,
-`viewport` and editor subscriptions entirely and stops importing `utils/thumbnails`.
+### 3.2 Cross-domain work leaking into components (MEDIUM) — **DONE**
 
-Similarly `GalleryPanel.tsx:164` calls `galleryRepository.getThumbnailBlob` directly, holding a
-handle to the IndexedDB layer that `GalleryRepositoryPort` (`GalleryStore.ts:20-32`) deliberately
-does not expose. That belongs behind a store method.
+`GalleryPanel.tsx` held the editor store (`strokesByItem`) purely to render a preview, duplicating
+`Commands.renderItemToBlob`'s dispatch with a thumbnail instead of a blob. This made the panel touch
+`strokesByItem`, which `EditorStore.ts` explicitly warns must never enter a snapshot or selector.
 
-### 3.3 `utils/` duplicates `core/`, and `storage.ts` boilerplate (MEDIUM)
+**Done.** `Commands.renderItemPreview(item)` owns the same kind/image dispatch and returns a data
+URL. The panel drops the `strokesByItem` and `viewport` subscriptions entirely and no longer imports
+`utils/thumbnails`. The invariant is now enforced by the module graph rather than by convention.
 
-`utils/storage.ts:46` `generateThumbnailDataUrl` is dead and duplicates the private
-`generateThumbnail` (`:33-44`) — same bitmap → OffscreenCanvas → `convertToBlob` sequence, and its
-`FileReader` tail already exists as `blobToDataUrl` in `utils/thumbnails.ts:7-14`. Three copies of
-blob→data-URL, one unused.
+The second half: the panel called `galleryRepository.getThumbnailBlob` directly, holding a handle to
+the IndexedDB layer that `GalleryRepositoryPort` deliberately does not expose. `getThumbnailBlob`
+is now on the port, with a `GalleryStore` passthrough mirroring `getImageBlob`. The panel's last
+`galleryRepository` import is gone.
 
-`utils/storage.ts` (503 lines) repeats `new Promise` + `tx.oncomplete`/`onerror` boilerplate **12
-times**. `getThumbnailBlob` (`:416-430`) and `getImageBlob` (`:400-414`) are byte-identical apart
-from the store name. A `withTx(stores, mode, fn)` helper (~20 lines) collapses all of them.
+### 3.3 `utils/` duplicates `core/`, and `storage.ts` boilerplate (MEDIUM) — **DONE**
 
-### 3.4 Layering inversions (LOW)
+`utils/storage.ts` `generateThumbnailDataUrl` was dead and duplicated the private
+`generateThumbnail` — same bitmap → OffscreenCanvas → `convertToBlob` sequence, and its
+`FileReader` tail already existed as `blobToDataUrl` in `utils/thumbnails.ts`. Three copies of
+blob→data-URL, one unused. Deleted; two remain and both are live.
 
-- `utils/itemRender.ts:3` imports a type from `hooks/useImageProcessingWorker`, which merely
-  re-exports it from `core/ImageProcessor.ts:5`. The dependency should point at `core/`.
-- `react/useSaveFlow.tsx:2` imports a component (`FolderPickerDialog`). Defensible for a hook
-  returning JSX, but it makes the file `.tsx` solely for that reason and gives `react/` a
-  `components/` edge.
-- `shared/Icon.tsx` / `shared/types.ts` — no `shared/` consumer of substance remains.
+`storage.ts` repeated `new Promise` + `tx.oncomplete`/`onerror` + `db.close()` boilerplate
+**12 times**. A `withTx(stores, mode, fn)` helper now owns it, and `idbGetBlob` collapses
+`getThumbnailBlob` / `getImageBlob`, which were byte-identical apart from the store name.
+
+**15 → 2 `new Promise`, 503 → 397 lines.** The two that remain are `openDB` and the mutation lock,
+which are not transaction boilerplate. `withTx` closes the connection on both paths, so no caller
+can leak one — and it documents the constraint that `fn` must not await, since IndexedDB commits as
+soon as the microtask queue drains.
+
+### 3.4 Layering inversions (LOW) — **DONE**
+
+- `utils/itemRender.ts` imported `ProcessParams` from `hooks/useImageProcessingWorker`, which merely
+  re-exports it from `core/ImageProcessor.ts`. Repointed at `core/`.
+- `react/useSaveFlow.tsx` imported a component (`FolderPickerDialog`), making the file `.tsx` solely
+  for that reason and giving `react/` a `components/` edge. **Fixed:** the hook now returns a `prompt`
+  props object and lives in `useSaveFlow.ts`; `gallery/SaveFolderPrompt.tsx` renders it. `react/`
+  no longer imports `components/`.
+- `shared/types.ts` — **reconsidered, not acted on.** The original claim that "no `shared/` consumer
+  of substance remains" no longer holds: `shared/types.ts` is now imported by six files across
+  `core/`, `components/` and `utils/`, since Tier 2's `selectors.ts` took its gallery types from
+  there. `shared/Icon.tsx` is renderer-specific and could move, but that is churn without a
+  benefit.
 
 ### 3.5 Inverted dependencies in tests (MEDIUM)
 
@@ -428,7 +450,10 @@ unnoticed. Fixed as part of this pass.
 ## Open questions
 
 1. **Counter time format** (2.3) — standardise on `5:00` everywhere, or keep the compact `5m` badge
-   in the status bar and make the difference intentional?
-2. **`GalleryPanel` split** (3.1) — the two Tier 1 extractions are done, so the file is down to
-   ~723 lines with `NewFolderForm` and `GridTile` out. Still open: the thumbnail-URL lifecycle and
-   the remaining grid renderers. Worth doing as one pass, or leaving until it actually hurts?
+   in the status bar and make the difference intentional? **Still the one open decision.**
+2. **`GalleryPanel` split** (3.1) — **resolved.** The file went 826 → 638 lines and now has 26 tests.
+   What remains inside it is the Opened Items folder and the folder-detail view; both are ordinary
+   presentation, and splitting them further would move code without reducing coupling.
+3. **`shared/Icon.tsx`** (3.4) — renderer-specific and could live under `components/shared/`, where
+   its only real consumer already is. Left alone as churn without benefit; worth folding into
+   whatever change next touches the icon set.

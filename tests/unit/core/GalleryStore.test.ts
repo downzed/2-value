@@ -35,6 +35,7 @@ function makeRepository(overrides: Partial<GalleryRepositoryPort> = {}) {
 		copyImage: vi.fn().mockResolvedValue(makeImage('g2', 'study.png', 'f1')),
 		deleteImage: vi.fn().mockResolvedValue(undefined),
 		getImageBlob: vi.fn().mockResolvedValue(new Blob(['x'])),
+		getThumbnailBlob: vi.fn().mockResolvedValue(new Blob(['t'])),
 		...overrides,
 	};
 	return repo;
@@ -293,6 +294,12 @@ describe('GalleryStore', () => {
 		it('exposes the raw blob getter for export', async () => {
 			await store.getImageBlob('g1');
 			expect(repo.getImageBlob).toHaveBeenCalledWith('g1');
+		});
+
+		it('exposes the thumbnail blob getter for grid previews', async () => {
+			const thumb = await store.getThumbnailBlob('g1');
+			expect(repo.getThumbnailBlob).toHaveBeenCalledWith('g1');
+			expect(thumb).toBeInstanceOf(Blob);
 		});
 	});
 
