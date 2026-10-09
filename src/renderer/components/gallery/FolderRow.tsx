@@ -1,4 +1,5 @@
 import type React from 'react';
+import { Button } from '../shared/Button';
 
 interface FolderRowProps {
 	title: string;
@@ -30,19 +31,18 @@ export const FolderRow: React.FC<FolderRowProps> = ({
 	emphasis = 'normal',
 	className,
 }) => (
-	<button
-		type='button'
+	<Button
+		block
+		label={ariaLabel}
+		disabledTone='none'
 		onClick={onClick}
-		aria-label={ariaLabel}
-		className={`w-full text-left p-3 bg-transparent ${className ?? ''}`}
+		className={`p-3 bg-transparent ${className ?? ''}`}
 	>
 		<p
-			className={`text-xs truncate ${
-				emphasis === 'strong' ? 'font-semibold text-slate-800' : 'font-medium text-slate-700'
-			}`}
+			className={`text-xs truncate ${emphasis === 'strong' ? 'font-semibold text-slate-800' : 'font-medium text-slate-700'}`}
 		>
 			{title}
 		</p>
 		<p className={`text-[10px] mt-0.5 ${emphasis === 'strong' ? 'text-slate-500' : 'text-slate-400'}`}>{subtitle}</p>
-	</button>
+	</Button>
 );

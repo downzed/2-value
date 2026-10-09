@@ -1,4 +1,5 @@
 import type React from 'react';
+import { Button } from './Button';
 
 interface MenuItemProps {
 	children: React.ReactNode;
@@ -30,13 +31,13 @@ const TONES = {
  * `px-3 py-1.5 text-xs` row, differing only in colour and whether they disabled.
  */
 export const MenuItem: React.FC<MenuItemProps> = ({ children, onClick, tone = 'default', disabled, role }) => (
-	<button
-		type='button'
+	<Button
+		block
 		role={role}
 		disabled={disabled}
 		onClick={onClick}
-		className={`w-full text-left px-3 py-1.5 text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent ${TONES[tone]}`}
+		className={`px-3 py-1.5 text-xs disabled:hover:bg-transparent ${TONES[tone]}`}
 	>
 		{children}
-	</button>
+	</Button>
 );

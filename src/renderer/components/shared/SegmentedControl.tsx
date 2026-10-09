@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Button } from './Button';
 
 export interface SegmentedOption<T extends string | number> {
 	value: T;
@@ -53,22 +54,18 @@ export function SegmentedControl<T extends string | number>({
 	return (
 		// No role: each button carries aria-pressed, which is what conveys the toggle.
 		<div className={t.container}>
-			{options.map((option) => {
-				const isActive = option.value === value;
-				return (
-					<button
-						key={String(option.value)}
-						type='button'
-						onClick={() => onChange(option.value)}
-						disabled={disabled}
-						aria-pressed={isActive}
-						title={option.title}
-						className={`${t.button} ${isActive ? t.active : t.inactive}`}
-					>
-						{option.label}
-					</button>
-				);
-			})}
+			{options.map((option) => (
+				<Button
+					key={String(option.value)}
+					pressed={option.value === value}
+					onClick={() => onChange(option.value)}
+					disabled={disabled}
+					title={option.title}
+					className={`${t.button} ${option.value === value ? t.active : t.inactive}`}
+				>
+					{option.label}
+				</Button>
+			))}
 		</div>
 	);
 }

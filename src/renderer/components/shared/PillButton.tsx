@@ -1,3 +1,5 @@
+import { Button } from './Button';
+
 interface PillButtonProps {
 	children: React.ReactNode;
 	onClick: () => void;
@@ -42,16 +44,15 @@ export const PillButton = ({
 	const stateClass = tone === 'subtle' && active ? TONES.subtle.on : TONES[tone].off;
 
 	return (
-		<button
-			type='button'
-			onClick={onClick}
+		<Button
 			disabled={disabled}
+			onClick={onClick}
 			// Only the subtle tone carries a pressed state; a solid accent button is
 			// not a toggle and must not claim to be one.
-			aria-pressed={tone === 'subtle' && active ? true : undefined}
-			className={`text-xs font-medium rounded disabled:opacity-40 disabled:cursor-not-allowed ${sizeClass} ${stateClass} ${className ?? ''}`}
+			pressed={tone === 'subtle' && active ? true : undefined}
+			className={`text-xs font-medium rounded ${sizeClass} ${stateClass} ${className ?? ''}`}
 		>
 			{children}
-		</button>
+		</Button>
 	);
 };

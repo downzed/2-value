@@ -6,7 +6,7 @@ subsequently renamed to `shell/TopPanel.tsx` in the working tree.
 
 **Baseline at time of writing:** 281 tests passing, 0 type errors, `yarn build` green.
 **Status:** All four tiers complete, plus the shared-button pass. Nothing open.
-**Current:** 387 tests across 30 files, 0 type errors.
+**Current:** 401 tests across 31 files, 0 type errors.
 
 **How to read the tiers**
 
@@ -309,12 +309,12 @@ live, incompatible `RecentEntry`** in `utils/storage.ts:466-470`. Both deleted.
 ## Shared buttons (B1) — **DONE**
 
 `<button>` markup was hand-rolled at **43 call sites** across `components/`, differing only in class
-strings and icon. Ten components in `components/shared/` and `components/gallery/` now own it.
+strings and icon. One base component and eight thin wrappers now own it.
 
 `SegmentedControl` was **not** the right vehicle for most of these. It models a row of mutually
 exclusive toggles; context-menu items, dialog footers and ghost icon buttons have nothing to do
 with each other, and routing them through it would have produced a component whose name lies about
-its behaviour and whose `variant` prop does all the work. Three components shaped for the actual
+its behaviour and whose `variant` prop does all the work. Components shaped for the actual
 duplication were added instead.
 
 | Component | Replaced | Notes |
@@ -328,7 +328,27 @@ duplication were added instead.
 | `FolderRow` | 2 folder cards | title + count, `emphasis='strong'` for Opened Items |
 | `NewFolderCard` | 2 sites | byte-identical dashed "+ New Folder" tile |
 
-**43 → 8 real call sites**; the other 6 are the components themselves.
+### One base, not nine wrappers
+
+The first pass replaced 43 hand-rolled buttons with nine components. That was **distribution, not
+reduction**: nine components each re-implemented `<button type='button' onClick disabled className>`,
+the `label`/`title` pairing, and the tri-state `aria-pressed` that stops a plain button from claiming
+to be a toggle. A shared base now owns all of it:
+
+`shared/Button.tsx` is the **only `<button>` element in the application**. It owns the `type`
+default, event forwarding for both click and contextmenu, the disabled treatment, the
+`label`/`title` pairing, `aria-pressed` (undefined meaning "not a toggle"), the `block` layout
+shortcut, and well-formed class output. Every wrapper above it now supplies **only its own shape and
+state classes** — `MenuItem` is 43 lines and contains no `<button>`, no `type`, and no `disabled`.
+
+That freed four call sites previously written off as one-offs. `NewFolderForm`'s compact pair,
+`FolderPickerDialog`'s selectable card, `FloatingControls`' "Reset" and `GridTile` all fit once the
+base stopped imposing one button's shape on the others. `GridTile` in particular gained nothing but
+lost its own `type`/`aria-label` plumbing.
+
+**43 raw buttons → 1.** The only remaining raw `<button>` is `FileMenu`'s trigger, which needs a
+`ref`, `aria-haspopup` and `aria-expanded` — a menu trigger is a different control, and widening
+`Button` for one caller would have cost more than it saved.
 
 ### Behaviour changes worth knowing
 
@@ -337,25 +357,16 @@ duplication were added instead.
 - **`PillButton` and `IconButton` now report `aria-pressed`.** Previously neither set it, so the
   preset pills and the eye toggle had no accessible pressed state. A solid-accent button does not
   set it — it is not a toggle.
+- **`FolderPickerDialog`'s folder cards now report `aria-pressed`** and carry a `Select folder …`
+  accessible name; the selection was previously conveyed by colour alone.
 - **`IconButton` forwards the click event.** The folder kebab menu anchors its context menu to the
   pointer, so `onClick` takes the event rather than being zero-arg.
+- **Rendered class strings are unchanged** from the pre-refactor markup, verified by diffing actual
+  DOM output. `Button` trims its output so a wrapper appending an absent optional `className` cannot
+  leave a trailing space in the attribute.
 
-### Deliberately left as raw `<button>`
-
-Four call sites are one-offs where a shared component would have fought the markup rather than
-helped it:
-
-- `NewFolderForm`'s submit/cancel pair — `flex-1 text-[10px] rounded` at a different size from
-  `DialogButton`'s `px-3 py-1.5 text-xs rounded-lg`. Overriding both would mean shipping conflicting
-  Tailwind utilities in `className`.
-- `FolderPickerDialog`'s selectable folder card — bordered cards with a selected/unselected pair,
-  a different shape from `FolderRow`'s unbordered rows.
-- `FileMenu`'s trigger — needs a `ref`, `aria-haspopup` and `aria-expanded`; it is a menu button,
-  not a chrome icon.
-- `FloatingControls`' "Reset" — an unpadded text-only link-style button.
-
-Tests: `SegmentedControl` (8), `IconToggle` (7), `MenuItem` (6), `DialogButton` (7), `IconButton`
-(9), `PillButton` (7), `FolderRow` + `NewFolderCard` (7).
+Tests: `Button` (14), `SegmentedControl` (8), `IconToggle` (7), `MenuItem` (6), `DialogButton` (7),
+`IconButton` (9), `PillButton` (7), `FolderRow` + `NewFolderCard` (7).
 
 ---
 

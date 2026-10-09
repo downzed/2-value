@@ -1,4 +1,5 @@
 import type React from 'react';
+import { Button } from './Button';
 
 interface DialogButtonProps {
 	children: React.ReactNode;
@@ -9,7 +10,6 @@ interface DialogButtonProps {
 	 */
 	variant?: 'primary' | 'ghost' | 'danger' | 'submit';
 	disabled?: boolean;
-	type?: 'button' | 'submit';
 	className?: string;
 }
 
@@ -33,17 +33,14 @@ export const DialogButton: React.FC<DialogButtonProps> = ({
 	onClick,
 	variant = 'primary',
 	disabled,
-	type,
 	className,
 }) => (
-	<button
-		// `submit` implies the submit type; otherwise default to a plain button so
-		// a stray dialog button can never post an unrelated form.
-		type={variant === 'submit' ? 'submit' : (type ?? 'button')}
+	<Button
+		type={variant === 'submit' ? 'submit' : 'button'}
 		onClick={onClick}
 		disabled={disabled}
-		className={`px-3 py-1.5 text-xs rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent ${VARIANTS[variant]} ${className ?? ''}`}
+		className={`px-3 py-1.5 text-xs rounded-lg disabled:hover:bg-transparent ${VARIANTS[variant]} ${className ?? ''}`}
 	>
 		{children}
-	</button>
+	</Button>
 );

@@ -1,5 +1,6 @@
 import type React from 'react';
 import { UI } from '../../constants/ui';
+import { Button } from '../shared/Button';
 
 interface TileGridProps {
 	children: React.ReactNode;
@@ -61,13 +62,13 @@ export const GridTile: React.FC<GridTileProps> = ({
 			: 'border-slate-200 hover:border-slate-400';
 
 	return (
-		<button
-			type='button'
+		<Button
+			label={ariaLabel}
+			title={title}
+			disabledTone='none'
 			onClick={onClick}
 			onContextMenu={onContextMenu}
-			aria-label={ariaLabel}
-			title={title}
-			className={`relative rounded-lg overflow-hidden border transition-colors cursor-pointer text-left p-0 bg-transparent ${borderClass}`}
+			className={`relative rounded-lg overflow-hidden border cursor-pointer p-0 bg-transparent ${borderClass}`}
 		>
 			{src ? (
 				<img src={src} alt={alt} className='w-full aspect-square object-cover' />
@@ -87,6 +88,6 @@ export const GridTile: React.FC<GridTileProps> = ({
 					<span className='text-[10px] text-slate-600'>Loading...</span>
 				</div>
 			)}
-		</button>
+		</Button>
 	);
 };

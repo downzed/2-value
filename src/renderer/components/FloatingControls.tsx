@@ -12,6 +12,7 @@ import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
+import { Button } from './shared/Button';
 import { SegmentedControl } from './shared/SegmentedControl';
 import { PillButton } from './shared/PillButton';
 import { SectionHeader } from './shared/SectionHeader';
@@ -145,14 +146,9 @@ const FloatingControls: React.FC = () => {
 							onChange={setValues}
 							disabled={!hasImage}
 						/>
-						<button
-							type='button'
-							onClick={handleReset}
-							disabled={!hasImage}
-							className='text-xs text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed'
-						>
+						<Button onClick={handleReset} disabled={!hasImage} className='text-xs text-red-500 hover:text-red-700'>
 							Reset
-						</button>
+						</Button>
 					</div>
 				</div>
 

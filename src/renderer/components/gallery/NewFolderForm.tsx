@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
+import { Button } from '../shared/Button';
 
 interface NewFolderFormProps {
 	/**
@@ -77,23 +78,23 @@ export const NewFolderForm: React.FC<NewFolderFormProps> = ({ onCreate, onCancel
 			/>
 			{error && <p className='text-[10px] text-red-500'>{error}</p>}
 			<div className='flex gap-1'>
-				<button
+				<Button
 					type='submit'
 					disabled={creating}
-					className='flex-1 text-[10px] bg-slate-800 text-white rounded py-1 hover:bg-slate-700 transition-colors disabled:opacity-50'
+					disabledTone='faint'
+					className='flex-1 text-[10px] bg-slate-800 text-white rounded py-1 hover:bg-slate-700'
 				>
 					Create
-				</button>
-				<button
-					type='button'
+				</Button>
+				<Button
 					onClick={() => {
 						onCancel();
 						reset();
 					}}
-					className='flex-1 text-[10px] text-slate-500 hover:text-slate-700 transition-colors'
+					className='flex-1 text-[10px] text-slate-500 hover:text-slate-700'
 				>
 					Cancel
-				</button>
+				</Button>
 			</div>
 		</form>
 	);

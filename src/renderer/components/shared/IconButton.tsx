@@ -1,4 +1,5 @@
 import type React from 'react';
+import { Button } from './Button';
 
 interface IconButtonProps {
 	children: React.ReactNode;
@@ -18,7 +19,7 @@ interface IconButtonProps {
 	/**
 	 * Palette. `light` is for the white floating panels and gallery chrome;
 	 * `dark` is for the slate status bar, where the hover is lighter rather than
-	 * darker. Overrides `tone`'s colouring.
+	 * darker.
 	 */
 	surface?: 'light' | 'dark';
 	active?: boolean;
@@ -42,23 +43,22 @@ export const IconButton: React.FC<IconButtonProps> = ({
 	active = false,
 	className,
 }) => (
-	<button
-		type='button'
-		onClick={onClick}
+	<Button
+		label={title}
+		title={title}
 		disabled={disabled}
-		aria-label={title}
+		onClick={onClick}
 		// Only a toggle carries pressed state; a plain icon button must not lie
 		// about being one.
-		aria-pressed={tone === 'pressed' ? active : undefined}
-		title={title}
-		className={`transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+		pressed={tone === 'pressed' ? active : undefined}
+		className={
 			surface === 'dark'
-				? 'text-slate-400 hover:text-slate-200'
+				? `text-slate-400 hover:text-slate-200 ${className ?? ''}`
 				: tone === 'pressed' && active
-					? 'text-slate-700'
-					: 'text-slate-400 hover:text-slate-600'
-		} ${className ?? ''}`}
+					? `text-slate-700 ${className ?? ''}`
+					: `text-slate-400 hover:text-slate-600 ${className ?? ''}`
+		}
 	>
 		{children}
-	</button>
+	</Button>
 );

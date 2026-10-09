@@ -4,6 +4,7 @@ import { useDismissable } from '../../react/useDismissable';
 import { bySortOrder } from '../../core/selectors';
 import Modal from '../shared/Modal';
 import { DialogButton } from '../shared/DialogButton';
+import { Button } from '../shared/Button';
 import type { GalleryFolder } from '../../../shared/types';
 import { NewFolderCard } from './NewFolderCard';
 import { NewFolderForm } from './NewFolderForm';
@@ -49,17 +50,20 @@ export const FolderPickerDialog: React.FC<FolderPickerDialogProps> = ({
 					<ul className='grid grid-cols-2 gap-2 list-none p-0 m-0 max-h-[240px] overflow-y-auto'>
 						{sorted.map((folder) => (
 							<li key={folder.id}>
-								<button
-									type='button'
+								<Button
+									block
+									label={`Select folder ${folder.name}`}
+									pressed={selectedId === folder.id}
+									disabledTone='none'
 									onClick={() => setSelectedId(folder.id)}
-									className={`w-full rounded-lg border p-3 text-left transition-colors ${
+									className={`rounded-lg border p-3 ${
 										selectedId === folder.id
 											? 'border-slate-800 bg-slate-100'
 											: 'border-slate-200 bg-slate-50 hover:border-slate-400 hover:bg-slate-100'
 									}`}
 								>
 									<p className='text-xs font-medium text-slate-700 truncate'>{folder.name}</p>
-								</button>
+								</Button>
 							</li>
 						))}
 

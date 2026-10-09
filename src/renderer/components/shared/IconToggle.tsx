@@ -1,5 +1,6 @@
 import type React from 'react';
 import type { ReactNode } from 'react';
+import { Button } from './Button';
 
 interface IconToggleProps {
 	children: ReactNode;
@@ -23,16 +24,15 @@ export const IconToggle: React.FC<IconToggleProps> = ({ children, onClick, activ
 	const positionClass = badge ? 'relative ' : '';
 
 	return (
-		<button
-			type='button'
-			onClick={onClick}
-			aria-pressed={active}
-			aria-label={title}
+		<Button
+			label={title}
 			title={title}
-			className={`${positionClass}w-6 h-6 flex items-center justify-center rounded transition-colors ${stateClass} ${className ?? ''}`}
+			pressed={active}
+			onClick={onClick}
+			className={`${positionClass}w-6 h-6 flex items-center justify-center rounded ${stateClass} ${className ?? ''}`}
 		>
 			{children}
 			{badge}
-		</button>
+		</Button>
 	);
 };
