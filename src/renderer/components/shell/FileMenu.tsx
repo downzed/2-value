@@ -79,7 +79,7 @@ const FileMenu: React.FC<FileMenuProps> = ({ items }) => {
 					}}
 				>
 					{items.map((item) => (
-						<MenuItem key={item.id} role='menuitem' disabled={item.disabled} onClick={() => run(item)}>
+						<MenuItem key={item.id} disabled={item.disabled} onClick={() => run(item)}>
 							<span className='flex items-baseline justify-between gap-3'>
 								<span className='font-medium'>{item.label}</span>
 								{item.shortcut && <span className='text-[10px] text-slate-400'>{item.shortcut}</span>}

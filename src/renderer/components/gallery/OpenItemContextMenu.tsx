@@ -51,7 +51,6 @@ const OpenItemContextMenu: React.FC<OpenItemContextMenuProps> = ({
 			role='menu'
 		>
 			<MenuItem
-				role='menuitem'
 				onClick={() => {
 					onOpen(item);
 					onCloseMenu();
@@ -60,7 +59,6 @@ const OpenItemContextMenu: React.FC<OpenItemContextMenuProps> = ({
 				Open
 			</MenuItem>
 			<MenuItem
-				role='menuitem'
 				onClick={() => {
 					onSave(item);
 					onCloseMenu();
@@ -69,7 +67,6 @@ const OpenItemContextMenu: React.FC<OpenItemContextMenuProps> = ({
 				Save to gallery
 			</MenuItem>
 			<MenuItem
-				role='menuitem'
 				onClick={() => {
 					onExport(item);
 					onCloseMenu();
@@ -79,7 +76,6 @@ const OpenItemContextMenu: React.FC<OpenItemContextMenuProps> = ({
 			</MenuItem>
 			<div className='border-t border-slate-100 my-1' />
 			<MenuItem
-				role='menuitem'
 				tone='danger'
 				onClick={() => {
 					onCloseItem(item);

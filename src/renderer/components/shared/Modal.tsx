@@ -49,6 +49,56 @@ const Modal: React.FC<ModalProps> = ({ children, widthClass = 'w-[360px]', title
 		};
 	}, [initialFocusRef]);
 
+	/**
+	 * Keeps Tab inside the dialog.
+	 *
+	 * `aria-modal` only tells assistive technology what the dialog *is*; nothing
+	 * stops the browser's own tab order from walking into the page behind it.
+	 *
+	 * The listener is on `document` rather than the card so it still applies if
+	 * focus has already escaped — a card-level handler would never see that Tab.
+	 */
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key !== 'Tab') return;
+
+			const card = cardRef.current;
+			if (!card) return;
+
+			const focusable = getFocusable(card);
+			if (focusable.length === 0) {
+				// Nothing to move between; hold focus on the card.
+				e.preventDefault();
+				card.focus();
+				return;
+			}
+
+			const first = focusable[0];
+			const last = focusable[focusable.length - 1];
+			const active = document.activeElement;
+
+			if (!card.contains(active)) {
+				// Focus has escaped; pull it back in rather than follow it out.
+				e.preventDefault();
+				(e.shiftKey ? last : first).focus();
+				return;
+			}
+
+			// Focus may sit on the card itself (tabIndex={-1}); treat that as
+			// "before the first control", so Tab steps in instead of wrapping.
+			if (e.shiftKey && (active === card || active === first)) {
+				e.preventDefault();
+				last.focus();
+			} else if (!e.shiftKey && active === last) {
+				e.preventDefault();
+				first.focus();
+			}
+		};
+
+		document.addEventListener('keydown', handleKeyDown);
+		return () => document.removeEventListener('keydown', handleKeyDown);
+	}, []);
+
 	return (
 		<div className='fixed inset-0 z-[300] flex items-center justify-center'>
 			{/*
@@ -77,5 +127,24 @@ const Modal: React.FC<ModalProps> = ({ children, widthClass = 'w-[360px]', title
 		</div>
 	);
 };
+
+/** Elements that can hold focus, in tab order, excluding hidden and disabled ones. */
+const FOCUSABLE_SELECTOR = [
+	'a[href]',
+	'button:not([disabled])',
+	'input:not([disabled])',
+	'select:not([disabled])',
+	'textarea:not([disabled])',
+	'[tabindex]:not([tabindex="-1"])',
+].join(',');
+
+function getFocusable(container: HTMLElement | null): HTMLElement[] {
+	if (!container) return [];
+	// Deliberately not filtering on `offsetParent`: jsdom never lays out, so it
+	// is always null and every element would be judged hidden.
+	return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+		(el) => !el.hasAttribute('disabled') && el.tabIndex !== -1,
+	);
+}
 
 export default Modal;

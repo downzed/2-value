@@ -10,8 +10,6 @@ interface MenuItemProps {
 	 */
 	tone?: 'default' | 'danger' | 'muted';
 	disabled?: boolean;
-	/** Set when the surrounding element carries `role='menu'`. */
-	role?: 'menuitem';
 }
 
 const TONES = {
@@ -29,11 +27,15 @@ const TONES = {
  * The four context menus (`FolderContextMenu`, `ImageContextMenu`,
  * `OpenItemContextMenu`, `FileMenu`) shared the same full-width left-aligned
  * `px-3 py-1.5 text-xs` row, differing only in colour and whether they disabled.
+ *
+ * `role='menuitem'` is unconditional: every use of this component is a row inside
+ * a `role='menu'`, and an optional prop let two of the four menus silently omit
+ * both halves.
  */
-export const MenuItem: React.FC<MenuItemProps> = ({ children, onClick, tone = 'default', disabled, role }) => (
+export const MenuItem: React.FC<MenuItemProps> = ({ children, onClick, tone = 'default', disabled }) => (
 	<Button
 		block
-		role={role}
+		role='menuitem'
 		disabled={disabled}
 		onClick={onClick}
 		className={`px-3 py-1.5 text-xs disabled:hover:bg-transparent ${TONES[tone]}`}
