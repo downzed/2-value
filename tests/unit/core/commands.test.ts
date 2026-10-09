@@ -177,23 +177,69 @@ describe('Commands', () => {
 	// --- saveOpenItem ---
 
 	describe('saveOpenItem', () => {
+		/**
+		 * `renderItemToBlob` is stubbed rather than mocked at module level, because
+		 * the `renderItemToBlob` tests below rely on the real one returning `null`
+		 * when jsdom has no `OffscreenCanvas`. Stubbing the instance method lets this
+		 * suite reach the save path without changing those.
+		 */
+		beforeEach(() => {
+			vi.spyOn(commands, 'renderItemToBlob').mockResolvedValue(blob);
+		});
+
 		it('activates a background item before saving it', async () => {
 			await editor.loadImage({ width: 10, height: 10 } as never, 'a.png');
-			const first = editor.getState().activeItemId as string;
+			const backgroundId = editor.getState().activeItemId as string;
+			const background = editor.getState().items.find((i) => i.id === backgroundId);
+			if (!background) throw new Error('image item missing');
+
+			// Make a *different* item active, so the target really is in the background.
 			editor.newBlankCanvas();
-			const blank = editor.getState().activeItemId as string;
-			expect(editor.getState().activeItemId).toBe(blank);
+			const blankId = editor.getState().activeItemId as string;
+			expect(blankId).not.toBe(backgroundId);
 
-			// Blank canvas has strokes to render; give it one so a blob is produced.
-			editor.getStrokes(blank).push([0, 0, 0.5, 0.5]);
+			await commands.saveOpenItem(background, 'f1');
 
-			const target = editor.getState().items.find((i) => i.id === blank);
-			if (!target) throw new Error('canvas item missing');
-			await commands.saveOpenItem(target);
+			// The point of the test: the target must have been activated.
+			expect(editor.getState().activeItemId).toBe(backgroundId);
+		});
 
-			expect(editor.getState().activeItemId).toBe(blank);
-			expect(editor.getState().items).toHaveLength(2);
-			expect(first).not.toBe(blank);
+		it('saves the activated item into the gallery', async () => {
+			await editor.loadImage({ width: 10, height: 10 } as never, 'a.png');
+			const targetId = editor.getState().activeItemId as string;
+			const target = editor.getState().items.find((i) => i.id === targetId);
+			if (!target) throw new Error('image item missing');
+
+			editor.newBlankCanvas();
+			await commands.saveOpenItem(target, 'f1');
+
+			const [file, folderId] = vi.mocked(repository.importImage).mock.calls[0];
+			expect(folderId).toBe('f1');
+			expect((file as File).name).toBe('a.png');
+			// Saving links the item to its new gallery entry and clears the dirty flag.
+			expect(editor.getState().items.find((i) => i.id === targetId)?.galleryImageId).toBe('g1');
+			expect(editor.getState().items.find((i) => i.id === targetId)?.dirty).toBe(false);
+		});
+
+		it('leaves an already-active item alone', async () => {
+			await editor.loadImage({ width: 10, height: 10 } as never, 'a.png');
+			const active = activeItem(editor);
+
+			await commands.saveOpenItem(active, 'f1');
+
+			expect(editor.getState().activeItemId).toBe(active.id);
+			expect(repository.importImage).toHaveBeenCalled();
+		});
+
+		it('does nothing when the item cannot be rendered', async () => {
+			vi.spyOn(commands, 'renderItemToBlob').mockResolvedValue(null);
+			await editor.loadImage({ width: 10, height: 10 } as never, 'a.png');
+			const active = activeItem(editor);
+
+			await commands.saveOpenItem(active, 'f1');
+
+			// The early return must happen before any gallery write.
+			expect(repository.importImage).not.toHaveBeenCalled();
 		});
 	});
 
