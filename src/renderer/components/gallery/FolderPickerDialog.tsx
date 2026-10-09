@@ -3,7 +3,9 @@ import { useMemo, useRef, useState } from 'react';
 import { useDismissable } from '../../react/useDismissable';
 import { bySortOrder } from '../../core/selectors';
 import Modal from '../shared/Modal';
+import { DialogButton } from '../shared/DialogButton';
 import type { GalleryFolder } from '../../../shared/types';
+import { NewFolderCard } from './NewFolderCard';
 import { NewFolderForm } from './NewFolderForm';
 
 export interface FolderPickerDialogProps {
@@ -72,33 +74,18 @@ export const FolderPickerDialog: React.FC<FolderPickerDialogProps> = ({
 							</li>
 						) : (
 							<li>
-								<button
-									type='button'
-									onClick={() => setNewFolderMode(true)}
-									className='w-full rounded-lg border border-dashed border-slate-300 bg-transparent hover:border-slate-400 hover:bg-slate-50 transition-colors p-3 text-left'
-								>
-									<p className='text-xs font-medium text-slate-400'>+ New Folder</p>
-								</button>
+								<NewFolderCard onClick={() => setNewFolderMode(true)} />
 							</li>
 						)}
 					</ul>
 
 					<div className='flex justify-end gap-2'>
-						<button
-							type='button'
-							onClick={onSkip}
-							className='px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors'
-						>
+						<DialogButton variant='ghost' onClick={onSkip}>
 							{skipLabel}
-						</button>
-						<button
-							type='button'
-							onClick={() => selectedId && onSelect(selectedId)}
-							disabled={!selectedId}
-							className='px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed'
-						>
+						</DialogButton>
+						<DialogButton disabled={!selectedId} onClick={() => selectedId && onSelect(selectedId)}>
 							Save
-						</button>
+						</DialogButton>
 					</div>
 				</div>
 			</div>

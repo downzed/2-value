@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { GalleryFolder } from '../../../shared/types';
 import { useDismissable } from '../../react/useDismissable';
 import Modal from '../shared/Modal';
+import { DialogButton } from '../shared/DialogButton';
+import { MenuItem } from '../shared/MenuItem';
 import { useMenuPosition } from '../../react/useMenuPosition';
 
 interface FolderContextMenuProps {
@@ -41,37 +43,32 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
 				visibility: position ? 'visible' : 'hidden',
 			}}
 		>
-			<button
-				type='button'
-				className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
+			<MenuItem
 				onClick={() => {
 					onRename(folder);
 					onClose();
 				}}
 			>
 				Rename
-			</button>
-			<button
-				type='button'
-				className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
+			</MenuItem>
+			<MenuItem
 				onClick={() => {
 					onEditTags(folder);
 					onClose();
 				}}
 			>
 				Edit Tags
-			</button>
+			</MenuItem>
 			<div className='border-t border-slate-100 my-1' />
-			<button
-				type='button'
-				className='w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors'
+			<MenuItem
+				tone='danger'
 				onClick={() => {
 					onDelete(folder);
 					onClose();
 				}}
 			>
 				Delete
-			</button>
+			</MenuItem>
 		</div>
 	);
 };
@@ -112,20 +109,12 @@ export const DeleteFolderDialog: React.FC<DeleteFolderDialogProps> = ({ folder, 
 				</div>
 			)}
 			<div className='flex justify-end gap-2'>
-				<button
-					type='button'
-					onClick={onCancel}
-					className='px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors'
-				>
+				<DialogButton variant='ghost' onClick={onCancel}>
 					Cancel
-				</button>
-				<button
-					type='button'
-					onClick={() => onConfirm(deleteImages)}
-					className='px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors'
-				>
+				</DialogButton>
+				<DialogButton variant='danger' onClick={() => onConfirm(deleteImages)}>
 					Delete
-				</button>
+				</DialogButton>
 			</div>
 		</Modal>
 	);
@@ -164,19 +153,10 @@ export const RenameFolderDialog: React.FC<RenameFolderDialogProps> = ({ folder, 
 					maxLength={100}
 				/>
 				<div className='flex justify-end gap-2'>
-					<button
-						type='button'
-						onClick={onCancel}
-						className='px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors'
-					>
+					<DialogButton variant='ghost' onClick={onCancel}>
 						Cancel
-					</button>
-					<button
-						type='submit'
-						className='px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors'
-					>
-						Rename
-					</button>
+					</DialogButton>
+					<DialogButton variant='submit'>Rename</DialogButton>
 				</div>
 			</form>
 		</Modal>
@@ -220,19 +200,10 @@ export const EditTagsDialog: React.FC<EditTagsDialogProps> = ({ folder, onConfir
 					className='w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-slate-500'
 				/>
 				<div className='flex justify-end gap-2'>
-					<button
-						type='button'
-						onClick={onCancel}
-						className='px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors'
-					>
+					<DialogButton variant='ghost' onClick={onCancel}>
 						Cancel
-					</button>
-					<button
-						type='submit'
-						className='px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors'
-					>
-						Save
-					</button>
+					</DialogButton>
+					<DialogButton variant='submit'>Save</DialogButton>
 				</div>
 			</form>
 		</Modal>

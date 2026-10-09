@@ -6,6 +6,7 @@ import { byNewestFirst, bySortOrder, filterImages } from '../../core/selectors';
 import type { GalleryFolder, GalleryImage } from '../../../shared/types';
 import { UI } from '../../constants/ui';
 import { Icon } from '../shared/Icon';
+import { IconButton } from '../shared/IconButton';
 import {
 	DeleteFolderDialog,
 	EditTagsDialog,
@@ -14,6 +15,8 @@ import {
 } from '../gallery/FolderContextMenu';
 import { ImageContextMenu } from '../gallery/ImageContextMenu';
 import { GridTile, TileGrid } from '../gallery/GridTile';
+import { FolderRow } from '../gallery/FolderRow';
+import { NewFolderCard } from '../gallery/NewFolderCard';
 import { NewFolderForm } from '../gallery/NewFolderForm';
 import { OpenItemContextMenu } from '../gallery/OpenItemContextMenu';
 import { RecentSuggestions } from '../gallery/RecentSuggestions';
@@ -380,14 +383,9 @@ const GalleryPanel: React.FC = () => {
 			<div className='space-y-3'>
 				{/* Header with back button */}
 				<div className='flex items-center gap-2'>
-					<button
-						type='button'
-						aria-label='Back to folders'
-						onClick={() => setSelectedFolder(null)}
-						className='text-slate-400 hover:text-slate-600 transition-colors'
-					>
+					<IconButton onClick={() => setSelectedFolder(null)} title='Back to folders'>
 						<Icon name='arrow-left' size='sm' />
-					</button>
+					</IconButton>
 					<p className='text-xs font-semibold text-slate-700 truncate flex-1'>{selectedFolder.name}</p>
 					<span className='text-[10px] text-slate-400'>
 						{count} image{count !== 1 ? 's' : ''}
@@ -413,14 +411,9 @@ const GalleryPanel: React.FC = () => {
 				{/* Header */}
 				<div className='flex items-center justify-between px-4 py-2.5 border-b border-slate-100'>
 					<span className='text-xs font-semibold text-slate-700'>Gallery</span>
-					<button
-						type='button'
-						aria-label='Close gallery'
-						onClick={() => setPanel('gallery', false)}
-						className='text-slate-400 hover:text-slate-600 transition-colors'
-					>
+					<IconButton onClick={() => setPanel('gallery', false)} title='Close gallery'>
 						<Icon name='close' />
-					</button>
+					</IconButton>
 				</div>
 
 				{/* Body */}
@@ -433,14 +426,9 @@ const GalleryPanel: React.FC = () => {
 					{selectedFolderId === OPENED_ITEMS_ID && !isSearching ? (
 						<div className='space-y-3'>
 							<div className='flex items-center gap-2'>
-								<button
-									type='button'
-									aria-label='Back to folders'
-									onClick={() => setSelectedFolder(null)}
-									className='text-slate-400 hover:text-slate-600 transition-colors'
-								>
+								<IconButton onClick={() => setSelectedFolder(null)} title='Back to folders'>
 									<Icon name='arrow-left' size='sm' />
-								</button>
+								</IconButton>
 								<p className='text-xs font-semibold text-slate-700 truncate flex-1'>Opened Items</p>
 								<span className='text-[10px] text-slate-400'>
 									{items.length} open item{items.length !== 1 ? 's' : ''}
@@ -465,14 +453,13 @@ const GalleryPanel: React.FC = () => {
 									className='w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 pr-7 focus:outline-none focus:border-slate-400 bg-slate-50'
 								/>
 								{isSearching && (
-									<button
-										type='button'
-										aria-label='Clear search'
+									<IconButton
 										onClick={() => setGallerySearchQuery('')}
-										className='absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600'
+										title='Clear search'
+										className='absolute right-2 top-1/2 -translate-y-1/2'
 									>
 										&times;
-									</button>
+									</IconButton>
 								)}
 							</div>
 
@@ -506,17 +493,13 @@ const GalleryPanel: React.FC = () => {
 									) : (
 										<ul className='grid grid-cols-2 gap-2 list-none p-0 m-0'>
 											<li className='relative rounded-lg border border-slate-300 bg-slate-100 hover:border-slate-500 hover:bg-slate-50 transition-colors'>
-												<button
-													type='button'
-													className='w-full text-left p-3 bg-transparent'
+												<FolderRow
+													emphasis='strong'
+													title='Opened Items'
+													subtitle={`${items.length} open item${items.length !== 1 ? 's' : ''}`}
+													ariaLabel='Open Opened Items folder'
 													onClick={() => setSelectedFolder(OPENED_ITEMS_ID)}
-													aria-label='Open Opened Items folder'
-												>
-													<p className='text-xs font-semibold text-slate-800 truncate'>Opened Items</p>
-													<p className='text-[10px] text-slate-500 mt-0.5'>
-														{items.length} open item{items.length !== 1 ? 's' : ''}
-													</p>
-												</button>
+												/>
 											</li>
 
 											{sortedFolders.map((folder) => {
@@ -527,25 +510,19 @@ const GalleryPanel: React.FC = () => {
 														className='relative group rounded-lg border border-slate-200 bg-slate-50 hover:border-slate-400 hover:bg-slate-100 transition-colors cursor-pointer'
 														onContextMenu={(e) => handleFolderContextMenu(e, folder)}
 													>
-														<button
-															type='button'
-															className='w-full text-left p-3 bg-transparent'
+														<FolderRow
+															title={folder.name}
+															subtitle={`${count} image${count !== 1 ? 's' : ''}`}
+															ariaLabel={`Open folder ${folder.name}`}
 															onClick={() => setSelectedFolder(folder.id)}
-															aria-label={`Open folder ${folder.name}`}
-														>
-															<p className='text-xs font-medium text-slate-700 truncate'>{folder.name}</p>
-															<p className='text-[10px] text-slate-400 mt-0.5'>
-																{count} image{count !== 1 ? 's' : ''}
-															</p>
-														</button>
-														<button
-															type='button'
-															aria-label={`Actions for folder ${folder.name}`}
+														/>
+														<IconButton
 															onClick={(e) => handleFolderMenuButton(e, folder)}
-															className='absolute top-1 right-1 w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded'
+															title={`Actions for folder ${folder.name}`}
+															className='absolute top-1 right-1 w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity'
 														>
 															•••
-														</button>
+														</IconButton>
 													</li>
 												);
 											})}
@@ -554,13 +531,7 @@ const GalleryPanel: React.FC = () => {
 											{newFolderMode ? (
 												<NewFolderForm onCreate={handleCreateFolder} onCancel={() => setNewFolderMode(false)} />
 											) : (
-												<button
-													type='button'
-													onClick={() => setNewFolderMode(true)}
-													className='rounded-lg border border-dashed border-slate-300 bg-transparent hover:border-slate-400 hover:bg-slate-50 transition-colors p-3 text-left'
-												>
-													<p className='text-xs font-medium text-slate-400'>+ New Folder</p>
-												</button>
+												<NewFolderCard onClick={() => setNewFolderMode(true)} />
 											)}
 										</ul>
 									)}

@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useDismissable } from '../../react/useDismissable';
 import { useMenuPosition } from '../../react/useMenuPosition';
+import { MenuItem } from '../shared/MenuItem';
 
 export interface FileMenuItem {
 	id: string;
@@ -78,20 +79,13 @@ const FileMenu: React.FC<FileMenuProps> = ({ items }) => {
 					}}
 				>
 					{items.map((item) => (
-						<button
-							key={item.id}
-							type='button'
-							role='menuitem'
-							disabled={item.disabled}
-							onClick={() => run(item)}
-							className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent'
-						>
+						<MenuItem key={item.id} role='menuitem' disabled={item.disabled} onClick={() => run(item)}>
 							<span className='flex items-baseline justify-between gap-3'>
 								<span className='font-medium'>{item.label}</span>
 								{item.shortcut && <span className='text-[10px] text-slate-400'>{item.shortcut}</span>}
 							</span>
 							{item.description && <span className='block text-[10px] text-slate-400 mt-0.5'>{item.description}</span>}
-						</button>
+						</MenuItem>
 					))}
 				</div>
 			)}

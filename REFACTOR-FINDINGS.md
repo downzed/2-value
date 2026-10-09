@@ -5,8 +5,8 @@ bindings). Verified against the tree at commit `9077283` — note `shell/BottomP
 subsequently renamed to `shell/TopPanel.tsx` in the working tree.
 
 **Baseline at time of writing:** 281 tests passing, 0 type errors, `yarn build` green.
-**Status:** All four tiers complete. Only 2.3 (counter time format) remains, deferred by choice.
-**Current:** 350 tests across 25 files, 0 type errors.
+**Status:** All four tiers complete, plus the shared-button pass. Nothing open.
+**Current:** 387 tests across 30 files, 0 type errors.
 
 **How to read the tiers**
 
@@ -207,11 +207,17 @@ to `images` + `gallerySearchQuery` and filter in a `useMemo`), but both paths no
 tested code, so the duplication is gone rather than merely relocated. `filterImages` returns its
 input array unchanged for a blank query, which keeps the component's memoisation cheap.
 
-### 2.3 Counter time formatted two ways (LOW — deferred by choice, **not done**)
+### 2.3 Counter time formatted two ways (LOW — **RESOLVED: keep both, on purpose**)
 
-`FloatingCounter.tsx:27-31` renders `5:00`; `shell/TopPanel.tsx:203-205` renders `5m`. Same
-concept, same data, inconsistent output. Reconciling this needs a product decision (see
-*Open questions*), so it was deliberately left alone.
+`FloatingCounter.tsx` renders `5:00` in the timer widget; `shell/TopPanel.tsx` renders `5m` on the
+status bar's timer badge. Same concept, same data, different output.
+
+**Decision: leave them different.** The badge sits inside a 24px icon button where seconds would be
+unreadable, so it is deliberately lossy — a glanceable nudge, not a readout. Both format functions
+now carry a comment pointing at the other and explaining why they differ, so the next reader
+records the choice instead of re-opening it.
+
+This closes the last open item in the document.
 
 ### 2.4 Naming inconsistency (LOW) — **DONE via 1.1**
 
@@ -300,37 +306,56 @@ live, incompatible `RecentEntry`** in `utils/storage.ts:466-470`. Both deleted.
 
 ---
 
-## Shared buttons (B1)
+## Shared buttons (B1) — **DONE**
 
-`<button>` markup was hand-rolled at seven call sites, differing only in class strings and icon.
-Two components in `components/shared/` now own it, alongside the existing `PillButton` and
-`SliderRow`.
+`<button>` markup was hand-rolled at **43 call sites** across `components/`, differing only in class
+strings and icon. Ten components in `components/shared/` and `components/gallery/` now own it.
 
-### `SegmentedControl<T>`
+`SegmentedControl` was **not** the right vehicle for most of these. It models a row of mutually
+exclusive toggles; context-menu items, dialog footers and ghost icon buttons have nothing to do
+with each other, and routing them through it would have produced a component whose name lies about
+its behaviour and whose `variant` prop does all the work. Three components shaped for the actual
+duplication were added instead.
 
-A row of mutually exclusive buttons. Two copies existed: the 2/3 value toggle in
-`FloatingControls.tsx` (on a white panel) and Fit / 1:1 / 2× in the status bar (on the slate bar).
-Same structure, different colours and padding, so the component takes `tone: 'light' | 'dark'` and
-drives all four class differences rather than each call site re-deriving them.
+| Component | Replaced | Notes |
+| --- | --- | --- |
+| `SegmentedControl<T>` | 2 sites | `tone: 'light' \| 'dark'` drives four class differences |
+| `IconToggle` | 4 panel toggles | optional `badge`; `relative` only when one is present |
+| `MenuItem` | 13 context-menu rows | `tone: 'default' \| 'danger' \| 'muted'`; optional `role='menuitem'` |
+| `DialogButton` | 9 dialog footers | `variant: 'primary' \| 'ghost' \| 'danger' \| 'submit'` |
+| `IconButton` | 9 chrome icons | `surface: 'light' \| 'dark'`; `tone='pressed'` for the eye toggle |
+| `PillButton` (extended) | timer Start/Stop | added `tone: 'success' \| 'danger'` for solid accents |
+| `FolderRow` | 2 folder cards | title + count, `emphasis='strong'` for Opened Items |
+| `NewFolderCard` | 2 sites | byte-identical dashed "+ New Folder" tile |
 
-Generic over `T extends string | number` so the number toggle passes `setValues` directly and the
-zoom presets pass a string union. The zoom group allows `''` to mean "no preset active" (the user
-can zoom to e.g. 150%), so its call site is `SegmentedControl<ZoomPreset | ''>`.
+**43 → 8 real call sites**; the other 6 are the components themselves.
 
-Each button carries `aria-pressed`. No wrapper `role` — Biome's a11y rule rejects `role='group'`
-in favour of `<fieldset>`, which would be wrong for a toggle row.
+### Behaviour changes worth knowing
 
-### `IconToggle`
+- **Destructive rows were two shades.** The context menus mixed `text-red-500` and `text-red-600`
+  for the same intent. `MenuItem` uses red-600 throughout.
+- **`PillButton` and `IconButton` now report `aria-pressed`.** Previously neither set it, so the
+  preset pills and the eye toggle had no accessible pressed state. A solid-accent button does not
+  set it — it is not a toggle.
+- **`IconButton` forwards the click event.** The folder kebab menu anchors its context menu to the
+  pointer, so `onClick` takes the event rather than being zero-arg.
 
-A square icon button with an on/off state. The four panel toggles in `TopPanel.tsx`
-(Adjustments / Original / Timer / Gallery) were four near-identical 8-line blocks differing only in
-icon, title and active state.
+### Deliberately left as raw `<button>`
 
-Takes an optional `badge` for the timer's remaining-seconds pill, and only adds `relative`
-positioning when one is present — the other three buttons have no need for it.
+Four call sites are one-offs where a shared component would have fought the markup rather than
+helped it:
 
-Tests: `tests/unit/components/SegmentedControl.test.tsx` (8),
-`tests/unit/components/IconToggle.test.tsx` (7).
+- `NewFolderForm`'s submit/cancel pair — `flex-1 text-[10px] rounded` at a different size from
+  `DialogButton`'s `px-3 py-1.5 text-xs rounded-lg`. Overriding both would mean shipping conflicting
+  Tailwind utilities in `className`.
+- `FolderPickerDialog`'s selectable folder card — bordered cards with a selected/unselected pair,
+  a different shape from `FolderRow`'s unbordered rows.
+- `FileMenu`'s trigger — needs a `ref`, `aria-haspopup` and `aria-expanded`; it is a menu button,
+  not a chrome icon.
+- `FloatingControls`' "Reset" — an unpadded text-only link-style button.
+
+Tests: `SegmentedControl` (8), `IconToggle` (7), `MenuItem` (6), `DialogButton` (7), `IconButton`
+(9), `PillButton` (7), `FolderRow` + `NewFolderCard` (7).
 
 ---
 
@@ -348,7 +373,7 @@ Largest file in the repo by 2× (next is `EditorStore.ts` at 547). It had five s
 | three grid renderers | → `gallery/GridTile.tsx` (Tier 1) |
 | Opened Items virtual folder | left in place; covered by tests instead |
 
-**826 → 638 lines**, and `tests/unit/components/GalleryPanel.test.tsx` now exists with **26 tests**
+**826 → 609 lines**, and `tests/unit/components/GalleryPanel.test.tsx` now exists with **26 tests**
 covering visibility, the folder list (ordering, per-folder counts, pluralisation), folder detail,
 search (cross-folder filtering, result counts, override of an open folder), Opened Items, and
 thumbnail loading. That was the HIGH-priority half of this finding — three grid renderers, three
@@ -449,11 +474,11 @@ unnoticed. Fixed as part of this pass.
 
 ## Open questions
 
-1. **Counter time format** (2.3) — standardise on `5:00` everywhere, or keep the compact `5m` badge
-   in the status bar and make the difference intentional? **Still the one open decision.**
-2. **`GalleryPanel` split** (3.1) — **resolved.** The file went 826 → 638 lines and now has 26 tests.
-   What remains inside it is the Opened Items folder and the folder-detail view; both are ordinary
-   presentation, and splitting them further would move code without reducing coupling.
-3. **`shared/Icon.tsx`** (3.4) — renderer-specific and could live under `components/shared/`, where
-   its only real consumer already is. Left alone as churn without benefit; worth folding into
-   whatever change next touches the icon set.
+None. The three that were open during the audit have all been settled:
+
+1. **Counter time format** (2.3) — **settled: keep both formats.** The status-bar badge is
+   deliberately lossy; see 2.3.
+2. **`GalleryPanel` split** (3.1) — **settled.** 826 → 609 lines with 26 tests. What remains is
+   ordinary presentation; splitting further would move code without reducing coupling.
+3. **`shared/Icon.tsx`** (3.4) — **settled: leave it.** Moving it under `components/shared/` is
+   churn without benefit; its only real consumer already lives there.

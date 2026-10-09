@@ -17,6 +17,7 @@ import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
 import { SaveFolderPrompt } from '../gallery/SaveFolderPrompt';
 import FileMenu from './FileMenu';
 import { Icon } from '../shared/Icon';
+import { IconButton } from '../shared/IconButton';
 import { IconToggle } from '../shared/IconToggle';
 import { SegmentedControl } from '../shared/SegmentedControl';
 
@@ -207,6 +208,13 @@ const TopPanel: React.FC<TopPanelProps> = ({ previewCanvasRef }) => {
 		error: { text: errorMsg ?? 'Error', className: 'text-red-400' },
 	};
 
+	/**
+	 * Compact time for the panel-toggle badge: `45` under a minute, `3m` above.
+	 *
+	 * Deliberately not the same format as `FloatingCounter`'s `5:00` readout. The
+	 * badge is a glanceable nudge inside a 24px icon button where seconds would be
+	 * unreadable, so it is deliberately lossy rather than accidentally inconsistent.
+	 */
 	const formatBadge = (seconds: number): string => {
 		if (seconds < 60) return `${seconds}`;
 		return `${Math.floor(seconds / 60)}m`;
@@ -287,14 +295,9 @@ const TopPanel: React.FC<TopPanelProps> = ({ previewCanvasRef }) => {
 				{/* Zoom controls */}
 				{hasImage && (
 					<div className='flex items-center gap-1.5 mr-3'>
-						<button
-							type='button'
-							onClick={zoomOut}
-							className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
-							title='Zoom Out (Ctrl+-)'
-						>
+						<IconButton surface='dark' onClick={zoomOut} title='Zoom Out (Ctrl+-)' className='text-sm px-1'>
 							−
-						</button>
+						</IconButton>
 
 						<SegmentedControl<ZoomPreset | ''>
 							tone='dark'
@@ -314,14 +317,9 @@ const TopPanel: React.FC<TopPanelProps> = ({ previewCanvasRef }) => {
 
 						<span className='text-slate-400 text-[10px] w-8 text-center'>{Math.round(effectiveZoom * 100)}%</span>
 
-						<button
-							type='button'
-							onClick={zoomIn}
-							className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
-							title='Zoom In (Ctrl+=)'
-						>
+						<IconButton surface='dark' onClick={zoomIn} title='Zoom In (Ctrl+=)' className='text-sm px-1'>
 							+
-						</button>
+						</IconButton>
 					</div>
 				)}
 

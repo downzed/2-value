@@ -4,6 +4,7 @@ import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { imageToImageData } from '../utils/imageConversion';
 import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
+import { IconButton } from './shared/IconButton';
 
 const STORAGE_KEY = 'image-editor-original-position';
 const DEFAULT_POSITION = { x: 20, y: 52 };
@@ -58,14 +59,14 @@ const FloatingImage: React.FC = () => {
 	if (!originalImage) return null;
 
 	const eyeToggle = (
-		<button
-			type='button'
+		<IconButton
+			tone='pressed'
+			active={showOriginal}
 			onClick={toggleShowOriginal}
-			className='text-slate-400 hover:text-slate-600 transition-colors'
 			title={showOriginal ? 'Show Processed' : 'Show Original'}
 		>
 			{showOriginal ? <Icon name='eye-open' /> : <Icon name='eye-closed' />}
-		</button>
+		</IconButton>
 	);
 
 	return (

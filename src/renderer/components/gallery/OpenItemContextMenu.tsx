@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type { OpenItem } from '../../core/types';
 import { useDismissable } from '../../react/useDismissable';
 import { useMenuPosition } from '../../react/useMenuPosition';
+import { MenuItem } from '../shared/MenuItem';
 
 interface OpenItemContextMenuProps {
 	item: OpenItem;
@@ -35,8 +36,6 @@ const OpenItemContextMenu: React.FC<OpenItemContextMenuProps> = ({
 
 	useDismissable(menuRef, onCloseMenu);
 
-	const itemClass = 'w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors';
-
 	const position = useMenuPosition(anchorX, anchorY, menuRef);
 
 	return (
@@ -51,51 +50,44 @@ const OpenItemContextMenu: React.FC<OpenItemContextMenuProps> = ({
 			}}
 			role='menu'
 		>
-			<button
-				type='button'
+			<MenuItem
 				role='menuitem'
-				className={itemClass}
 				onClick={() => {
 					onOpen(item);
 					onCloseMenu();
 				}}
 			>
 				Open
-			</button>
-			<button
-				type='button'
+			</MenuItem>
+			<MenuItem
 				role='menuitem'
-				className={itemClass}
 				onClick={() => {
 					onSave(item);
 					onCloseMenu();
 				}}
 			>
 				Save to gallery
-			</button>
-			<button
-				type='button'
+			</MenuItem>
+			<MenuItem
 				role='menuitem'
-				className={itemClass}
 				onClick={() => {
 					onExport(item);
 					onCloseMenu();
 				}}
 			>
 				Export as...
-			</button>
+			</MenuItem>
 			<div className='border-t border-slate-100 my-1' />
-			<button
-				type='button'
+			<MenuItem
 				role='menuitem'
-				className={`${itemClass} text-red-500 hover:bg-red-50`}
+				tone='danger'
 				onClick={() => {
 					onCloseItem(item);
 					onCloseMenu();
 				}}
 			>
 				Close
-			</button>
+			</MenuItem>
 		</div>
 	);
 };
