@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useDismissable } from '../../react/useDismissable';
 import { useMenuPosition } from '../../react/useMenuPosition';
+import { MenuItem } from '../shared/MenuItem';
 
 export interface FileMenuItem {
 	id: string;
@@ -31,6 +33,8 @@ const FileMenu: React.FC<FileMenuProps> = ({ items }) => {
 	// read on click rather than during render, where it would be a layout read.
 	const position = useMenuPosition(anchor?.left ?? 0, anchor?.bottom ?? 0, menuRef);
 
+	const close = useCallback(() => setAnchor(null), []);
+
 	const toggle = () => {
 		setAnchor((prev) => {
 			if (prev) return null;
@@ -39,27 +43,7 @@ const FileMenu: React.FC<FileMenuProps> = ({ items }) => {
 		});
 	};
 
-	useEffect(() => {
-		if (!anchor) return;
-		const handleMouseDown = (e: MouseEvent) => {
-			const target = e.target as Node;
-			if (menuRef.current?.contains(target)) return;
-			if (buttonRef.current?.contains(target)) return;
-			setAnchor(null);
-		};
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') {
-				setAnchor(null);
-				buttonRef.current?.focus();
-			}
-		};
-		document.addEventListener('mousedown', handleMouseDown);
-		document.addEventListener('keydown', handleKeyDown);
-		return () => {
-			document.removeEventListener('mousedown', handleMouseDown);
-			document.removeEventListener('keydown', handleKeyDown);
-		};
-	}, [anchor]);
+	useDismissable(menuRef, close, { ignoreRef: buttonRef, refocusRef: buttonRef });
 
 	const run = (item: FileMenuItem) => {
 		if (item.disabled) return;
@@ -95,20 +79,13 @@ const FileMenu: React.FC<FileMenuProps> = ({ items }) => {
 					}}
 				>
 					{items.map((item) => (
-						<button
-							key={item.id}
-							type='button'
-							role='menuitem'
-							disabled={item.disabled}
-							onClick={() => run(item)}
-							className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent'
-						>
+						<MenuItem key={item.id} role='menuitem' disabled={item.disabled} onClick={() => run(item)}>
 							<span className='flex items-baseline justify-between gap-3'>
 								<span className='font-medium'>{item.label}</span>
 								{item.shortcut && <span className='text-[10px] text-slate-400'>{item.shortcut}</span>}
 							</span>
 							{item.description && <span className='block text-[10px] text-slate-400 mt-0.5'>{item.description}</span>}
-						</button>
+						</MenuItem>
 					))}
 				</div>
 			)}

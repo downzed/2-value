@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { KeyboardCommands } from '../../core/KeyboardCommands';
 import { UnsavedGuard } from '../../core/UnsavedGuard';
 import { getAppStore } from '../../core/store';
-import BottomPanel from './BottomPanel';
+import TopPanel from './TopPanel';
 import GalleryPanel from './GalleryPanel';
 import Canvas from '../Canvas';
 import FloatingControls from '../FloatingControls';
@@ -38,7 +38,7 @@ const AppContent: React.FC = () => {
 	return (
 		<div className='flex flex-col h-screen bg-slate-100'>
 			{/* Menu / status bar sits above the stage. */}
-			<BottomPanel previewCanvasRef={previewCanvasRef} />
+			<TopPanel previewCanvasRef={previewCanvasRef} />
 			<div className='flex-1 flex flex-col overflow-hidden'>
 				<Canvas previewCanvasRef={previewCanvasRef} />
 				<FloatingImage />

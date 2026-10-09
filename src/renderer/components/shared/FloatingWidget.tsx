@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useDraggablePanel } from '../../hooks/useDraggablePanel';
 import { Icon } from './Icon';
+import { IconButton } from './IconButton';
 
 interface FloatingWidgetProps {
 	/** Panel title displayed in the drag handle */
@@ -66,9 +67,9 @@ const FloatingWidget: React.FC<FloatingWidgetProps> = ({
 				</div>
 				<div className='flex items-center gap-2'>
 					{titleBarActions}
-					<button type='button' onClick={onClose} className='text-slate-400 hover:text-slate-600 transition-colors'>
+					<IconButton onClick={onClose} title={`Close ${title}`}>
 						<Icon name='close' />
-					</button>
+					</IconButton>
 				</div>
 			</div>
 			{children}

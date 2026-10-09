@@ -2,9 +2,11 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useEditorSelector, useGallerySelector, useEditorStore, useGalleryStore } from '../../react/useStore';
 import { decodeErrorMessage } from '../../core/decode';
+import { byNewestFirst, bySortOrder, filterImages } from '../../core/selectors';
 import type { GalleryFolder, GalleryImage } from '../../../shared/types';
 import { UI } from '../../constants/ui';
 import { Icon } from '../shared/Icon';
+import { IconButton } from '../shared/IconButton';
 import {
 	DeleteFolderDialog,
 	EditTagsDialog,
@@ -12,13 +14,17 @@ import {
 	RenameFolderDialog,
 } from '../gallery/FolderContextMenu';
 import { ImageContextMenu } from '../gallery/ImageContextMenu';
+import { GridTile, TileGrid } from '../gallery/GridTile';
+import { FolderRow } from '../gallery/FolderRow';
+import { NewFolderCard } from '../gallery/NewFolderCard';
+import { NewFolderForm } from '../gallery/NewFolderForm';
 import { OpenItemContextMenu } from '../gallery/OpenItemContextMenu';
+import { RecentSuggestions } from '../gallery/RecentSuggestions';
+import { SaveFolderPrompt } from '../gallery/SaveFolderPrompt';
 import { useCommands } from '../../react/useCommands';
+import { useThumbnailUrls } from '../../react/useThumbnailUrls';
 import { useSaveFlow } from '../../react/useSaveFlow';
-import { renderImageThumbnail, renderStrokesThumbnail } from '../../utils/thumbnails';
 import type { OpenItem } from '../../core/types';
-import { getRecents, RECENTS_MAX } from '../../utils/storage';
-import { galleryRepository } from '../../utils/storage';
 
 type FolderContextMenuState = {
 	folder: GalleryFolder;
@@ -54,15 +60,14 @@ const GalleryPanel: React.FC = () => {
 	const editor = useEditorStore();
 	const gallery = useGalleryStore();
 	const commands = useCommands();
-	const { requestSave, dialog: saveDialog } = useSaveFlow();
-	const { setPanel, activateItem, closeItem, strokesByItem } = editor;
+	const { requestSave, prompt: savePrompt } = useSaveFlow();
+	const { setPanel, activateItem, closeItem } = editor;
 
-	// Reactive slices. Editor state is only needed for the Auto folder listing;
+	// Reactive slices. Editor state is only needed for the Opened Items listing;
 	// everything else comes from the gallery store, so a filter slider no longer
 	// re-renders the folder list.
 	const items = useEditorSelector((s) => s.items);
 	const activeItemId = useEditorSelector((s) => s.activeItemId);
-	const viewport = useEditorSelector((s) => s.viewport);
 	const panels = useEditorSelector((s) => s.panels);
 
 	const folders = useGallerySelector((s) => s.folders);
@@ -73,11 +78,7 @@ const GalleryPanel: React.FC = () => {
 	const error = useGallerySelector((s) => s.error);
 
 	// Search matches file names across every folder, not just the selected one.
-	const filteredImages = useMemo(() => {
-		const q = gallerySearchQuery.trim().toLowerCase();
-		if (!q) return images;
-		return images.filter((img) => img.fileName.toLowerCase().includes(q));
-	}, [images, gallerySearchQuery]);
+	const filteredImages = useMemo(() => filterImages(images, gallerySearchQuery), [images, gallerySearchQuery]);
 
 	const {
 		loadGallery,
@@ -91,6 +92,7 @@ const GalleryPanel: React.FC = () => {
 		setSelectedFolder,
 		setGallerySearchQuery,
 		clearError,
+		getThumbnailBlob,
 	} = gallery;
 
 	const [folderContextMenu, setFolderContextMenu] = useState<FolderContextMenuState>(null);
@@ -98,13 +100,11 @@ const GalleryPanel: React.FC = () => {
 	const [openItemMenu, setOpenItemMenu] = useState<OpenItemContextMenuState>(null);
 	const [openItemThumbs, setOpenItemThumbs] = useState<Record<string, string>>({});
 	const [dialog, setDialog] = useState<DialogState>(null);
+	// The form's name/error/in-flight state lives in NewFolderForm.
 	const [newFolderMode, setNewFolderMode] = useState(false);
-	const [newFolderName, setNewFolderName] = useState('');
-	const [newFolderError, setNewFolderError] = useState<string | null>(null);
 	const [imageLoadingId, setImageLoadingId] = useState<string | null>(null);
 	const newFolderInputRef = useRef<HTMLInputElement>(null);
-	const [thumbnailUrls, setThumbnailUrls] = useState<Record<string, string>>({});
-	const prevImageIdsRef = useRef<string[]>([]);
+	const thumbnailUrls = useThumbnailUrls(images, getThumbnailBlob);
 
 	useEffect(() => {
 		if (panels.gallery) {
@@ -113,76 +113,13 @@ const GalleryPanel: React.FC = () => {
 		}
 	}, [panels.gallery, loadGallery, clearError]);
 
-	// Suggestions for what to open next, shown only while nothing is open.
-	// Entries whose gallery image has since been deleted are filtered out.
-	const recentEntries = useMemo(
-		() =>
-			items.length === 0
-				? getRecents()
-						.filter((entry) => images.some((i) => i.id === entry.galleryImageId))
-						.slice(0, RECENTS_MAX)
-				: [],
-		[images, items],
-	);
-
-	const showRecents = recentEntries.length > 0 && gallerySearchQuery.trim().length === 0;
+	/* Recents render through RecentSuggestions; it decides for itself when to show. */
 
 	useEffect(() => {
 		if (newFolderMode) {
 			newFolderInputRef.current?.focus();
 		}
 	}, [newFolderMode]);
-
-	// Load thumbnail blobs from IndexedDB when images change
-	useEffect(() => {
-		const prevIds = new Set(prevImageIdsRef.current);
-		const newImages = images.filter((i) => !prevIds.has(i.id));
-		const removedIds = prevImageIdsRef.current.filter((id) => !images.some((i) => i.id === id));
-
-		// Revoke URLs for removed images via functional state update
-		if (removedIds.length > 0) {
-			setThumbnailUrls((prev) => {
-				const next = { ...prev };
-				for (const id of removedIds) {
-					if (next[id]) {
-						URL.revokeObjectURL(next[id]);
-						delete next[id];
-					}
-				}
-				return next;
-			});
-		}
-
-		if (newImages.length === 0) return;
-
-		let cancelled = false;
-		const newUrls: Record<string, string> = {};
-
-		Promise.all(
-			newImages.map(async (img) => {
-				try {
-					const blob = await galleryRepository.getThumbnailBlob(img.id);
-					if (blob && !cancelled) {
-						newUrls[img.id] = URL.createObjectURL(blob);
-					}
-				} catch {
-					// thumbnail unavailable
-				}
-			}),
-		).then(() => {
-			if (!cancelled) {
-				prevImageIdsRef.current = images.map((i) => i.id);
-				setThumbnailUrls((prev) => ({ ...prev, ...newUrls }));
-			}
-		});
-
-		return () => {
-			cancelled = true;
-			for (const url of Object.values(newUrls)) {
-				URL.revokeObjectURL(url);
-			}
-		};
-	}, [images]);
 
 	const handleFolderContextMenu = (e: React.MouseEvent, folder: GalleryFolder) => {
 		e.preventDefault();
@@ -205,18 +142,11 @@ const GalleryPanel: React.FC = () => {
 		setImageContextMenu({ image, x: e.clientX, y: e.clientY });
 	};
 
-	const handleCreateFolder = async (e: React.FormEvent) => {
-		e.preventDefault();
-		const name = newFolderName.trim();
-		if (!name) return;
-		try {
-			setNewFolderError(null);
-			await createFolder(name);
-			setNewFolderName('');
-			setNewFolderMode(false);
-		} catch (err) {
-			setNewFolderError(err instanceof Error ? err.message : 'Failed to create folder.');
-		}
+	// Create, then leave the form. Errors propagate to NewFolderForm, which owns
+	// the inline error state.
+	const handleCreateFolder = async (name: string) => {
+		await createFolder(name);
+		setNewFolderMode(false);
 	};
 
 	const handleRename = async (newName: string) => {
@@ -273,23 +203,16 @@ const GalleryPanel: React.FC = () => {
 	// --- Auto folder (virtual list of currently open items) ---
 
 	// Lazily generate a preview per open item; blank canvases render their strokes.
+	// The command reads the strokes internally, so this component never touches
+	// `strokesByItem`.
 	const ensureOpenItemThumb = useCallback(
 		async (item: OpenItem) => {
 			if (openItemThumbs[item.id]) return;
-			const url =
-				item.kind === 'blank'
-					? await renderStrokesThumbnail(
-							strokesByItem.get(item.id) ?? [],
-							Math.max(viewport.width, 1),
-							Math.max(viewport.height, 1),
-						)
-					: item.image
-						? await renderImageThumbnail(item.image)
-						: null;
+			const url = await commands.renderItemPreview(item);
 			if (!url) return;
 			setOpenItemThumbs((prev) => (prev[item.id] ? prev : { ...prev, [item.id]: url }));
 		},
-		[openItemThumbs, strokesByItem, viewport.width, viewport.height],
+		[commands, openItemThumbs],
 	);
 
 	// Clicking a row takes the user back to that document.
@@ -383,7 +306,7 @@ const GalleryPanel: React.FC = () => {
 
 	// Memoised derived structures to avoid O(n) work on every render.
 	// Must be called before any early return to satisfy the Rules of Hooks.
-	const sortedFolders = useMemo(() => [...folders].sort((a, b) => a.sortOrder - b.sortOrder), [folders]);
+	const sortedFolders = useMemo(() => [...folders].sort(bySortOrder), [folders]);
 	const folderNameMap = useMemo(() => new Map(folders.map((f) => [f.id, f.name])), [folders]);
 	const folderImageCount = useMemo(
 		() =>
@@ -397,7 +320,7 @@ const GalleryPanel: React.FC = () => {
 	// Images for the currently selected folder
 	const selectedFolderImages = useMemo(() => {
 		if (!selectedFolderId) return [];
-		return images.filter((img) => img.folderId === selectedFolderId).sort((a, b) => b.addedAt - a.addedAt);
+		return images.filter((img) => img.folderId === selectedFolderId).sort(byNewestFirst);
 	}, [images, selectedFolderId]);
 
 	const selectedFolder = useMemo(
@@ -411,44 +334,20 @@ const GalleryPanel: React.FC = () => {
 
 	// Render the image thumbnail grid
 	const renderImageGrid = (imgs: GalleryImage[], showFolderBadge: boolean) => (
-		<div
-			className='grid gap-1.5'
-			style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
-		>
-			{imgs.map((img) => {
-				const isLoading = imageLoadingId === img.id;
-				const folderName = showFolderBadge ? folderNameMap.get(img.folderId) : null;
-				const thumbUrl = thumbnailUrls[img.id];
-				return (
-					<button
-						key={img.id}
-						type='button'
-						className={`relative rounded-lg overflow-hidden border transition-colors cursor-pointer text-left p-0 bg-transparent ${
-							isLoading ? 'border-slate-400 opacity-60' : 'border-slate-200 hover:border-slate-400'
-						}`}
-						onClick={() => handleOpenImage(img)}
-						onContextMenu={(e) => handleImageContextMenu(e, img)}
-						aria-label={`Open ${img.fileName}`}
-					>
-						{thumbUrl ? (
-							<img src={thumbUrl} alt={img.fileName} className='w-full aspect-square object-cover' />
-						) : (
-							<div className='w-full aspect-square bg-slate-100 animate-pulse' />
-						)}
-						{folderName && (
-							<span className='absolute bottom-0 left-0 right-0 text-[9px] text-white bg-black/60 truncate px-1 py-0.5'>
-								{folderName}
-							</span>
-						)}
-						{isLoading && (
-							<div className='absolute inset-0 flex items-center justify-center bg-white/40'>
-								<span className='text-[10px] text-slate-600'>Loading...</span>
-							</div>
-						)}
-					</button>
-				);
-			})}
-		</div>
+		<TileGrid>
+			{imgs.map((img) => (
+				<GridTile
+					key={img.id}
+					src={thumbnailUrls[img.id]}
+					alt={img.fileName}
+					ariaLabel={`Open ${img.fileName}`}
+					caption={showFolderBadge ? folderNameMap.get(img.folderId) : null}
+					loading={imageLoadingId === img.id}
+					onClick={() => handleOpenImage(img)}
+					onContextMenu={(e) => handleImageContextMenu(e, img)}
+				/>
+			))}
+		</TileGrid>
 	);
 
 	// Grid of currently open items — the contents of the virtual Auto folder.
@@ -457,37 +356,21 @@ const GalleryPanel: React.FC = () => {
 			return <p className='text-xs text-slate-400 py-4 text-center'>Nothing open</p>;
 		}
 		return (
-			<div
-				className='grid gap-1.5'
-				style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
-			>
-				{items.map((item) => {
-					const isActive = item.id === activeItemId;
-					const thumbUrl = openItemThumbs[item.id];
-					return (
-						<button
-							key={item.id}
-							type='button'
-							className={`relative rounded-lg overflow-hidden border transition-colors cursor-pointer text-left p-0 bg-transparent ${
-								isActive ? 'border-slate-500 ring-1 ring-slate-400' : 'border-slate-200 hover:border-slate-400'
-							}`}
-							onClick={() => handleOpenItemClick(item)}
-							onContextMenu={(e) => handleOpenItemMenu(e, item)}
-							aria-label={`Continue ${item.label}`}
-						>
-							{thumbUrl ? (
-								<img src={thumbUrl} alt={item.label} className='w-full aspect-square object-cover' />
-							) : (
-								<div className='w-full aspect-square bg-slate-100 animate-pulse' />
-							)}
-							<span className='absolute bottom-0 left-0 right-0 text-[9px] text-white bg-black/60 truncate px-1 py-0.5'>
-								{item.label}
-							</span>
-							{item.dirty && <span className='absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-500' />}
-						</button>
-					);
-				})}
-			</div>
+			<TileGrid>
+				{items.map((item) => (
+					<GridTile
+						key={item.id}
+						src={openItemThumbs[item.id]}
+						alt={item.label}
+						ariaLabel={`Continue ${item.label}`}
+						caption={item.label}
+						selected={item.id === activeItemId}
+						dot={item.dirty}
+						onClick={() => handleOpenItemClick(item)}
+						onContextMenu={(e) => handleOpenItemMenu(e, item)}
+					/>
+				))}
+			</TileGrid>
 		);
 	};
 
@@ -500,14 +383,9 @@ const GalleryPanel: React.FC = () => {
 			<div className='space-y-3'>
 				{/* Header with back button */}
 				<div className='flex items-center gap-2'>
-					<button
-						type='button'
-						aria-label='Back to folders'
-						onClick={() => setSelectedFolder(null)}
-						className='text-slate-400 hover:text-slate-600 transition-colors'
-					>
+					<IconButton onClick={() => setSelectedFolder(null)} title='Back to folders'>
 						<Icon name='arrow-left' size='sm' />
-					</button>
+					</IconButton>
 					<p className='text-xs font-semibold text-slate-700 truncate flex-1'>{selectedFolder.name}</p>
 					<span className='text-[10px] text-slate-400'>
 						{count} image{count !== 1 ? 's' : ''}
@@ -533,14 +411,9 @@ const GalleryPanel: React.FC = () => {
 				{/* Header */}
 				<div className='flex items-center justify-between px-4 py-2.5 border-b border-slate-100'>
 					<span className='text-xs font-semibold text-slate-700'>Gallery</span>
-					<button
-						type='button'
-						aria-label='Close gallery'
-						onClick={() => setPanel('gallery', false)}
-						className='text-slate-400 hover:text-slate-600 transition-colors'
-					>
+					<IconButton onClick={() => setPanel('gallery', false)} title='Close gallery'>
 						<Icon name='close' />
-					</button>
+					</IconButton>
 				</div>
 
 				{/* Body */}
@@ -553,14 +426,9 @@ const GalleryPanel: React.FC = () => {
 					{selectedFolderId === OPENED_ITEMS_ID && !isSearching ? (
 						<div className='space-y-3'>
 							<div className='flex items-center gap-2'>
-								<button
-									type='button'
-									aria-label='Back to folders'
-									onClick={() => setSelectedFolder(null)}
-									className='text-slate-400 hover:text-slate-600 transition-colors'
-								>
+								<IconButton onClick={() => setSelectedFolder(null)} title='Back to folders'>
 									<Icon name='arrow-left' size='sm' />
-								</button>
+								</IconButton>
 								<p className='text-xs font-semibold text-slate-700 truncate flex-1'>Opened Items</p>
 								<span className='text-[10px] text-slate-400'>
 									{items.length} open item{items.length !== 1 ? 's' : ''}
@@ -585,54 +453,28 @@ const GalleryPanel: React.FC = () => {
 									className='w-full text-xs border border-slate-200 rounded-lg px-2.5 py-1.5 pr-7 focus:outline-none focus:border-slate-400 bg-slate-50'
 								/>
 								{isSearching && (
-									<button
-										type='button'
-										aria-label='Clear search'
+									<IconButton
 										onClick={() => setGallerySearchQuery('')}
-										className='absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600'
+										title='Clear search'
+										className='absolute right-2 top-1/2 -translate-y-1/2'
 									>
 										&times;
-									</button>
+									</IconButton>
 								)}
 							</div>
 
-							{/* Recent suggestions, shown when nothing is open yet */}
-							{showRecents && (
-								<div className='mb-4 space-y-1.5'>
-									<p className='text-[10px] font-medium text-slate-500 uppercase tracking-wide'>Recent</p>
-									<div
-										className='grid gap-1.5'
-										style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
-									>
-										{recentEntries.map((entry) => (
-											<button
-												key={entry.galleryImageId}
-												type='button'
-												onClick={() => {
-													void commands.openGalleryImage(entry.galleryImageId);
-												}}
-												title={entry.fileName}
-												className='relative rounded-lg overflow-hidden border border-slate-200 hover:border-slate-400 transition-colors cursor-pointer p-0 bg-transparent'
-											>
-												{thumbnailUrls[entry.galleryImageId] ? (
-													<img
-														src={thumbnailUrls[entry.galleryImageId]}
-														alt={entry.fileName}
-														className='w-full aspect-square object-cover'
-													/>
-												) : (
-													<div className='w-full aspect-square bg-slate-100' />
-												)}
-												<span className='absolute bottom-0 left-0 right-0 text-[9px] text-white bg-black/60 truncate px-1 py-0.5'>
-													{entry.fileName}
-												</span>
-											</button>
-										))}
-									</div>
-								</div>
+							{/* Search results or folder grid */}
+							{isSearching ? null : (
+								<RecentSuggestions
+									images={images}
+									openItemCount={items.length}
+									thumbnailUrls={thumbnailUrls}
+									onOpen={(id) => {
+										void commands.openGalleryImage(id);
+									}}
+								/>
 							)}
 
-							{/* Search results or folder grid */}
 							{isSearching ? (
 								<div className='space-y-2'>
 									<p className='text-[10px] text-slate-400'>
@@ -651,17 +493,13 @@ const GalleryPanel: React.FC = () => {
 									) : (
 										<ul className='grid grid-cols-2 gap-2 list-none p-0 m-0'>
 											<li className='relative rounded-lg border border-slate-300 bg-slate-100 hover:border-slate-500 hover:bg-slate-50 transition-colors'>
-												<button
-													type='button'
-													className='w-full text-left p-3 bg-transparent'
+												<FolderRow
+													emphasis='strong'
+													title='Opened Items'
+													subtitle={`${items.length} open item${items.length !== 1 ? 's' : ''}`}
+													ariaLabel='Open Opened Items folder'
 													onClick={() => setSelectedFolder(OPENED_ITEMS_ID)}
-													aria-label='Open Opened Items folder'
-												>
-													<p className='text-xs font-semibold text-slate-800 truncate'>Opened Items</p>
-													<p className='text-[10px] text-slate-500 mt-0.5'>
-														{items.length} open item{items.length !== 1 ? 's' : ''}
-													</p>
-												</button>
+												/>
 											</li>
 
 											{sortedFolders.map((folder) => {
@@ -672,83 +510,28 @@ const GalleryPanel: React.FC = () => {
 														className='relative group rounded-lg border border-slate-200 bg-slate-50 hover:border-slate-400 hover:bg-slate-100 transition-colors cursor-pointer'
 														onContextMenu={(e) => handleFolderContextMenu(e, folder)}
 													>
-														<button
-															type='button'
-															className='w-full text-left p-3 bg-transparent'
+														<FolderRow
+															title={folder.name}
+															subtitle={`${count} image${count !== 1 ? 's' : ''}`}
+															ariaLabel={`Open folder ${folder.name}`}
 															onClick={() => setSelectedFolder(folder.id)}
-															aria-label={`Open folder ${folder.name}`}
-														>
-															<p className='text-xs font-medium text-slate-700 truncate'>{folder.name}</p>
-															<p className='text-[10px] text-slate-400 mt-0.5'>
-																{count} image{count !== 1 ? 's' : ''}
-															</p>
-														</button>
-														<button
-															type='button'
-															aria-label={`Actions for folder ${folder.name}`}
+														/>
+														<IconButton
 															onClick={(e) => handleFolderMenuButton(e, folder)}
-															className='absolute top-1 right-1 w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded'
+															title={`Actions for folder ${folder.name}`}
+															className='absolute top-1 right-1 w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity'
 														>
 															•••
-														</button>
+														</IconButton>
 													</li>
 												);
 											})}
 
 											{/* New Folder card */}
 											{newFolderMode ? (
-												<form
-													onSubmit={handleCreateFolder}
-													className='rounded-lg border border-slate-300 bg-slate-50 p-2 flex flex-col gap-1'
-												>
-													<input
-														ref={newFolderInputRef}
-														type='text'
-														value={newFolderName}
-														onChange={(e) => {
-															setNewFolderName(e.target.value);
-															setNewFolderError(null);
-														}}
-														placeholder='Folder name'
-														maxLength={100}
-														className='text-xs border border-slate-300 rounded px-2 py-1 focus:outline-none focus:border-slate-500 w-full'
-														onKeyDown={(e) => {
-															if (e.key === 'Escape') {
-																setNewFolderMode(false);
-																setNewFolderName('');
-																setNewFolderError(null);
-															}
-														}}
-													/>
-													{newFolderError && <p className='text-[10px] text-red-500'>{newFolderError}</p>}
-													<div className='flex gap-1'>
-														<button
-															type='submit'
-															className='flex-1 text-[10px] bg-slate-800 text-white rounded py-1 hover:bg-slate-700 transition-colors'
-														>
-															Create
-														</button>
-														<button
-															type='button'
-															onClick={() => {
-																setNewFolderMode(false);
-																setNewFolderName('');
-																setNewFolderError(null);
-															}}
-															className='flex-1 text-[10px] text-slate-500 hover:text-slate-700 transition-colors'
-														>
-															Cancel
-														</button>
-													</div>
-												</form>
+												<NewFolderForm onCreate={handleCreateFolder} onCancel={() => setNewFolderMode(false)} />
 											) : (
-												<button
-													type='button'
-													onClick={() => setNewFolderMode(true)}
-													className='rounded-lg border border-dashed border-slate-300 bg-transparent hover:border-slate-400 hover:bg-slate-50 transition-colors p-3 text-left'
-												>
-													<p className='text-xs font-medium text-slate-400'>+ New Folder</p>
-												</button>
+												<NewFolderCard onClick={() => setNewFolderMode(true)} />
 											)}
 										</ul>
 									)}
@@ -772,7 +555,7 @@ const GalleryPanel: React.FC = () => {
 				/>
 			)}
 
-			{saveDialog}
+			<SaveFolderPrompt prompt={savePrompt} />
 
 			{/* Open-item context menu (virtual Opened Items folder) */}
 			{openItemMenu && (

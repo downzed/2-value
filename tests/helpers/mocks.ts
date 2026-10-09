@@ -1,112 +1,7 @@
 import { vi } from 'vitest';
-
-// ---------------------------------------------------------------------------
-// IndexedDB mock (jsdom doesn't implement it)
-// ---------------------------------------------------------------------------
-
-interface MockIDBStore {
-	[key: string]: unknown;
-}
-
-class MockIDBObjectStore {
-	private store: MockIDBStore = {};
-
-	get(key: string) {
-		return Promise.resolve(this.store[key]);
-	}
-
-	getAll() {
-		return Promise.resolve(Object.values(this.store));
-	}
-
-	put(value: { id: string } & Record<string, unknown>) {
-		this.store[value.id] = value;
-		return Promise.resolve();
-	}
-
-	delete(key: string) {
-		delete this.store[key];
-		return Promise.resolve();
-	}
-
-	clear() {
-		this.store = {};
-		return Promise.resolve();
-	}
-}
-
-class MockIDBTransaction {
-	private stores: Record<string, MockIDBObjectStore> = {};
-
-	constructor(storeNames: string[]) {
-		for (const name of storeNames) {
-			this.stores[name] = new MockIDBObjectStore();
-		}
-	}
-
-	objectStore(name: string): MockIDBObjectStore {
-		return this.stores[name];
-	}
-}
-
-export function setupIndexedDBMock() {
-	const stores: Record<string, MockIDBObjectStore> = {};
-
-	const mockDB = {
-		transaction: vi.fn((storeNames: string | string[]) => {
-			const names = Array.isArray(storeNames) ? storeNames : [storeNames];
-			const tx = new MockIDBTransaction(names);
-			for (const name of names) {
-				if (!stores[name]) stores[name] = new MockIDBObjectStore();
-				vi.spyOn(tx, 'objectStore').mockReturnValue(stores[name]);
-			}
-			return tx;
-		}),
-		close: vi.fn(),
-	};
-
-	const open = vi.fn().mockReturnValue({
-		result: mockDB,
-		error: null,
-		onsuccess: null,
-		onerror: null,
-		onupgradeneeded: null,
-	});
-
-	Object.defineProperty(globalThis, 'indexedDB', {
-		value: { open },
-		writable: true,
-		configurable: true,
-	});
-
-	return { mockDB, stores, open };
-}
-
-// ---------------------------------------------------------------------------
-// URL.createObjectURL / URL.revokeObjectURL mock (jsdom may not support it)
-// ---------------------------------------------------------------------------
-
-const urlMap = new Map<string, string>();
-
-export function setupURLMock() {
-	const originalCreate = URL.createObjectURL;
-	const originalRevoke = URL.revokeObjectURL;
-
-	URL.createObjectURL = vi.fn((_blob: Blob) => {
-		const url = `blob:mock/${Math.random().toString(36).slice(2)}`;
-		urlMap.set(url, '');
-		return url;
-	});
-
-	URL.revokeObjectURL = vi.fn((url: string) => {
-		urlMap.delete(url);
-	});
-
-	return () => {
-		URL.createObjectURL = originalCreate;
-		URL.revokeObjectURL = originalRevoke;
-	};
-}
+import type { Image as ImageJS } from 'image-js';
+import type { GalleryState } from '../../src/renderer/core/GalleryStore';
+import type { EditorState, OpenItem } from '../../src/renderer/core/types';
 
 // ---------------------------------------------------------------------------
 // ResizeObserver mock (jsdom doesn't implement it)
@@ -214,40 +109,25 @@ export function stubBoundingRect(element: Element, rect: Partial<DOMRect>) {
 }
 
 // ---------------------------------------------------------------------------
-// ImageData mock (jsdom may not always have it)
-// ---------------------------------------------------------------------------
-
-export function setupImageDataMock() {
-	if (typeof globalThis.ImageData === 'undefined') {
-		globalThis.ImageData = vi.fn(function (
-			this: Record<string, unknown>,
-			data: Uint8ClampedArray,
-			width: number,
-			height: number,
-		) {
-			this.data = data;
-			this.width = width;
-			this.height = height;
-		}) as unknown as typeof ImageData;
-	}
-}
-
-// ---------------------------------------------------------------------------
 // Mock image-js Image object
 // ---------------------------------------------------------------------------
 
-export function createMockImage(width = 100, height = 100) {
+/**
+ * Minimal stand-in for an image-js `Image`.
+ *
+ * Only the members component tests actually touch are implemented, so the cast
+ * is deliberate: satisfying the full `Image` interface would add ~80 irrelevant
+ * members to every test.
+ */
+export function createMockImage(width = 100, height = 100): ImageJS {
 	const data = new Uint8ClampedArray(width * height * 4);
 	return {
 		width,
 		height,
 		getRawImage: () => ({ data, width, height }),
-	};
+	} as unknown as ImageJS;
 }
 
-// ---------------------------------------------------------------------------
-// Default context value factory
-// ---------------------------------------------------------------------------
 // Store mocks (Phase 4)
 //
 // Components now read the singleton stores via selectors in
@@ -262,11 +142,8 @@ export function createOpenItem(overrides: Partial<OpenItem> = {}): OpenItem {
 		label: 'photo.jpg',
 		fileName: 'photo.jpg',
 		image: null,
-		width: 100,
-		height: 100,
 		galleryImageId: null,
 		dedupeKey: null,
-		thumbUrl: null,
 		blur: 0,
 		threshold: 0,
 		values: 2,
@@ -365,6 +242,7 @@ export function createGalleryStoreStub(overrides: Record<string, unknown> = {}) 
 		copyImage: vi.fn(),
 		deleteImage: vi.fn(),
 		getImageBlob: vi.fn(),
+		getThumbnailBlob: vi.fn(),
 		openGalleryImage: vi.fn(),
 		setSelectedFolder: vi.fn(),
 		setGallerySearchQuery: vi.fn(),
@@ -382,6 +260,7 @@ export function createCommandsStub(overrides: Record<string, unknown> = {}) {
 		saveActiveItemToGallery: vi.fn().mockResolvedValue(undefined),
 		saveOpenItem: vi.fn().mockResolvedValue(undefined),
 		renderItemToBlob: vi.fn().mockResolvedValue(null),
+		renderItemPreview: vi.fn().mockResolvedValue(null),
 		exportOpenItem: vi.fn().mockResolvedValue(undefined),
 		exportGalleryImage: vi.fn().mockResolvedValue(undefined),
 		dispose: vi.fn(),

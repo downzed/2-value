@@ -1,9 +1,19 @@
 import { useEffect, useState } from 'react';
 import { UI } from '../constants/ui';
+import {
+	selectBlur,
+	selectCanRedo,
+	selectCanUndo,
+	selectHasImage,
+	selectThreshold,
+	selectValues,
+} from '../core/selectors';
 import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
+import { Button } from './shared/Button';
+import { SegmentedControl } from './shared/SegmentedControl';
 import { PillButton } from './shared/PillButton';
 import { SectionHeader } from './shared/SectionHeader';
 import { SliderRow } from './shared/SliderRow';
@@ -15,12 +25,12 @@ const FloatingControls: React.FC = () => {
 	const editor = useEditorStore();
 	const { setBlur, setThreshold, setValues, resetControls, applyPreset, undo, redo, setPanel } = editor;
 
-	const hasImage = useEditorSelector((s) => s.items.some((i) => i.id === s.activeItemId && i.image !== null));
-	const blur = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.blur ?? 0);
-	const threshold = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.threshold ?? 0);
-	const values = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.values ?? 2);
-	const canUndo = useEditorSelector((s) => (s.items.find((i) => i.id === s.activeItemId)?.history.length ?? 0) > 0);
-	const canRedo = useEditorSelector((s) => (s.items.find((i) => i.id === s.activeItemId)?.future.length ?? 0) > 0);
+	const hasImage = useEditorSelector(selectHasImage);
+	const blur = useEditorSelector(selectBlur);
+	const threshold = useEditorSelector(selectThreshold);
+	const values = useEditorSelector(selectValues);
+	const canUndo = useEditorSelector(selectCanUndo);
+	const canRedo = useEditorSelector(selectCanRedo);
 	const isOpen = useEditorSelector((s) => s.panels.controls);
 
 	const [localBlur, setLocalBlur] = useState(blur);
@@ -127,36 +137,18 @@ const FloatingControls: React.FC = () => {
 					/>
 
 					<div className='flex items-center justify-between'>
-						<div className='flex items-center gap-1 bg-slate-100 rounded p-0.5'>
-							<button
-								type='button'
-								onClick={() => setValues(2)}
-								disabled={!hasImage}
-								className={`px-2 py-1 text-xs font-medium rounded ${
-									values === 2 ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'
-								}`}
-							>
-								2
-							</button>
-							<button
-								type='button'
-								onClick={() => setValues(3)}
-								disabled={!hasImage}
-								className={`px-2 py-1 text-xs font-medium rounded ${
-									values === 3 ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'
-								}`}
-							>
-								3
-							</button>
-						</div>
-						<button
-							type='button'
-							onClick={handleReset}
+						<SegmentedControl
+							options={[
+								{ value: 2, label: '2' },
+								{ value: 3, label: '3' },
+							]}
+							value={values}
+							onChange={setValues}
 							disabled={!hasImage}
-							className='text-xs text-red-500 hover:text-red-700 disabled:opacity-40 disabled:cursor-not-allowed'
-						>
+						/>
+						<Button onClick={handleReset} disabled={!hasImage} className='text-xs text-red-500 hover:text-red-700'>
 							Reset
-						</button>
+						</Button>
 					</div>
 				</div>
 

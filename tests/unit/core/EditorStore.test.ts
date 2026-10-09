@@ -1,8 +1,6 @@
-import type { Image } from 'image-js';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { EditorStore } from '../../../src/renderer/core/EditorStore';
-
-const createMockImage = (width = 100, height = 100) => ({ clone: () => ({}), width, height }) as unknown as Image;
+import { createMockImage } from '../../helpers/mocks';
 
 /** Adjustments belong to an open item, so these tests need one. */
 function withImage(): EditorStore {
@@ -34,11 +32,9 @@ describe('EditorStore', () => {
 
 		expect(s.items).toEqual([]);
 		expect(s.activeItemId).toBe(null);
-		expect(store.currentImage).toBe(null);
+		expect(store.activeItem).toBe(null);
 		expect(store.fileName).toBe('');
 		expect(store.hasImage).toBe(false);
-		expect(store.hasCanvas).toBe(false);
-		expect(store.canvasMode).toBe('image');
 		expect(s.zoom).toBe(1);
 		expect(s.fitMode).toBe('fit');
 		expect(s.counter).toBe(0);
@@ -80,7 +76,7 @@ describe('EditorStore', () => {
 
 		store.resetImage();
 
-		expect(store.currentImage).toBe(null);
+		expect(store.activeItem).toBe(null);
 		expect(store.fileName).toBe('');
 		expect(store.getState().items).toEqual([]);
 		expect(store.getState().activeItemId).toBe(null);
@@ -98,33 +94,30 @@ describe('EditorStore', () => {
 		expect(store.getState().activeItemId).toBe(store.getState().items[0].id);
 	});
 
-	it('should record gallery metadata so the item is restorable', async () => {
+	it('should record gallery metadata on the open item', async () => {
 		const store = new EditorStore();
-		await store.loadImage(createMockImage(), 'photo.jpg', { galleryImageId: 'g1', thumbUrl: 'blob:thumb' });
+		await store.loadImage(createMockImage(), 'photo.jpg', { galleryImageId: 'g1' });
 
 		expect(activeItem(store).galleryImageId).toBe('g1');
-		expect(activeItem(store).thumbUrl).toBe('blob:thumb');
-		expect(store.restorableItemIds).toEqual(['g1']);
 	});
 
-	it('should not offer a dirty gallery item for restore', async () => {
+	it('should track a gallery item as dirty once edited', async () => {
 		const store = new EditorStore();
 		await store.loadImage(createMockImage(), 'photo.jpg', { galleryImageId: 'g1' });
 		store.setBlur(3);
 
 		expect(activeItem(store).dirty).toBe(true);
-		expect(store.restorableItemIds).toEqual([]);
 		expect(store.hasDirtyItems).toBe(true);
 	});
 
-	it('should mark an item saved so it is restorable again', async () => {
+	it('should mark an item clean again after saving', async () => {
 		const store = new EditorStore();
 		await store.loadImage(createMockImage(), 'photo.jpg', { galleryImageId: 'g1' });
 		store.setBlur(3);
 		store.markActiveSaved();
 
 		expect(activeItem(store).dirty).toBe(false);
-		expect(store.restorableItemIds).toEqual(['g1']);
+		expect(store.hasDirtyItems).toBe(false);
 	});
 
 	it('should reactivate an already-open clean source instead of duplicating it', async () => {
@@ -161,7 +154,7 @@ describe('EditorStore', () => {
 		expect(store.getState().items).toHaveLength(0);
 		expect(store.getState().activeItemId).toBe(null);
 		expect(store.fileName).toBe('');
-		expect(store.hasCanvas).toBe(false);
+		expect(store.hasImage).toBe(false);
 	});
 
 	// --- Adjustments ---
@@ -490,9 +483,7 @@ describe('EditorStore', () => {
 	describe('blank canvases', () => {
 		it('should start with no items and no canvas content', () => {
 			const store = new EditorStore();
-			expect(store.canvasMode).toBe('image');
-			expect(store.hasBlankCanvas).toBe(false);
-			expect(store.hasCanvas).toBe(false);
+			expect(store.activeItem).toBe(null);
 			expect(store.getState().items).toHaveLength(0);
 			expect(store.getState().activeItemId).toBe(null);
 		});
@@ -501,14 +492,11 @@ describe('EditorStore', () => {
 			const store = new EditorStore();
 			store.newBlankCanvas();
 
-			expect(store.canvasMode).toBe('blank');
-			expect(store.hasBlankCanvas).toBe(true);
-			expect(store.hasCanvas).toBe(true);
 			expect(store.getState().items).toHaveLength(1);
 			expect(store.getState().items[0].kind).toBe('blank');
 			expect(store.getState().items[0].label).toBe('Canvas 1');
 			// No raster image — the blank surface bypasses the worker.
-			expect(store.currentImage).toBe(null);
+			expect(activeItem(store).image).toBe(null);
 			expect(store.hasImage).toBe(false);
 		});
 
@@ -528,7 +516,7 @@ describe('EditorStore', () => {
 			// The photo is still open, just not active.
 			expect(store.getState().items).toHaveLength(2);
 			expect(store.hasImage).toBe(false);
-			expect(store.canvasMode).toBe('blank');
+			expect(activeItem(store).kind).toBe('blank');
 		});
 
 		it('should restore each item when switching between them', async () => {
@@ -550,7 +538,7 @@ describe('EditorStore', () => {
 
 			// And forward to the canvas, which keeps its own clean history.
 			store.activateItem(canvasId);
-			expect(store.canvasMode).toBe('blank');
+			expect(activeItem(store).kind).toBe('blank');
 			expect(activeItem(store).blur).toBe(0);
 			expect(store.canUndo).toBe(false);
 		});
@@ -597,8 +585,7 @@ describe('EditorStore', () => {
 			store.newBlankCanvas();
 			await store.loadImage(createMockImage(), 'photo.jpg');
 
-			expect(store.canvasMode).toBe('image');
-			expect(store.hasBlankCanvas).toBe(false);
+			expect(store.activeItem?.kind).toBe('image');
 			expect(store.hasImage).toBe(true);
 			expect(store.getState().items).toHaveLength(2);
 		});
@@ -624,7 +611,7 @@ describe('EditorStore', () => {
 
 			expect(store.getState().items).toHaveLength(0);
 			expect(store.getState().activeItemId).toBe(null);
-			expect(store.hasCanvas).toBe(false);
+			expect(store.activeItem).toBe(null);
 		});
 
 		it('should drop an item strokes when it is closed', () => {
@@ -682,24 +669,6 @@ describe('EditorStore', () => {
 
 			store.newBlankCanvas();
 			expect(store.getState().viewport).toEqual({ width: 1024, height: 768 });
-		});
-
-		it('should report blank size only for a blank canvas', () => {
-			const store = new EditorStore();
-			expect(store.blankSize).toBe(null);
-
-			store.setViewport({ width: 800, height: 600 });
-			store.newBlankCanvas();
-			expect(store.blankSize).toEqual({ width: 800, height: 600 });
-
-			store.activateItem(store.getState().items[0].id);
-		});
-
-		it('should report no blank size for an image item', async () => {
-			const store = new EditorStore();
-			store.setViewport({ width: 800, height: 600 });
-			await store.loadImage(createMockImage(), 'photo.jpg');
-			expect(store.blankSize).toBe(null);
 		});
 	});
 

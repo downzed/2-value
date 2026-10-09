@@ -1,30 +1,11 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { OpenItemContextMenu } from '../../../src/renderer/components/gallery/OpenItemContextMenu';
-import type { OpenItem } from '../../../src/renderer/hooks/useImage';
+import type { OpenItem } from '../../../src/renderer/core/types';
+import { createOpenItem } from '../../helpers/mocks';
 
-function makeItem(overrides: Partial<OpenItem> = {}): OpenItem {
-	return {
-		id: 'item-1',
-		kind: 'blank',
-		label: 'Canvas 1',
-		fileName: '',
-		image: null,
-		width: 0,
-		height: 0,
-		galleryImageId: null,
-		dedupeKey: null,
-		thumbUrl: null,
-		blur: 0,
-		threshold: 0,
-		values: 2,
-		showOriginal: false,
-		history: [],
-		future: [],
-		dirty: false,
-		...overrides,
-	};
-}
+const makeItem = (overrides: Partial<OpenItem> = {}): OpenItem =>
+	createOpenItem({ kind: 'blank', label: 'Canvas 1', fileName: '', image: null, ...overrides });
 
 function renderMenu(overrides: Partial<OpenItem> = {}) {
 	const handlers = {

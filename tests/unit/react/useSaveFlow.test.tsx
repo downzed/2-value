@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useSaveFlow } from '../../../src/renderer/react/useSaveFlow';
+import { SaveFolderPrompt } from '../../../src/renderer/components/gallery/SaveFolderPrompt';
 
 const holders = vi.hoisted(() => ({
 	getGalleryStore: () => ({}),
@@ -24,7 +25,7 @@ const REF_FOLDER = { id: 'f1', name: 'Refs' };
 
 /** Renders the trigger and the dialog in one tree, the way real callers do. */
 function Wrapper({ hasEntry }: { hasEntry: boolean }) {
-	const { requestSave, dialog } = useSaveFlow();
+	const { requestSave, prompt } = useSaveFlow();
 	return (
 		<div>
 			<button
@@ -35,7 +36,7 @@ function Wrapper({ hasEntry }: { hasEntry: boolean }) {
 			>
 				Trigger save
 			</button>
-			{dialog}
+			<SaveFolderPrompt prompt={prompt} />
 		</div>
 	);
 }

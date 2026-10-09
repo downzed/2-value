@@ -1,7 +1,10 @@
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { GalleryFolder, GalleryImage } from '../../../shared/types';
+import { useDismissable } from '../../react/useDismissable';
+import { bySortOrder } from '../../core/selectors';
 import { useMenuPosition } from '../../react/useMenuPosition';
+import { MenuItem } from '../shared/MenuItem';
 
 interface ImageContextMenuProps {
 	image: GalleryImage;
@@ -34,31 +37,11 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
 	const menuRef = useRef<HTMLDivElement>(null);
 	const [subMenu, setSubMenu] = useState<SubMenu>(null);
 
-	useEffect(() => {
-		const handleClickOutside = (e: MouseEvent) => {
-			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-				onClose();
-			}
-		};
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') {
-				if (subMenu) {
-					setSubMenu(null);
-				} else {
-					onClose();
-				}
-			}
-		};
-		document.addEventListener('mousedown', handleClickOutside);
-		document.addEventListener('keydown', handleKeyDown);
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside);
-			document.removeEventListener('keydown', handleKeyDown);
-		};
-	}, [onClose, subMenu]);
+	// Escape peels back one level at a time before dismissing the menu.
+	useDismissable(menuRef, () => (subMenu ? setSubMenu(null) : onClose()));
 
 	// Folders the image can be moved/copied to (exclude current folder)
-	const targetFolders = folders.filter((f) => f.id !== image.folderId).sort((a, b) => a.sortOrder - b.sortOrder);
+	const targetFolders = folders.filter((f) => f.id !== image.folderId).sort(bySortOrder);
 
 	const renderFolderSubList = (action: 'move' | 'copy') => (
 		<div className='border-t border-slate-100 py-1'>
@@ -67,10 +50,8 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
 			</p>
 			{targetFolders.length > 0 ? (
 				targetFolders.map((folder) => (
-					<button
+					<MenuItem
 						key={folder.id}
-						type='button'
-						className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
 						onClick={() => {
 							if (action === 'move') {
 								onMoveTo(image, folder.id);
@@ -81,18 +62,14 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
 						}}
 					>
 						{folder.name}
-					</button>
+					</MenuItem>
 				))
 			) : (
 				<p className='px-3 py-1.5 text-xs text-slate-400'>No other folders</p>
 			)}
-			<button
-				type='button'
-				className='w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors'
-				onClick={() => setSubMenu(null)}
-			>
+			<MenuItem tone='muted' onClick={() => setSubMenu(null)}>
 				Back
-			</button>
+			</MenuItem>
 		</div>
 	);
 
@@ -111,51 +88,35 @@ export const ImageContextMenu: React.FC<ImageContextMenuProps> = ({
 		>
 			{subMenu === null ? (
 				<>
-					<button
-						type='button'
-						className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
+					<MenuItem
 						onClick={() => {
 							onOpen(image);
 							onClose();
 						}}
 					>
 						Open
-					</button>
-					<button
-						type='button'
-						className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
-						onClick={() => setSubMenu('move')}
-					>
-						Move to...
-					</button>
-					<button
-						type='button'
-						className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
-						onClick={() => setSubMenu('copy')}
-					>
-						Copy to...
-					</button>
+					</MenuItem>
+					<MenuItem onClick={() => setSubMenu('move')}>Move to...</MenuItem>
+					<MenuItem onClick={() => setSubMenu('copy')}>Copy to...</MenuItem>
 					<div className='border-t border-slate-100 my-1' />
-					<button
-						type='button'
-						className='w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors'
+					<MenuItem
+						tone='danger'
 						onClick={() => {
 							onExport(image);
 							onClose();
 						}}
 					>
 						Export as...
-					</button>
-					<button
-						type='button'
-						className='w-full text-left px-3 py-1.5 text-xs text-red-500 hover:bg-red-50 transition-colors'
+					</MenuItem>
+					<MenuItem
+						tone='danger'
 						onClick={() => {
 							onDelete(image);
 							onClose();
 						}}
 					>
 						Delete
-					</button>
+					</MenuItem>
 				</>
 			) : (
 				renderFolderSubList(subMenu)

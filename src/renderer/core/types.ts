@@ -28,13 +28,10 @@ export interface OpenItem {
 	label: string;
 	fileName: string;
 	image: Image | null;
-	width: number;
-	height: number;
-	/** Set when the item is backed by an IndexedDB gallery entry, which makes it restorable. */
+	/** Set when the item is backed by an IndexedDB gallery entry. */
 	galleryImageId: string | null;
 	/** Identity used to avoid opening the same source twice; null for blank canvases. */
 	dedupeKey: string | null;
-	thumbUrl: string | null;
 	blur: number;
 	threshold: number;
 	values: 2 | 3;
@@ -47,9 +44,8 @@ export interface OpenItem {
 }
 
 export interface OpenImageMeta {
-	/** Gallery entry backing this item. Presence makes the item restorable. */
+	/** Gallery entry backing this item. */
 	galleryImageId?: string | null;
-	thumbUrl?: string | null;
 	/** Identifies the already-open row to reactivate instead of adding a duplicate. */
 	dedupeKey?: string | null;
 }

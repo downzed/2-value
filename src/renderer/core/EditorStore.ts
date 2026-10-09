@@ -1,7 +1,6 @@
 import { UI } from '../constants/ui';
 import type {
 	AdjustmentSnapshot,
-	CanvasMode,
 	EditorState,
 	FitMode,
 	Listener,
@@ -168,15 +167,6 @@ export class EditorStore {
 		return this.#activeItem();
 	}
 
-	get canvasMode(): CanvasMode {
-		return this.#activeItem()?.kind ?? 'image';
-	}
-
-	/** currentImage and originalImage are the same immutable object. */
-	get currentImage(): Image | null {
-		return this.#activeItem()?.image ?? null;
-	}
-
 	get fileName(): string {
 		return this.#activeItem()?.fileName ?? '';
 	}
@@ -185,23 +175,8 @@ export class EditorStore {
 		return this.#activeItem()?.image != null;
 	}
 
-	get hasBlankCanvas(): boolean {
-		return this.canvasMode === 'blank';
-	}
-
-	get hasCanvas(): boolean {
-		return this.#activeItem() !== null;
-	}
-
 	get hasDirtyItems(): boolean {
 		return this.#state.items.some((i) => i.dirty);
-	}
-
-	/** Only gallery-backed, non-dirty items survive a reload. */
-	get restorableItemIds(): string[] {
-		return this.#state.items
-			.filter((i) => i.galleryImageId !== null && !i.dirty)
-			.map((i) => i.galleryImageId as string);
 	}
 
 	get canUndo(): boolean {
@@ -210,18 +185,6 @@ export class EditorStore {
 
 	get canRedo(): boolean {
 		return (this.#activeItem()?.future.length ?? 0) > 0;
-	}
-
-	get effectiveZoom(): number {
-		return this.#state.fitMode === 'fit' ? this.#state.fitScale : this.#state.zoom;
-	}
-
-	/** Blank-canvas dimensions for the status bar; null for images or before layout. */
-	get blankSize(): { width: number; height: number } | null {
-		const item = this.#activeItem();
-		const { viewport } = this.#state;
-		if (item?.kind !== 'blank' || viewport.width <= 0 || viewport.height <= 0) return null;
-		return { width: Math.round(viewport.width), height: Math.round(viewport.height) };
 	}
 
 	// -------------------------------------------------------------------------
@@ -271,10 +234,7 @@ export class EditorStore {
 				label: fileName || 'Untitled image',
 				fileName,
 				image,
-				width: image.width,
-				height: image.height,
 				galleryImageId: meta.galleryImageId ?? null,
-				thumbUrl: meta.thumbUrl ?? null,
 				dedupeKey: key,
 				...createAdjustments(),
 				history: [],
@@ -300,10 +260,7 @@ export class EditorStore {
 				label: `Canvas ${blankCount + 1}`,
 				fileName: '',
 				image: null,
-				width: 0,
-				height: 0,
 				galleryImageId: null,
-				thumbUrl: null,
 				dedupeKey: null,
 				...createAdjustments(),
 				history: [],
@@ -361,13 +318,11 @@ export class EditorStore {
 		});
 	};
 
-	/** Links an item to its gallery entry, making it restorable after a reload. */
-	linkGalleryImage = (itemId: string, galleryImageId: string, thumbUrl?: string | null): void => {
+	/** Links an item to its gallery entry once it has been saved. */
+	linkGalleryImage = (itemId: string, galleryImageId: string): void => {
 		this.#patch((s) => ({
 			...s,
-			items: s.items.map((i) =>
-				i.id === itemId ? { ...i, galleryImageId, thumbUrl: thumbUrl ?? i.thumbUrl, dedupeKey: galleryImageId } : i,
-			),
+			items: s.items.map((i) => (i.id === itemId ? { ...i, galleryImageId, dedupeKey: galleryImageId } : i)),
 		}));
 	};
 

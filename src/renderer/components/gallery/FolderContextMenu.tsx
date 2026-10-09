@@ -1,6 +1,10 @@
 import type React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import type { GalleryFolder } from '../../../shared/types';
+import { useDismissable } from '../../react/useDismissable';
+import Modal from '../shared/Modal';
+import { DialogButton } from '../shared/DialogButton';
+import { MenuItem } from '../shared/MenuItem';
 import { useMenuPosition } from '../../react/useMenuPosition';
 
 interface FolderContextMenuProps {
@@ -24,22 +28,7 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
 }) => {
 	const menuRef = useRef<HTMLDivElement>(null);
 
-	useEffect(() => {
-		const handleClickOutside = (e: MouseEvent) => {
-			if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-				onClose();
-			}
-		};
-		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') onClose();
-		};
-		document.addEventListener('mousedown', handleClickOutside);
-		document.addEventListener('keydown', handleKeyDown);
-		return () => {
-			document.removeEventListener('mousedown', handleClickOutside);
-			document.removeEventListener('keydown', handleKeyDown);
-		};
-	}, [onClose]);
+	useDismissable(menuRef, onClose);
 
 	const position = useMenuPosition(anchorX, anchorY, menuRef);
 
@@ -54,37 +43,32 @@ export const FolderContextMenu: React.FC<FolderContextMenuProps> = ({
 				visibility: position ? 'visible' : 'hidden',
 			}}
 		>
-			<button
-				type='button'
-				className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
+			<MenuItem
 				onClick={() => {
 					onRename(folder);
 					onClose();
 				}}
 			>
 				Rename
-			</button>
-			<button
-				type='button'
-				className='w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors'
+			</MenuItem>
+			<MenuItem
 				onClick={() => {
 					onEditTags(folder);
 					onClose();
 				}}
 			>
 				Edit Tags
-			</button>
+			</MenuItem>
 			<div className='border-t border-slate-100 my-1' />
-			<button
-				type='button'
-				className='w-full text-left px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors'
+			<MenuItem
+				tone='danger'
 				onClick={() => {
 					onDelete(folder);
 					onClose();
 				}}
 			>
 				Delete
-			</button>
+			</MenuItem>
 		</div>
 	);
 };
@@ -100,49 +84,39 @@ export const DeleteFolderDialog: React.FC<DeleteFolderDialogProps> = ({ folder, 
 	const [deleteImages, setDeleteImages] = useState(false);
 
 	return (
-		<div className='fixed inset-0 z-[300] flex items-center justify-center bg-black/40'>
-			<div className='bg-white rounded-xl shadow-2xl p-5 w-[320px] space-y-4'>
-				<h2 className='text-sm font-semibold text-slate-800'>Delete "{folder.name}"?</h2>
-				{imageCount > 0 && (
-					<div className='space-y-2'>
-						<p className='text-xs text-slate-500'>
-							This folder contains {imageCount} image
-							{imageCount !== 1 ? 's' : ''}.
+		<Modal widthClass='w-[320px] space-y-4'>
+			<h2 className='text-sm font-semibold text-slate-800'>Delete "{folder.name}"?</h2>
+			{imageCount > 0 && (
+				<div className='space-y-2'>
+					<p className='text-xs text-slate-500'>
+						This folder contains {imageCount} image
+						{imageCount !== 1 ? 's' : ''}.
+					</p>
+					<label className='flex items-center gap-2 text-xs text-slate-700 cursor-pointer'>
+						<input
+							type='checkbox'
+							checked={deleteImages}
+							onChange={(e) => setDeleteImages(e.target.checked)}
+							className='rounded'
+						/>
+						Delete images permanently
+					</label>
+					{!deleteImages && (
+						<p className='text-xs text-slate-400'>
+							Images move to another folder, or are deleted with the folder if it is the last one.
 						</p>
-						<label className='flex items-center gap-2 text-xs text-slate-700 cursor-pointer'>
-							<input
-								type='checkbox'
-								checked={deleteImages}
-								onChange={(e) => setDeleteImages(e.target.checked)}
-								className='rounded'
-							/>
-							Delete images permanently
-						</label>
-						{!deleteImages && (
-							<p className='text-xs text-slate-400'>
-								Images move to another folder, or are deleted with the folder if it is the last one.
-							</p>
-						)}
-					</div>
-				)}
-				<div className='flex justify-end gap-2'>
-					<button
-						type='button'
-						onClick={onCancel}
-						className='px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors'
-					>
-						Cancel
-					</button>
-					<button
-						type='button'
-						onClick={() => onConfirm(deleteImages)}
-						className='px-3 py-1.5 text-xs bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors'
-					>
-						Delete
-					</button>
+					)}
 				</div>
+			)}
+			<div className='flex justify-end gap-2'>
+				<DialogButton variant='ghost' onClick={onCancel}>
+					Cancel
+				</DialogButton>
+				<DialogButton variant='danger' onClick={() => onConfirm(deleteImages)}>
+					Delete
+				</DialogButton>
 			</div>
-		</div>
+		</Modal>
 	);
 };
 
@@ -167,36 +141,25 @@ export const RenameFolderDialog: React.FC<RenameFolderDialogProps> = ({ folder, 
 	};
 
 	return (
-		<div className='fixed inset-0 z-[300] flex items-center justify-center bg-black/40'>
-			<div className='bg-white rounded-xl shadow-2xl p-5 w-[280px] space-y-3'>
-				<h2 className='text-sm font-semibold text-slate-800'>Rename Folder</h2>
-				<form onSubmit={handleSubmit} className='space-y-3'>
-					<input
-						ref={inputRef}
-						type='text'
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-						className='w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-slate-500'
-						maxLength={100}
-					/>
-					<div className='flex justify-end gap-2'>
-						<button
-							type='button'
-							onClick={onCancel}
-							className='px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors'
-						>
-							Cancel
-						</button>
-						<button
-							type='submit'
-							className='px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors'
-						>
-							Rename
-						</button>
-					</div>
-				</form>
-			</div>
-		</div>
+		<Modal widthClass='w-[280px] space-y-3'>
+			<h2 className='text-sm font-semibold text-slate-800'>Rename Folder</h2>
+			<form onSubmit={handleSubmit} className='space-y-3'>
+				<input
+					ref={inputRef}
+					type='text'
+					value={name}
+					onChange={(e) => setName(e.target.value)}
+					className='w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-slate-500'
+					maxLength={100}
+				/>
+				<div className='flex justify-end gap-2'>
+					<DialogButton variant='ghost' onClick={onCancel}>
+						Cancel
+					</DialogButton>
+					<DialogButton variant='submit'>Rename</DialogButton>
+				</div>
+			</form>
+		</Modal>
 	);
 };
 
@@ -224,36 +187,25 @@ export const EditTagsDialog: React.FC<EditTagsDialogProps> = ({ folder, onConfir
 	};
 
 	return (
-		<div className='fixed inset-0 z-300]flex items-center justify-center bg-black/40'>
-			<div className='bg-white rounded-xl shadow-2xl p-5 w-300 space-y-3'>
-				<h2 className='text-sm font-semibold text-slate-800'>Edit Tags — {folder.name}</h2>
-				<p className='text-xs text-slate-400'>Tags help generate image suggestions. Separate with commas.</p>
-				<form onSubmit={handleSubmit} className='space-y-3'>
-					<input
-						ref={inputRef}
-						type='text'
-						value={tagsInput}
-						onChange={(e) => setTagsInput(e.target.value)}
-						placeholder='nature, landscape, sunset...'
-						className='w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-slate-500'
-					/>
-					<div className='flex justify-end gap-2'>
-						<button
-							type='button'
-							onClick={onCancel}
-							className='px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors'
-						>
-							Cancel
-						</button>
-						<button
-							type='submit'
-							className='px-3 py-1.5 text-xs bg-slate-800 text-white rounded-lg hover:bg-slate-700 transition-colors'
-						>
-							Save
-						</button>
-					</div>
-				</form>
-			</div>
-		</div>
+		<Modal widthClass='w-[300px] space-y-3'>
+			<h2 className='text-sm font-semibold text-slate-800'>Edit Tags — {folder.name}</h2>
+			<p className='text-xs text-slate-400'>Tags help generate image suggestions. Separate with commas.</p>
+			<form onSubmit={handleSubmit} className='space-y-3'>
+				<input
+					ref={inputRef}
+					type='text'
+					value={tagsInput}
+					onChange={(e) => setTagsInput(e.target.value)}
+					placeholder='nature, landscape, sunset...'
+					className='w-full text-xs border border-slate-300 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-slate-500'
+				/>
+				<div className='flex justify-end gap-2'>
+					<DialogButton variant='ghost' onClick={onCancel}>
+						Cancel
+					</DialogButton>
+					<DialogButton variant='submit'>Save</DialogButton>
+				</div>
+			</form>
+		</Modal>
 	);
 };

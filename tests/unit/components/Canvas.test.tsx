@@ -59,7 +59,7 @@ let editorStub: ReturnType<typeof createEditorStoreStub>;
 /** Shorthand for the common cases: no item open, a blank canvas, or an image. */
 function openImage(width = 100, height = 100) {
 	editorState.current = createEditorState({
-		items: [createOpenItem({ image: createMockImage(width, height), width, height })],
+		items: [createOpenItem({ image: createMockImage(width, height) })],
 		activeItemId: 'item-1',
 	});
 }

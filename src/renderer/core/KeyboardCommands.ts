@@ -21,9 +21,8 @@ const PANEL_KEYS: Record<string, PanelId> = {
  * a component's mount lifecycle.
  *
  * Note this deliberately does **not** cover Ctrl+N / Ctrl+O / Ctrl+S. Those live
- * in `BottomPanel` because they drive its hidden file input and status text.
- * Fully consolidating them means hoisting that status into a store, which is
- * Phase 4 work — see ARCHITECTURE.md.
+ * in `TopPanel` because they drive its hidden file input and status text.
+ * Fully consolidating them means hoisting that status into a store.
  */
 export class KeyboardCommands {
 	#editor: EditorStore;

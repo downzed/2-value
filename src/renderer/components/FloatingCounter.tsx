@@ -24,6 +24,12 @@ const FloatingCounter: React.FC = () => {
 		setPanel('timer', false);
 	};
 
+	/**
+	 * Full time for the timer readout: `45` under a minute, `5:00` above.
+	 *
+	 * The status bar's panel-toggle badge uses a deliberately more compact form
+	 * (`3m`); see the note on `formatBadge` in `shell/TopPanel.tsx`.
+	 */
 	const formatTime = (seconds: number): string => {
 		const mins = Math.floor(seconds / 60);
 		const secs = seconds % 60;
@@ -61,18 +67,14 @@ const FloatingCounter: React.FC = () => {
 				</div>
 
 				<div className='flex items-center justify-center gap-2'>
-					<button
-						type='button'
+					<PillButton
+						size='md'
+						tone={counterRunning ? 'danger' : 'success'}
 						onClick={counterRunning ? stopCounter : () => counterDuration && startCounter(counterDuration)}
 						disabled={!counterDuration && !counterRunning}
-						className={`px-3 py-1 text-xs font-medium rounded ${
-							counterRunning
-								? 'bg-red-500 text-white hover:bg-red-600'
-								: 'bg-emerald-500 text-white hover:bg-emerald-600'
-						} disabled:opacity-40 disabled:cursor-not-allowed`}
 					>
 						{counterRunning ? 'Stop' : 'Start'}
-					</button>
+					</PillButton>
 					<PillButton onClick={stopCounter} disabled={!counterRunning && counter === 0} size='md'>
 						Reset
 					</PillButton>

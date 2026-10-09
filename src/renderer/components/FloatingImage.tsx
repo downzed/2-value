@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { selectActiveImage, selectShowOriginal } from '../core/selectors';
 import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { imageToImageData } from '../utils/imageConversion';
 import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
+import { IconButton } from './shared/IconButton';
 
 const STORAGE_KEY = 'image-editor-original-position';
 const DEFAULT_POSITION = { x: 20, y: 52 };
@@ -10,8 +12,8 @@ const DEFAULT_POSITION = { x: 20, y: 52 };
 const FloatingImage: React.FC = () => {
 	const editor = useEditorStore();
 	const { toggleShowOriginal, setPanel } = editor;
-	const originalImage = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.image ?? null);
-	const showOriginal = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.showOriginal ?? false);
+	const originalImage = useEditorSelector(selectActiveImage);
+	const showOriginal = useEditorSelector(selectShowOriginal);
 	const isOpen = useEditorSelector((s) => s.panels.original);
 	const [showKey, setShowKey] = useState(0);
 	const originalCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -57,14 +59,14 @@ const FloatingImage: React.FC = () => {
 	if (!originalImage) return null;
 
 	const eyeToggle = (
-		<button
-			type='button'
+		<IconButton
+			tone='pressed'
+			active={showOriginal}
 			onClick={toggleShowOriginal}
-			className='text-slate-400 hover:text-slate-600 transition-colors'
 			title={showOriginal ? 'Show Processed' : 'Show Original'}
 		>
 			{showOriginal ? <Icon name='eye-open' /> : <Icon name='eye-closed' />}
-		</button>
+		</IconButton>
 	);
 
 	return (

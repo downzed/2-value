@@ -25,7 +25,6 @@ const makeFolder = (id: string, name: string, sortOrder = 0) => ({
 function makeRepository(overrides: Partial<GalleryRepositoryPort> = {}) {
 	const repo: GalleryRepositoryPort = {
 		getData: vi.fn().mockResolvedValue({ version: 1, folders: [], images: [] }),
-		ensureUnsortedFolder: vi.fn().mockResolvedValue(makeFolder('unsorted', 'Unsorted')),
 		createFolder: vi.fn().mockResolvedValue(makeFolder('f1', 'Refs')),
 		renameFolder: vi.fn().mockResolvedValue(undefined),
 		deleteFolder: vi.fn().mockResolvedValue(undefined),
@@ -36,6 +35,7 @@ function makeRepository(overrides: Partial<GalleryRepositoryPort> = {}) {
 		copyImage: vi.fn().mockResolvedValue(makeImage('g2', 'study.png', 'f1')),
 		deleteImage: vi.fn().mockResolvedValue(undefined),
 		getImageBlob: vi.fn().mockResolvedValue(new Blob(['x'])),
+		getThumbnailBlob: vi.fn().mockResolvedValue(new Blob(['t'])),
 		...overrides,
 	};
 	return repo;
@@ -295,13 +295,19 @@ describe('GalleryStore', () => {
 			await store.getImageBlob('g1');
 			expect(repo.getImageBlob).toHaveBeenCalledWith('g1');
 		});
+
+		it('exposes the thumbnail blob getter for grid previews', async () => {
+			const thumb = await store.getThumbnailBlob('g1');
+			expect(repo.getThumbnailBlob).toHaveBeenCalledWith('g1');
+			expect(thumb).toBeInstanceOf(Blob);
+		});
 	});
 
 	// --- saveImageToGallery ---
 
 	describe('saveImageToGallery', () => {
 		it('overwrites the existing entry rather than creating a duplicate', async () => {
-			const id = await store.saveImageToGallery(new Blob(['x']), 'study.png', 'g1');
+			const id = await store.saveImageToGallery(new Blob(['x']), 'study.png', 'g1', null);
 
 			expect(repo.updateImageBlob).toHaveBeenCalledTimes(1);
 			expect(repo.importImage).not.toHaveBeenCalled();

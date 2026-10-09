@@ -1,4 +1,5 @@
 import type { GalleryFolder, GalleryImage } from '../../shared/types';
+import { filterImages } from './selectors';
 import type { Listener } from './types';
 
 export interface GalleryState {
@@ -29,6 +30,7 @@ export interface GalleryRepositoryPort {
 	copyImage(imageId: string, targetFolderId: string): Promise<GalleryImage>;
 	deleteImage(imageId: string): Promise<void>;
 	getImageBlob(imageId: string): Promise<Blob | undefined>;
+	getThumbnailBlob(imageId: string): Promise<Blob | undefined>;
 }
 
 function createInitialState(): GalleryState {
@@ -93,9 +95,7 @@ export class GalleryStore {
 
 	/** Search matches file names across every folder, not just the selected one. */
 	get filteredImages(): GalleryImage[] {
-		const q = this.#state.gallerySearchQuery.trim().toLowerCase();
-		if (!q) return this.#state.images;
-		return this.#state.images.filter((img) => img.fileName.toLowerCase().includes(q));
+		return filterImages(this.#state.images, this.#state.gallerySearchQuery);
 	}
 
 	// -------------------------------------------------------------------------
@@ -232,6 +232,9 @@ export class GalleryStore {
 
 	/** Reads a gallery image's stored bytes, for exporting to a file. */
 	getImageBlob = (imageId: string): Promise<Blob | undefined> => this.#repository.getImageBlob(imageId);
+
+	/** Reads a gallery image's thumbnail bytes, for the grid previews. */
+	getThumbnailBlob = (imageId: string): Promise<Blob | undefined> => this.#repository.getThumbnailBlob(imageId);
 
 	/** Reads an image's bytes plus its metadata, for opening it in the editor. */
 	openGalleryImage = async (imageId: string): Promise<OpenImageResult> => {

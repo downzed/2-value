@@ -1,55 +1,68 @@
 import { useCallback, useEffect, useState } from 'react';
 import { decodeErrorMessage } from '../../core/decode';
+import {
+	selectActiveFileName,
+	selectActiveImage,
+	selectActiveItem,
+	selectEffectiveZoom,
+	selectHasCanvas,
+	selectHasGalleryEntry,
+	selectIsBlank,
+} from '../../core/selectors';
 import { openImageFile } from '../../utils/fileOps';
 import { useCommands } from '../../react/useCommands';
 import { useSaveFlow } from '../../react/useSaveFlow';
 import { useEditorSelector, useEditorStore, useGallerySelector, useGalleryStore } from '../../react/useStore';
-import { galleryRepository } from '../../utils/storage';
 import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
+import { SaveFolderPrompt } from '../gallery/SaveFolderPrompt';
 import FileMenu from './FileMenu';
 import { Icon } from '../shared/Icon';
+import { IconButton } from '../shared/IconButton';
+import { IconToggle } from '../shared/IconToggle';
+import { SegmentedControl } from '../shared/SegmentedControl';
 
 type Status = 'ready' | 'loading' | 'loaded' | 'saving' | 'saved' | 'error';
+
+/** The zoom steps the status bar offers as one-click presets. */
+const ZOOM_PRESETS = ['fit', '1:1', '2x'] as const;
+type ZoomPreset = (typeof ZOOM_PRESETS)[number];
 
 interface PendingOpen {
 	file: File;
 }
 
-interface BottomPanelProps {
+interface TopPanelProps {
 	previewCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
-const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
+const TopPanel: React.FC<TopPanelProps> = ({ previewCanvasRef }) => {
 	const editor = useEditorStore();
 	const gallery = useGalleryStore();
 	const commands = useCommands();
-	const { requestSave, dialog: saveDialog } = useSaveFlow();
+	const { requestSave, prompt: savePrompt } = useSaveFlow();
 
 	// Non-reactive actions.
 	const { newBlankCanvas, togglePanel, setFitMode, setZoom, zoomIn, zoomOut } = editor;
-	const { importImage, loadGallery } = gallery;
+	const { importImage, createFolder } = gallery;
 
 	// Reactive slices: editor state, then gallery state. Splitting these means a
 	// gallery reload no longer re-renders the status bar's zoom readout, and a
 	// slider drag does not touch the folder list.
 	const hasImage = useEditorSelector((s) => s.items.some((i) => i.id === s.activeItemId && i.image !== null));
-	const hasCanvas = useEditorSelector((s) => s.activeItemId !== null);
-	const hasBlankCanvas = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.kind === 'blank');
+	const hasCanvas = useEditorSelector(selectHasCanvas);
+	const hasBlankCanvas = useEditorSelector(selectIsBlank);
 	const viewport = useEditorSelector((s) => s.viewport);
-	const currentImage = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.image ?? null);
-	const fileName = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.fileName ?? '');
-	const hasGalleryEntry = useEditorSelector(
-		(s) => (s.items.find((i) => i.id === s.activeItemId)?.galleryImageId ?? null) !== null,
-	);
-	const activeItem = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId) ?? null);
+	const currentImage = useEditorSelector(selectActiveImage);
+	const fileName = useEditorSelector(selectActiveFileName);
+	const hasGalleryEntry = useEditorSelector(selectHasGalleryEntry);
+	const activeItem = useEditorSelector(selectActiveItem);
 	const panels = useEditorSelector((s) => s.panels);
 	const counter = useEditorSelector((s) => s.counter);
 	const counterRunning = useEditorSelector((s) => s.counterRunning);
 	const counterDuration = useEditorSelector((s) => s.counterDuration);
 	const zoom = useEditorSelector((s) => s.zoom);
 	const fitMode = useEditorSelector((s) => s.fitMode);
-	const fitScale = useEditorSelector((s) => s.fitScale);
-	const effectiveZoom = fitMode === 'fit' ? fitScale : zoom;
+	const effectiveZoom = useEditorSelector(selectEffectiveZoom);
 
 	const folders = useGallerySelector((s) => s.folders);
 	const [status, setStatus] = useState<Status>('ready');
@@ -142,14 +155,9 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		await doLoadFromFile({ file });
 	}, [pendingOpen, doLoadFromFile]);
 
-	const handleCreateFolderInPicker = useCallback(
-		async (name: string) => {
-			const folder = await galleryRepository.createFolder(name);
-			await loadGallery();
-			return folder;
-		},
-		[loadGallery],
-	);
+	// Routed through the gallery store so #runMutation records and rethrows
+	// failures; calling the repository directly swallowed them.
+	const handleCreateFolderInPicker = useCallback((name: string) => createFolder(name), [createFolder]);
 
 	// Saves into the gallery, not to disk. Use "Export as..." on a gallery item
 	// to download a file.
@@ -200,6 +208,13 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		error: { text: errorMsg ?? 'Error', className: 'text-red-400' },
 	};
 
+	/**
+	 * Compact time for the panel-toggle badge: `45` under a minute, `3m` above.
+	 *
+	 * Deliberately not the same format as `FloatingCounter`'s `5:00` readout. The
+	 * badge is a glanceable nudge inside a 24px icon button where seconds would be
+	 * unreadable, so it is deliberately lossy rather than accidentally inconsistent.
+	 */
 	const formatBadge = (seconds: number): string => {
 		if (seconds < 60) return `${seconds}`;
 		return `${Math.floor(seconds / 60)}m`;
@@ -252,123 +267,66 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 				{/* Panel toggles — always visible; the active one is highlighted. */}
 				<div className='flex items-center gap-1 mr-3'>
-					<button
-						type='button'
-						onClick={() => togglePanel('controls')}
-						aria-pressed={panels.controls}
-						className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
-							panels.controls ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-						}`}
-						title='Adjustments (Alt+1)'
-					>
+					<IconToggle active={panels.controls} onClick={() => togglePanel('controls')} title='Adjustments (Alt+1)'>
 						<Icon name='sliders' size='sm' />
-					</button>
-					<button
-						type='button'
-						onClick={() => togglePanel('original')}
-						aria-pressed={panels.original}
-						className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
-							panels.original ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-						}`}
-						title='Original (Alt+2)'
-					>
+					</IconToggle>
+					<IconToggle active={panels.original} onClick={() => togglePanel('original')} title='Original (Alt+2)'>
 						<Icon name='image' size='sm' />
-					</button>
-					<button
-						type='button'
+					</IconToggle>
+					<IconToggle
+						active={panels.timer}
 						onClick={() => togglePanel('timer')}
-						aria-pressed={panels.timer}
-						className={`relative w-6 h-6 flex items-center justify-center rounded transition-colors ${
-							panels.timer ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-						}`}
 						title={counterRunning ? `Timer: ${counter}s remaining (Alt+3)` : 'Timer (Alt+3)'}
+						badge={
+							counterRunning && counterDuration ? (
+								<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-3.5 h-3.5 flex items-center justify-center px-0.5'>
+									{formatBadge(counter)}
+								</span>
+							) : undefined
+						}
 					>
 						<Icon name='clock' size='sm' />
-						{counterRunning && counterDuration && (
-							<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-3.5 h-3.5 flex items-center justify-center px-0.5'>
-								{formatBadge(counter)}
-							</span>
-						)}
-					</button>
-					<button
-						type='button'
-						onClick={() => togglePanel('gallery')}
-						aria-pressed={panels.gallery}
-						className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
-							panels.gallery ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
-						}`}
-						title='Gallery (Alt+4)'
-					>
+					</IconToggle>
+					<IconToggle active={panels.gallery} onClick={() => togglePanel('gallery')} title='Gallery (Alt+4)'>
 						<Icon name='gallery' size='sm' />
-					</button>
+					</IconToggle>
 				</div>
 
 				{/* Zoom controls */}
 				{hasImage && (
 					<div className='flex items-center gap-1.5 mr-3'>
-						<button
-							type='button'
-							onClick={zoomOut}
-							className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
-							title='Zoom Out (Ctrl+-)'
-						>
+						<IconButton surface='dark' onClick={zoomOut} title='Zoom Out (Ctrl+-)' className='text-sm px-1'>
 							−
-						</button>
+						</IconButton>
 
-						<div className='flex items-center bg-slate-700/50 rounded p-0.5'>
-							<button
-								type='button'
-								onClick={() => setFitMode('fit')}
-								className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
-									fitMode === 'fit' ? 'bg-slate-500 text-slate-100 shadow-sm' : 'text-slate-400 hover:text-slate-200'
-								}`}
-								title='Fit to View (Ctrl+0)'
-							>
-								Fit
-							</button>
-							<button
-								type='button'
-								onClick={() => setZoom(1)}
-								className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
-									fitMode === 'manual' && Math.abs(zoom - 1) < 0.01
-										? 'bg-slate-500 text-slate-100 shadow-sm'
-										: 'text-slate-400 hover:text-slate-200'
-								}`}
-								title='Actual Size (1:1)'
-							>
-								1:1
-							</button>
-							<button
-								type='button'
-								onClick={() => setZoom(2)}
-								className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
-									fitMode === 'manual' && Math.abs(zoom - 2) < 0.01
-										? 'bg-slate-500 text-slate-100 shadow-sm'
-										: 'text-slate-400 hover:text-slate-200'
-								}`}
-								title='Double Size (2×)'
-							>
-								2×
-							</button>
-						</div>
+						<SegmentedControl<ZoomPreset | ''>
+							tone='dark'
+							options={[
+								{ value: 'fit', label: 'Fit', title: 'Fit to View (Ctrl+0)' },
+								{ value: '1:1', label: '1:1', title: 'Actual Size (1:1)' },
+								{ value: '2x', label: '2×', title: 'Zoom to 200%' },
+							]}
+							value={
+								fitMode === 'fit' ? 'fit' : Math.abs(zoom - 1) < 0.01 ? '1:1' : Math.abs(zoom - 2) < 0.01 ? '2x' : ''
+							}
+							onChange={(next) => {
+								if (next === 'fit') setFitMode('fit');
+								else setZoom(next === '1:1' ? 1 : 2);
+							}}
+						/>
 
 						<span className='text-slate-400 text-[10px] w-8 text-center'>{Math.round(effectiveZoom * 100)}%</span>
 
-						<button
-							type='button'
-							onClick={zoomIn}
-							className='text-slate-400 hover:text-slate-200 transition-colors text-sm px-1'
-							title='Zoom In (Ctrl+=)'
-						>
+						<IconButton surface='dark' onClick={zoomIn} title='Zoom In (Ctrl+=)' className='text-sm px-1'>
 							+
-						</button>
+						</IconButton>
 					</div>
 				)}
 
 				<span className={statusStyles[status].className}>{statusStyles[status].text}</span>
 			</div>
 
-			{saveDialog}
+			<SaveFolderPrompt prompt={savePrompt} />
 
 			{/* Folder Picker Dialog */}
 			{pendingOpen && (
@@ -383,4 +341,4 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	);
 };
 
-export default BottomPanel;
+export default TopPanel;

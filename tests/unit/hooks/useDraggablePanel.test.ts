@@ -2,6 +2,15 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { useDraggablePanel } from '../../../src/renderer/hooks/useDraggablePanel';
 
+/**
+ * The hook's handleMouseDown is typed `MouseEvent<HTMLDivElement>`, but these
+ * tests only care about clientX/clientY, so a cast to the element-generic
+ * MouseEvent is not assignable. Build the event with the narrower type instead.
+ */
+function mouseEvent(clientX: number, clientY: number): React.MouseEvent<HTMLDivElement> {
+	return { clientX, clientY } as React.MouseEvent<HTMLDivElement>;
+}
+
 describe('useDraggablePanel', () => {
 	let mockStorage: Record<string, string>;
 
@@ -106,10 +115,7 @@ describe('useDraggablePanel', () => {
 
 			// Drag offset: clientX(510) - rect.left(500) = 10
 			act(() => {
-				result.current.handleMouseDown({
-					clientX: 510,
-					clientY: 310,
-				} as React.MouseEvent);
+				result.current.handleMouseDown(mouseEvent(510, 310));
 			});
 
 			// Mouse far to the right: x = 1200 - 10 = 1190, clamped to 1024 - 200 = 824
@@ -132,10 +138,7 @@ describe('useDraggablePanel', () => {
 
 			// Drag offset: clientY(310) - rect.top(300) = 10
 			act(() => {
-				result.current.handleMouseDown({
-					clientX: 110,
-					clientY: 310,
-				} as React.MouseEvent);
+				result.current.handleMouseDown(mouseEvent(110, 310));
 			});
 
 			// Mouse far below: y = 900 - 10 = 890, clamped to 768 - 100 = 668
@@ -158,10 +161,7 @@ describe('useDraggablePanel', () => {
 
 			// Drag offset: 10, 10
 			act(() => {
-				result.current.handleMouseDown({
-					clientX: 110,
-					clientY: 110,
-				} as React.MouseEvent);
+				result.current.handleMouseDown(mouseEvent(110, 110));
 			});
 
 			// Mouse far up-left: x = 2 - 10 = -8 → 0, y = 5 - 10 = -5 → 0
@@ -191,10 +191,7 @@ describe('useDraggablePanel', () => {
 			);
 
 			act(() => {
-				result.current.handleMouseDown({
-					clientX: 0,
-					clientY: 0,
-				} as React.MouseEvent);
+				result.current.handleMouseDown(mouseEvent(0, 0));
 			});
 
 			act(() => {

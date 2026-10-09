@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { useRef } from 'react';
-import BottomPanel from '../../../src/renderer/components/shell/BottomPanel';
+import TopPanel from '../../../src/renderer/components/shell/TopPanel';
 import {
 	createCommandsStub,
 	createEditorState,
@@ -44,7 +44,7 @@ vi.mock('../../../src/renderer/core/decode', () => ({
 
 function BottomPanelWrapper() {
 	const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-	return <BottomPanel previewCanvasRef={previewCanvasRef} />;
+	return <TopPanel previewCanvasRef={previewCanvasRef} />;
 }
 
 /** Opens the File dropdown and returns its menu items. */
@@ -66,7 +66,7 @@ function setState(overrides: Partial<EditorStateLike>) {
 
 /** A single open image item, for tests about dimensions, names and zoom. */
 function imageItem(overrides: Record<string, unknown> = {}) {
-	return createOpenItem({ image: createMockImage(800, 600) as never, width: 800, height: 600, ...overrides });
+	return createOpenItem({ image: createMockImage(800, 600) as never, ...overrides });
 }
 
 /** A single open blank canvas item. */
