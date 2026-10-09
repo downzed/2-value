@@ -3,7 +3,7 @@ import FloatingWidget from './shared/FloatingWidget';
 import { PillButton } from './shared/PillButton';
 
 const STORAGE_KEY = 'image-editor-counter-position';
-const DEFAULT_POSITION = { x: 20, y: 280 };
+const DEFAULT_POSITION = { x: 20, y: 312 };
 
 const PRESETS = [
 	{ label: '1m', seconds: 60 },

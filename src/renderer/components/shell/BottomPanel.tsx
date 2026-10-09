@@ -6,6 +6,7 @@ import { useSaveFlow } from '../../react/useSaveFlow';
 import { useEditorSelector, useEditorStore, useGallerySelector, useGalleryStore } from '../../react/useStore';
 import { galleryRepository } from '../../utils/storage';
 import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
+import FileMenu from './FileMenu';
 import { Icon } from '../shared/Icon';
 
 type Status = 'ready' | 'loading' | 'loaded' | 'saving' | 'saved' | 'error';
@@ -25,7 +26,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	const { requestSave, dialog: saveDialog } = useSaveFlow();
 
 	// Non-reactive actions.
-	const { newBlankCanvas, setPanel, setFitMode, setZoom, zoomIn, zoomOut } = editor;
+	const { newBlankCanvas, togglePanel, setFitMode, setZoom, zoomIn, zoomOut } = editor;
 	const { importImage, loadGallery } = gallery;
 
 	// Reactive slices: editor state, then gallery state. Splitting these means a
@@ -40,6 +41,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	const hasGalleryEntry = useEditorSelector(
 		(s) => (s.items.find((i) => i.id === s.activeItemId)?.galleryImageId ?? null) !== null,
 	);
+	const activeItem = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId) ?? null);
 	const panels = useEditorSelector((s) => s.panels);
 	const counter = useEditorSelector((s) => s.counter);
 	const counterRunning = useEditorSelector((s) => s.counterRunning);
@@ -83,6 +85,17 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		},
 		[commands],
 	);
+
+	// Downloads the active item to a real file. Saving to the gallery is separate.
+	const handleExport = useCallback(async () => {
+		if (!activeItem) return;
+		try {
+			await commands.exportOpenItem(activeItem);
+		} catch (err) {
+			setStatus('error');
+			console.error('Failed to export image:', err);
+		}
+	}, [activeItem, commands]);
 
 	const handleOpen = useCallback(async () => {
 		try {
@@ -194,33 +207,31 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 	return (
 		<>
-			<div className='h-8 bg-slate-800 px-4 flex items-center text-xs text-slate-300'>
-				{/* File Operations */}
-				<button
-					type='button'
-					onClick={handleNew}
-					className='text-slate-400 hover:text-slate-200 transition-colors mr-4'
-					title='New Canvas (Ctrl+N)'
-				>
-					New
-				</button>
-
-				<button
-					type='button'
-					onClick={handleOpen}
-					className='text-slate-400 hover:text-slate-200 transition-colors mr-4'
-				>
-					Open
-				</button>
-
-				<button
-					type='button'
-					onClick={handleSave}
-					disabled={!hasCanvas}
-					className='text-slate-400 hover:text-slate-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed mr-4'
-				>
-					Save
-				</button>
+			<div className='h-8 shrink-0 bg-slate-800 border-b border-slate-700 px-4 flex items-center text-xs text-slate-300'>
+				{/* File operations live in a dropdown; the shortcuts stay on window. */}
+				<div className='mr-4'>
+					<FileMenu
+						items={[
+							{ id: 'new', label: 'New', shortcut: 'Ctrl+N', onSelect: handleNew },
+							{ id: 'open', label: 'Open', shortcut: 'Ctrl+O', onSelect: handleOpen },
+							{
+								id: 'save',
+								label: 'Save',
+								shortcut: 'Ctrl+S',
+								description: 'Write to the gallery',
+								disabled: !hasCanvas,
+								onSelect: handleSave,
+							},
+							{
+								id: 'export',
+								label: 'Export as...',
+								description: 'Download a PNG or JPEG',
+								disabled: !hasCanvas,
+								onSelect: handleExport,
+							},
+						]}
+					/>
+				</div>
 
 				<span className='w-px h-4 bg-slate-600 mr-4' />
 
@@ -239,53 +250,57 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 				<span className='flex-1' />
 
-				{/* Minimized panel icons */}
+				{/* Panel toggles — always visible; the active one is highlighted. */}
 				<div className='flex items-center gap-1 mr-3'>
-					{!panels.controls && (
-						<button
-							type='button'
-							onClick={() => setPanel('controls', true)}
-							className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
-							title='Show Adjustments (Alt+1)'
-						>
-							<Icon name='sliders' size='sm' />
-						</button>
-					)}
-					{!panels.original && (
-						<button
-							type='button'
-							onClick={() => setPanel('original', true)}
-							className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
-							title='Show Original (Alt+2)'
-						>
-							<Icon name='image' size='sm' />
-						</button>
-					)}
-					{!panels.timer && (
-						<button
-							type='button'
-							onClick={() => setPanel('timer', true)}
-							className='relative w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
-							title={counterRunning ? `Timer: ${counter}s remaining (Alt+3)` : 'Show Timer (Alt+3)'}
-						>
-							<Icon name='clock' size='sm' />
-							{counterRunning && counterDuration && (
-								<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-3.5 h-3.5 flex items-center justify-center px-0.5'>
-									{formatBadge(counter)}
-								</span>
-							)}
-						</button>
-					)}
-					{!panels.gallery && (
-						<button
-							type='button'
-							onClick={() => setPanel('gallery', true)}
-							className='w-6 h-6 flex items-center justify-center rounded hover:bg-slate-700 transition-colors text-slate-400 hover:text-slate-200'
-							title='Show Gallery (Alt+4)'
-						>
-							<Icon name='gallery' size='sm' />
-						</button>
-					)}
+					<button
+						type='button'
+						onClick={() => togglePanel('controls')}
+						aria-pressed={panels.controls}
+						className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
+							panels.controls ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+						}`}
+						title='Adjustments (Alt+1)'
+					>
+						<Icon name='sliders' size='sm' />
+					</button>
+					<button
+						type='button'
+						onClick={() => togglePanel('original')}
+						aria-pressed={panels.original}
+						className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
+							panels.original ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+						}`}
+						title='Original (Alt+2)'
+					>
+						<Icon name='image' size='sm' />
+					</button>
+					<button
+						type='button'
+						onClick={() => togglePanel('timer')}
+						aria-pressed={panels.timer}
+						className={`relative w-6 h-6 flex items-center justify-center rounded transition-colors ${
+							panels.timer ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+						}`}
+						title={counterRunning ? `Timer: ${counter}s remaining (Alt+3)` : 'Timer (Alt+3)'}
+					>
+						<Icon name='clock' size='sm' />
+						{counterRunning && counterDuration && (
+							<span className='absolute -top-1 -right-1 bg-red-500 text-white text-[7px] font-bold rounded-full min-w-3.5 h-3.5 flex items-center justify-center px-0.5'>
+								{formatBadge(counter)}
+							</span>
+						)}
+					</button>
+					<button
+						type='button'
+						onClick={() => togglePanel('gallery')}
+						aria-pressed={panels.gallery}
+						className={`w-6 h-6 flex items-center justify-center rounded transition-colors ${
+							panels.gallery ? 'bg-slate-700 text-slate-100' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+						}`}
+						title='Gallery (Alt+4)'
+					>
+						<Icon name='gallery' size='sm' />
+					</button>
 				</div>
 
 				{/* Zoom controls */}
