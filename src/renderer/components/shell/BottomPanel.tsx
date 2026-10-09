@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { useGalleryContext } from '../../hooks/GalleryContext';
-import { useImageContext } from '../../hooks/ImageContext';
-import { imageLoadErrorMessage, useImageLoader } from '../../hooks/useImageLoader';
+import { decodeErrorMessage } from '../../core/decode';
 import { openImageFile } from '../../utils/fileOps';
-import { useSaveToGallery } from '../../hooks/useSaveToGallery';
-import { galleryStore } from '../../utils/storage';
+import { useCommands } from '../../react/useCommands';
+import { useSaveFlow } from '../../react/useSaveFlow';
+import { useEditorSelector, useEditorStore, useGallerySelector, useGalleryStore } from '../../react/useStore';
+import { galleryRepository } from '../../utils/storage';
 import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
 import { Icon } from '../shared/Icon';
 
@@ -19,30 +19,37 @@ interface BottomPanelProps {
 }
 
 const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
-	const {
-		hasImage,
-		hasCanvas,
-		hasBlankCanvas,
-		viewport,
-		newBlankCanvas,
-		currentImage,
-		fileName,
-		panels,
-		setPanel,
-		counter,
-		counterRunning,
-		counterDuration,
-		zoom,
-		fitMode,
-		effectiveZoom,
-		setFitMode,
-		setZoom,
-		zoomIn,
-		zoomOut,
-	} = useImageContext();
-	const { folders, importImage, loadGallery } = useGalleryContext();
-	const { loadFromFile } = useImageLoader();
-	const saveToGallery = useSaveToGallery();
+	const editor = useEditorStore();
+	const gallery = useGalleryStore();
+	const commands = useCommands();
+	const { requestSave, dialog: saveDialog } = useSaveFlow();
+
+	// Non-reactive actions.
+	const { newBlankCanvas, setPanel, setFitMode, setZoom, zoomIn, zoomOut } = editor;
+	const { importImage, loadGallery } = gallery;
+
+	// Reactive slices: editor state, then gallery state. Splitting these means a
+	// gallery reload no longer re-renders the status bar's zoom readout, and a
+	// slider drag does not touch the folder list.
+	const hasImage = useEditorSelector((s) => s.items.some((i) => i.id === s.activeItemId && i.image !== null));
+	const hasCanvas = useEditorSelector((s) => s.activeItemId !== null);
+	const hasBlankCanvas = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.kind === 'blank');
+	const viewport = useEditorSelector((s) => s.viewport);
+	const currentImage = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.image ?? null);
+	const fileName = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.fileName ?? '');
+	const hasGalleryEntry = useEditorSelector(
+		(s) => (s.items.find((i) => i.id === s.activeItemId)?.galleryImageId ?? null) !== null,
+	);
+	const panels = useEditorSelector((s) => s.panels);
+	const counter = useEditorSelector((s) => s.counter);
+	const counterRunning = useEditorSelector((s) => s.counterRunning);
+	const counterDuration = useEditorSelector((s) => s.counterDuration);
+	const zoom = useEditorSelector((s) => s.zoom);
+	const fitMode = useEditorSelector((s) => s.fitMode);
+	const fitScale = useEditorSelector((s) => s.fitScale);
+	const effectiveZoom = fitMode === 'fit' ? fitScale : zoom;
+
+	const folders = useGallerySelector((s) => s.folders);
 	const [status, setStatus] = useState<Status>('ready');
 	const [errorMsg, setErrorMsg] = useState<string | null>(null);
 	const [pendingOpen, setPendingOpen] = useState<PendingOpen | null>(null);
@@ -64,17 +71,17 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 	const doLoadFromFile = useCallback(
 		async (pending: PendingOpen) => {
-			const outcome = await loadFromFile(pending.file);
+			const outcome = await commands.openFile(pending.file);
 			if (outcome.ok) {
 				setStatus('loaded');
 			} else {
-				const msg = imageLoadErrorMessage(outcome.error);
+				const msg = decodeErrorMessage(outcome.error);
 				setErrorMsg(msg);
 				setStatus('error');
 				console.error('Image load rejected:', outcome.error);
 			}
 		},
-		[loadFromFile],
+		[commands],
 	);
 
 	const handleOpen = useCallback(async () => {
@@ -124,7 +131,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 	const handleCreateFolderInPicker = useCallback(
 		async (name: string) => {
-			const folder = await galleryStore.createFolder(name);
+			const folder = await galleryRepository.createFolder(name);
 			await loadGallery();
 			return folder;
 		},
@@ -142,14 +149,17 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 			const blob = await new Promise<Blob>((resolve, reject) => {
 				canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('toBlob returned null'))), 'image/png');
 			});
-			await saveToGallery(blob, fileName || 'image.png');
+			const name = fileName || 'image.png';
+			// An item that already has a gallery entry is overwritten in place;
+			// otherwise the save flow asks which folder to put it in.
+			requestSave((folderId) => commands.saveActiveItemToGallery(blob, name, folderId), hasGalleryEntry);
 			setStatus('saved');
 			setTimeout(() => setStatus('loaded'), 2000);
 		} catch (error) {
 			setStatus('error');
 			console.error('Failed to save image:', error);
 		}
-	}, [previewCanvasRef, fileName, hasCanvas, saveToGallery]);
+	}, [previewCanvasRef, fileName, hasCanvas, commands, requestSave, hasGalleryEntry]);
 
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
@@ -342,6 +352,8 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 				<span className={statusStyles[status].className}>{statusStyles[status].text}</span>
 			</div>
+
+			{saveDialog}
 
 			{/* Folder Picker Dialog */}
 			{pendingOpen && (

@@ -1,10 +1,8 @@
 import type React from 'react';
-import { useRef } from 'react';
-import { ImageProvider } from '../../hooks/ImageContext';
-import { GalleryProvider } from '../../hooks/GalleryContext';
-import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts';
-import { useRestoreOpenItems } from '../../hooks/useRestoreOpenItems';
-import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
+import { useEffect, useRef } from 'react';
+import { KeyboardCommands } from '../../core/KeyboardCommands';
+import { UnsavedGuard } from '../../core/UnsavedGuard';
+import { getAppStore } from '../../core/store';
 import BottomPanel from './BottomPanel';
 import GalleryPanel from './GalleryPanel';
 import Canvas from '../Canvas';
@@ -14,9 +12,28 @@ import FloatingImage from '../FloatingImage';
 
 const AppContent: React.FC = () => {
 	const previewCanvasRef = useRef<HTMLCanvasElement>(null);
-	useKeyboardShortcuts();
-	useUnsavedChangesGuard();
-	useRestoreOpenItems();
+	const store = getAppStore();
+
+	/**
+	 * App-wide side effects that are not React state: keyboard bindings and the
+	 * unsaved-changes warning. Each class owns its own subscription and is
+	 * stopped on unmount.
+	 *
+	 * Nothing is restored on reload: the app starts with nothing open and the
+	 * gallery suggests recently opened images instead.
+	 */
+	useEffect(() => {
+		const keyboard = new KeyboardCommands(store.editor);
+		const guard = new UnsavedGuard(store.editor);
+
+		keyboard.start();
+		guard.start();
+
+		return () => {
+			keyboard.stop();
+			guard.stop();
+		};
+	}, [store]);
 
 	return (
 		<div className='flex flex-col h-screen bg-slate-100'>
@@ -32,14 +49,6 @@ const AppContent: React.FC = () => {
 	);
 };
 
-const App: React.FC = () => {
-	return (
-		<ImageProvider>
-			<GalleryProvider>
-				<AppContent />
-			</GalleryProvider>
-		</ImageProvider>
-	);
-};
+const App: React.FC = () => <AppContent />;
 
 export default App;

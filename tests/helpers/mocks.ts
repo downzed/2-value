@@ -248,40 +248,86 @@ export function createMockImage(width = 100, height = 100) {
 // ---------------------------------------------------------------------------
 // Default context value factory
 // ---------------------------------------------------------------------------
+// Store mocks (Phase 4)
+//
+// Components now read the singleton stores via selectors in
+// src/renderer/react/useStore.ts. Tests mock that module, running each selector
+// against a plain state object, so no store instance or React context is needed.
+// ---------------------------------------------------------------------------
 
-export function createMockContextValue(overrides: Record<string, unknown> = {}) {
+export function createOpenItem(overrides: Partial<OpenItem> = {}): OpenItem {
 	return {
-		currentImage: null,
-		originalImage: null,
-		fileName: '',
-		hasImage: false,
-		canvasMode: 'image' as const,
+		id: 'item-1',
+		kind: 'image',
+		label: 'photo.jpg',
+		fileName: 'photo.jpg',
+		image: null,
+		width: 100,
+		height: 100,
+		galleryImageId: null,
+		dedupeKey: null,
+		thumbUrl: null,
+		blur: 0,
+		threshold: 0,
+		values: 2,
+		showOriginal: false,
+		history: [],
+		future: [],
+		dirty: false,
+		...overrides,
+	};
+}
+
+export function createEditorState(overrides: Partial<EditorState> = {}): EditorState {
+	return {
+		items: [],
+		activeItemId: null,
 		viewport: { width: 0, height: 0 },
-		activeItemId: null as string | null,
-		blankCanvasId: null as string | null,
-		hasBlankCanvas: false,
-		hasCanvas: false,
-		blankSize: null as { width: number; height: number } | null,
-		items: [] as unknown[],
-		openItems: [] as unknown[],
+		zoom: 1,
+		fitMode: 'fit',
+		fitScale: 1,
+		counter: 0,
+		counterRunning: false,
+		counterDuration: null,
+		panels: { controls: true, original: true, timer: true, gallery: false },
+		...overrides,
+	};
+}
+
+export function createGalleryState(overrides: Partial<GalleryState> = {}): GalleryState {
+	return {
+		folders: [],
+		images: [],
+		selectedFolderId: null,
+		gallerySearchQuery: '',
+		loading: false,
+		error: null,
+		...overrides,
+	};
+}
+
+/** Every EditorStore method a component may reach for, as a spy. */
+export function createEditorStoreStub(overrides: Record<string, unknown> = {}) {
+	const strokesByItem = new Map<string, number[]>();
+	return {
+		strokesByItem,
+		getStrokes: vi.fn((id: string) => {
+			let list = strokesByItem.get(id);
+			if (!list) {
+				list = [];
+				strokesByItem.set(id, list);
+			}
+			return list;
+		}),
+		loadImage: vi.fn(),
+		newBlankCanvas: vi.fn(),
 		activateItem: vi.fn(),
 		closeItem: vi.fn(),
-		hasDirtyItems: false,
-		restorableItemIds: [] as string[],
+		resetImage: vi.fn(),
+		resetControls: vi.fn(),
 		markActiveSaved: vi.fn(),
 		markActiveDirty: vi.fn(),
 		linkGalleryImage: vi.fn(),
-		// A real Map so components can read/write per-item strokes.
-		strokesByItemRef: { current: new Map<string, number[]>() },
-		newBlankCanvas: vi.fn(),
-		setViewport: vi.fn(),
-		loadImage: vi.fn(),
-		resetImage: vi.fn(),
-		resetControls: vi.fn(),
-		blur: 0,
-		threshold: 0,
-		values: 2 as const,
-		showOriginal: false,
 		setBlur: vi.fn(),
 		setThreshold: vi.fn(),
 		setValues: vi.fn(),
@@ -289,25 +335,56 @@ export function createMockContextValue(overrides: Record<string, unknown> = {}) 
 		applyPreset: vi.fn(),
 		undo: vi.fn(),
 		redo: vi.fn(),
-		canUndo: false,
-		canRedo: false,
-		panels: { controls: true, original: true, timer: true, gallery: false },
 		togglePanel: vi.fn(),
 		setPanel: vi.fn(),
-		zoom: 1,
-		fitMode: 'fit' as const,
-		fitScale: 1,
-		effectiveZoom: 1,
 		setZoom: vi.fn(),
 		setFitMode: vi.fn(),
 		setFitScale: vi.fn(),
 		zoomIn: vi.fn(),
 		zoomOut: vi.fn(),
-		counter: 0,
-		counterRunning: false,
-		counterDuration: null,
+		setViewport: vi.fn(),
 		startCounter: vi.fn(),
 		stopCounter: vi.fn(),
+		stopTimer: vi.fn(),
+		dispose: vi.fn(),
+		...overrides,
+	};
+}
+
+/** Every GalleryStore method a component may reach for, as a spy. */
+export function createGalleryStoreStub(overrides: Record<string, unknown> = {}) {
+	return {
+		loadGallery: vi.fn(),
+		createFolder: vi.fn(),
+		renameFolder: vi.fn(),
+		deleteFolder: vi.fn(),
+		updateFolderTags: vi.fn(),
+		importImage: vi.fn(),
+		saveImageToGallery: vi.fn(),
+		moveImage: vi.fn(),
+		copyImage: vi.fn(),
+		deleteImage: vi.fn(),
+		getImageBlob: vi.fn(),
+		openGalleryImage: vi.fn(),
+		setSelectedFolder: vi.fn(),
+		setGallerySearchQuery: vi.fn(),
+		clearError: vi.fn(),
+		dispose: vi.fn(),
+		...overrides,
+	};
+}
+
+/** Every Commands method, as a spy. */
+export function createCommandsStub(overrides: Record<string, unknown> = {}) {
+	return {
+		openFile: vi.fn().mockResolvedValue({ ok: true }),
+		openGalleryImage: vi.fn().mockResolvedValue({ ok: true }),
+		saveActiveItemToGallery: vi.fn().mockResolvedValue(undefined),
+		saveOpenItem: vi.fn().mockResolvedValue(undefined),
+		renderItemToBlob: vi.fn().mockResolvedValue(null),
+		exportOpenItem: vi.fn().mockResolvedValue(undefined),
+		exportGalleryImage: vi.fn().mockResolvedValue(undefined),
+		dispose: vi.fn(),
 		...overrides,
 	};
 }

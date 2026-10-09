@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useImageContext } from '../hooks/ImageContext';
+import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { imageToImageData } from '../utils/imageConversion';
 import FloatingWidget from './shared/FloatingWidget';
 import { Icon } from './shared/Icon';
@@ -8,7 +8,11 @@ const STORAGE_KEY = 'image-editor-original-position';
 const DEFAULT_POSITION = { x: 20, y: 20 };
 
 const FloatingImage: React.FC = () => {
-	const { originalImage, showOriginal, toggleShowOriginal, panels, setPanel } = useImageContext();
+	const editor = useEditorStore();
+	const { toggleShowOriginal, setPanel } = editor;
+	const originalImage = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.image ?? null);
+	const showOriginal = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.showOriginal ?? false);
+	const isOpen = useEditorSelector((s) => s.panels.original);
 	const [showKey, setShowKey] = useState(0);
 	const originalCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -21,7 +25,7 @@ const FloatingImage: React.FC = () => {
 
 	// Render canvas only when panel is open (lazy render — avoids holding large backing store when hidden)
 	useEffect(() => {
-		if (!panels.original || !originalImage) {
+		if (!isOpen || !originalImage) {
 			// Clear canvas backing store to free memory when panel is not visible
 			if (originalCanvasRef.current) {
 				originalCanvasRef.current.width = 0;
@@ -31,10 +35,10 @@ const FloatingImage: React.FC = () => {
 		}
 		// Trigger redraw when panel opens
 		setShowKey((k) => k + 1);
-	}, [panels.original, originalImage]);
+	}, [isOpen, originalImage]);
 
 	useEffect(() => {
-		if (!originalImage || !originalCanvasRef.current || !showKey || !panels.original) return;
+		if (!originalImage || !originalCanvasRef.current || !showKey || !isOpen) return;
 
 		const canvas = originalCanvasRef.current;
 		// Write source image as raw RGBA ImageData using getRawImage() (avoids private .data access)
@@ -44,7 +48,7 @@ const FloatingImage: React.FC = () => {
 		if (ctx) {
 			ctx.putImageData(imageToImageData(originalImage), 0, 0);
 		}
-	}, [originalImage, showKey, panels.original]);
+	}, [originalImage, showKey, isOpen]);
 
 	const handleClose = () => {
 		setPanel('original', false);
@@ -68,7 +72,7 @@ const FloatingImage: React.FC = () => {
 			title='Original'
 			storageKey={STORAGE_KEY}
 			defaultPosition={DEFAULT_POSITION}
-			isOpen={panels.original}
+			isOpen={isOpen}
 			onClose={handleClose}
 			titleBarActions={eyeToggle}
 			panelStyle={{ width: '40%', maxWidth: '350px', maxHeight: '60vh' }}

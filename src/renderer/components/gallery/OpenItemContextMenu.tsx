@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import type { OpenItem } from '../../hooks/useImage';
+import type { OpenItem } from '../../core/types';
+import { useMenuPosition } from '../../react/useMenuPosition';
 
 interface OpenItemContextMenuProps {
 	item: OpenItem;
@@ -48,11 +49,18 @@ const OpenItemContextMenu: React.FC<OpenItemContextMenuProps> = ({
 
 	const itemClass = 'w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 transition-colors';
 
+	const position = useMenuPosition(anchorX, anchorY, menuRef);
+
 	return (
 		<div
 			ref={menuRef}
 			className='fixed z-[60] bg-white rounded-lg shadow-xl border border-slate-200 py-1 min-w-[160px]'
-			style={{ left: anchorX, top: anchorY }}
+			// Hidden until measured, so clamping to the viewport does not visibly jump.
+			style={{
+				left: position?.left ?? 0,
+				top: position?.top ?? 0,
+				visibility: position ? 'visible' : 'hidden',
+			}}
 			role='menu'
 		>
 			<button

@@ -7,6 +7,8 @@ interface FolderPickerDialogProps {
 	onSelect: (folderId: string) => void;
 	onSkip: () => void;
 	onCreateFolder: (name: string) => Promise<GalleryFolder>;
+	/** Label for the dismiss button: "Skip" when importing, "Cancel" when saving. */
+	skipLabel?: string;
 }
 
 export const FolderPickerDialog: React.FC<FolderPickerDialogProps> = ({
@@ -14,6 +16,7 @@ export const FolderPickerDialog: React.FC<FolderPickerDialogProps> = ({
 	onSelect,
 	onSkip,
 	onCreateFolder,
+	skipLabel = 'Skip',
 }) => {
 	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [newFolderMode, setNewFolderMode] = useState(false);
@@ -148,7 +151,7 @@ export const FolderPickerDialog: React.FC<FolderPickerDialogProps> = ({
 						onClick={onSkip}
 						className='px-3 py-1.5 text-xs text-slate-600 hover:text-slate-800 transition-colors'
 					>
-						Skip
+						{skipLabel}
 					</button>
 					<button
 						type='button'

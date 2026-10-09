@@ -18,11 +18,13 @@ A value image editor for drawing studies. Converts images to a 2-tone or 3-tone 
 - **Gallery/Recents**: Open images from a recent files grid or browse the filesystem
 - Open images (PNG, JPG, JPEG, BMP)
 - New blank canvas sized to the stage, with freehand drawing
-- **Auto folder in the gallery**: every image and canvas you currently have open, so you can
-  switch between them — each keeps its own adjustments, undo history and drawing
-- Save writes back to the gallery (overwriting the item's own entry, or creating one in
-  `Unsorted`); use **Export as...** on any gallery item's menu to download a file
-- Export images to disk as PNG or JPEG via **Export as...**
+- **Opened Items folder** in the gallery: every image and canvas you currently have open,
+  so you can switch between them. Each keeps its own adjustments, undo history and drawing.
+- On launch only the gallery panel is open and nothing is loaded; the gallery suggests your
+  five most recently opened images
+- Save writes into the gallery, overwriting the item's own entry when it has one, and asks which
+  folder to use the first time since there is no implicit destination
+- Export images to disk as PNG or JPEG via **Export as...** on any gallery item's menu
 - Adjustable blur (0-10) and threshold (0-255)
 - 2-value / 3-value mode toggle (binary or three-zone threshold)
 - 3 adjustment presets: Sketch, High Contrast, 3-Tone
@@ -64,12 +66,14 @@ A value image editor for drawing studies. Converts images to a 2-tone or 3-tone 
 
 - `src/renderer/` - React frontend (pure browser app, no Electron)
   - `components/shell/` - App (AppContent pattern), BottomPanel (status bar + file ops), GalleryPanel (gallery modal)
-  - `components/gallery/` - FolderContextMenu, FolderPickerDialog, ImageContextMenu
+  - `components/gallery/` - FolderContextMenu, FolderPickerDialog, ImageContextMenu, OpenItemContextMenu
   - `components/shared/` - Icon, PillButton, SectionHeader, SliderRow (reusable UI primitives)
-  - `components/` - Canvas, FloatingPanel (reusable), FloatingControls, FloatingImage, FloatingCounter
-  - `hooks/` - useImage, ImageContext, useGallery, GalleryContext, useDraggablePanel, useDebouncedCallback, useKeyboardShortcuts
-  - `utils/` - fileOps (file open/save with FSA + fallback), storage (IndexedDB wrapper)
-  - `constants/` - UI constants (filter ranges, presets, history config)
+  - `components/` - Canvas, FloatingWidget (reusable), FloatingControls, FloatingImage, FloatingCounter
+  - `core/` - framework-free domain classes (EditorStore, GalleryStore, Commands, lifecycle classes)
+  - `react/` - useStore (selector bindings), useCommands, useSaveFlow
+  - `hooks/` - useDraggablePanel, useDebouncedCallback, useImageProcessingWorker
+  - `utils/` - fileOps (file open/save with FSA + fallback), storage (IndexedDB repository + recents), thumbnails
+  - `constants/` - UI constants (filter ranges, presets, history config, blank-canvas brush)
 
 ## Tech Stack
 

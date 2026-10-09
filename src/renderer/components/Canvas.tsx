@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { UI } from '../constants/ui';
-import { useImageContext } from '../hooks/ImageContext';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
+import { useEditorStore, useEditorSelector } from '../react/useStore';
 import { useImageProcessingWorker } from '../hooks/useImageProcessingWorker';
 import { imageToImageData } from '../utils/imageConversion';
 import { Icon } from './shared/Icon';
@@ -40,25 +40,23 @@ function paintStroke(ctx: CanvasRenderingContext2D, stroke: Stroke, width: numbe
 }
 
 const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
-	const {
-		currentImage,
-		canvasMode,
-		activeItemId,
-		strokesByItemRef,
-		markActiveDirty,
-		blur,
-		threshold,
-		values,
-		showOriginal,
-		zoom,
-		fitMode,
-		setZoom,
-		setFitScale,
-		setViewport,
-	} = useImageContext();
+	// Non-reactive members: stable for the app's lifetime, so they never appear
+	// in a selector (notably `strokesByItem`, which must not trigger re-renders).
+	const editor = useEditorStore();
+	const { strokesByItem, setZoom, setFitScale, setViewport, markActiveDirty } = editor;
+
+	// Reactive slices. Only these re-render this component.
+	const activeItemId = useEditorSelector((s) => s.activeItemId);
+	const blur = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.blur ?? 0);
+	const threshold = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.threshold ?? 0);
+	const values = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.values ?? 2);
+	const showOriginal = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.showOriginal ?? false);
+	const currentImage = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.image ?? null);
+	const zoom = useEditorSelector((s) => s.zoom);
+	const fitMode = useEditorSelector((s) => s.fitMode);
 
 	// A blank canvas is a drawing surface and bypasses the filter worker entirely.
-	const isBlank = canvasMode === 'blank';
+	const isBlank = useEditorSelector((s) => s.items.find((i) => i.id === s.activeItemId)?.kind === 'blank');
 
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -72,13 +70,8 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 
 	const strokesFor = useCallback((): Stroke[] | null => {
 		if (!isBlank || activeItemId === null) return null;
-		let list = strokesByItemRef.current.get(activeItemId);
-		if (!list) {
-			list = [];
-			strokesByItemRef.current.set(activeItemId, list);
-		}
-		return list;
-	}, [isBlank, activeItemId, strokesByItemRef]);
+		return editor.getStrokes(activeItemId);
+	}, [isBlank, activeItemId, editor]);
 
 	const { process } = useImageProcessingWorker();
 
@@ -213,10 +206,10 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 		if (!ctx) return;
 		ctx.fillStyle = UI.CANVAS.BACKGROUND;
 		ctx.fillRect(0, 0, canvas.width, canvas.height);
-		for (const stroke of strokesByItemRef.current.get(activeItemId ?? '') ?? []) {
+		for (const stroke of strokesByItem.get(activeItemId ?? '') ?? []) {
 			paintStroke(ctx, stroke, canvas.width, canvas.height);
 		}
-	}, [previewCanvasRef, strokesByItemRef, activeItemId]);
+	}, [previewCanvasRef, strokesByItem, activeItemId]);
 
 	// Map a pointer event into 0..1 space over the canvas' rendered box.
 	const toNormalized = useCallback((e: React.PointerEvent<HTMLCanvasElement>): [number, number] => {
@@ -323,7 +316,7 @@ const Canvas: React.FC<CanvasProps> = ({ previewCanvasRef }) => {
 
 	const effectiveZoom = fitMode === 'fit' ? fitScale : zoom;
 
-	// Report fitScale to context so it can be used as reactive effectiveZoom
+	// Report fitScale so other components can read it as reactive state.
 	useEffect(() => {
 		setFitScale(fitScale);
 	}, [fitScale, setFitScale]);

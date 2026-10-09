@@ -1,10 +1,8 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useImageContext } from '../../hooks/ImageContext';
-import { useGalleryContext } from '../../hooks/GalleryContext';
-import { useImageLoader, imageLoadErrorMessage } from '../../hooks/useImageLoader';
+import { useEditorSelector, useGallerySelector, useEditorStore, useGalleryStore } from '../../react/useStore';
+import { decodeErrorMessage } from '../../core/decode';
 import type { GalleryFolder, GalleryImage } from '../../../shared/types';
-import { UNSORTED_FOLDER_NAME } from '../../../shared/types';
 import { UI } from '../../constants/ui';
 import { Icon } from '../shared/Icon';
 import {
@@ -15,11 +13,12 @@ import {
 } from '../gallery/FolderContextMenu';
 import { ImageContextMenu } from '../gallery/ImageContextMenu';
 import { OpenItemContextMenu } from '../gallery/OpenItemContextMenu';
-import { useExportItem } from '../../hooks/useExportItem';
-import { useSaveToGallery } from '../../hooks/useSaveToGallery';
+import { useCommands } from '../../react/useCommands';
+import { useSaveFlow } from '../../react/useSaveFlow';
 import { renderImageThumbnail, renderStrokesThumbnail } from '../../utils/thumbnails';
-import type { OpenItem } from '../../hooks/useImage';
-import { galleryStore } from '../../utils/storage';
+import type { OpenItem } from '../../core/types';
+import { getRecents, RECENTS_MAX } from '../../utils/storage';
+import { galleryRepository } from '../../utils/storage';
 
 type FolderContextMenuState = {
 	folder: GalleryFolder;
@@ -40,10 +39,10 @@ type ImageContextMenuState = {
 } | null;
 
 /**
- * Sentinel folder id for the virtual "Auto" folder. Deliberately not a UUID so
- * it can never collide with a real gallery folder id.
+ * Sentinel folder id for the virtual "Opened Items" folder. Deliberately not a
+ * UUID so it can never collide with a real gallery folder id.
  */
-const AUTO_FOLDER_ID = '__auto__';
+const OPENED_ITEMS_ID = '__opened_items__';
 
 type DialogState =
 	| { type: 'rename'; folder: GalleryFolder }
@@ -52,16 +51,35 @@ type DialogState =
 	| null;
 
 const GalleryPanel: React.FC = () => {
-	const { panels, setPanel, items, activeItemId, viewport, strokesByItemRef, activateItem, closeItem } =
-		useImageContext();
+	const editor = useEditorStore();
+	const gallery = useGalleryStore();
+	const commands = useCommands();
+	const { requestSave, dialog: saveDialog } = useSaveFlow();
+	const { setPanel, activateItem, closeItem, strokesByItem } = editor;
+
+	// Reactive slices. Editor state is only needed for the Auto folder listing;
+	// everything else comes from the gallery store, so a filter slider no longer
+	// re-renders the folder list.
+	const items = useEditorSelector((s) => s.items);
+	const activeItemId = useEditorSelector((s) => s.activeItemId);
+	const viewport = useEditorSelector((s) => s.viewport);
+	const panels = useEditorSelector((s) => s.panels);
+
+	const folders = useGallerySelector((s) => s.folders);
+	const images = useGallerySelector((s) => s.images);
+	const selectedFolderId = useGallerySelector((s) => s.selectedFolderId);
+	const gallerySearchQuery = useGallerySelector((s) => s.gallerySearchQuery);
+	const loading = useGallerySelector((s) => s.loading);
+	const error = useGallerySelector((s) => s.error);
+
+	// Search matches file names across every folder, not just the selected one.
+	const filteredImages = useMemo(() => {
+		const q = gallerySearchQuery.trim().toLowerCase();
+		if (!q) return images;
+		return images.filter((img) => img.fileName.toLowerCase().includes(q));
+	}, [images, gallerySearchQuery]);
+
 	const {
-		folders,
-		images,
-		filteredImages,
-		selectedFolderId,
-		gallerySearchQuery,
-		loading,
-		error,
 		loadGallery,
 		createFolder,
 		renameFolder,
@@ -70,15 +88,10 @@ const GalleryPanel: React.FC = () => {
 		moveImage,
 		copyImage,
 		deleteImage,
-		openGalleryImage,
 		setSelectedFolder,
 		setGallerySearchQuery,
 		clearError,
-	} = useGalleryContext();
-	const { renderItemToBlob, exportOpenItem, exportGalleryImage } = useExportItem();
-	const saveToGallery = useSaveToGallery();
-
-	const { loadFromFile } = useImageLoader();
+	} = gallery;
 
 	const [folderContextMenu, setFolderContextMenu] = useState<FolderContextMenuState>(null);
 	const [imageContextMenu, setImageContextMenu] = useState<ImageContextMenuState>(null);
@@ -99,6 +112,20 @@ const GalleryPanel: React.FC = () => {
 			clearError();
 		}
 	}, [panels.gallery, loadGallery, clearError]);
+
+	// Suggestions for what to open next, shown only while nothing is open.
+	// Entries whose gallery image has since been deleted are filtered out.
+	const recentEntries = useMemo(
+		() =>
+			items.length === 0
+				? getRecents()
+						.filter((entry) => images.some((i) => i.id === entry.galleryImageId))
+						.slice(0, RECENTS_MAX)
+				: [],
+		[images, items],
+	);
+
+	const showRecents = recentEntries.length > 0 && gallerySearchQuery.trim().length === 0;
 
 	useEffect(() => {
 		if (newFolderMode) {
@@ -134,7 +161,7 @@ const GalleryPanel: React.FC = () => {
 		Promise.all(
 			newImages.map(async (img) => {
 				try {
-					const blob = await galleryStore.getThumbnailBlob(img.id);
+					const blob = await galleryRepository.getThumbnailBlob(img.id);
 					if (blob && !cancelled) {
 						newUrls[img.id] = URL.createObjectURL(blob);
 					}
@@ -160,6 +187,17 @@ const GalleryPanel: React.FC = () => {
 	const handleFolderContextMenu = (e: React.MouseEvent, folder: GalleryFolder) => {
 		e.preventDefault();
 		setFolderContextMenu({ folder, x: e.clientX, y: e.clientY });
+	};
+
+	/**
+	 * "..." button: anchor to the button itself rather than the pointer, so the
+	 * menu hangs off the button the way the right-click menu hangs off the cursor.
+	 */
+	const handleFolderMenuButton = (e: React.MouseEvent, folder: GalleryFolder) => {
+		e.preventDefault();
+		e.stopPropagation();
+		const rect = e.currentTarget.getBoundingClientRect();
+		setFolderContextMenu({ folder, x: rect.left, y: rect.bottom });
 	};
 
 	const handleImageContextMenu = (e: React.MouseEvent, image: GalleryImage) => {
@@ -219,11 +257,9 @@ const GalleryPanel: React.FC = () => {
 		async (image: GalleryImage) => {
 			try {
 				setImageLoadingId(image.id);
-				const result = await openGalleryImage(image.id);
-				const file = new File([result.blob], result.fileName, { type: result.blob.type || 'image/png' });
-				const outcome = await loadFromFile(file);
+				const outcome = await commands.openGalleryImage(image.id);
 				if (!outcome.ok) {
-					console.error('Failed to open gallery image:', imageLoadErrorMessage(outcome.error));
+					console.error('Failed to open gallery image:', decodeErrorMessage(outcome.error));
 				}
 			} catch (err) {
 				console.error('Failed to open gallery image:', err);
@@ -231,7 +267,7 @@ const GalleryPanel: React.FC = () => {
 				setImageLoadingId(null);
 			}
 		},
-		[openGalleryImage, loadFromFile],
+		[commands],
 	);
 
 	// --- Auto folder (virtual list of currently open items) ---
@@ -243,7 +279,7 @@ const GalleryPanel: React.FC = () => {
 			const url =
 				item.kind === 'blank'
 					? await renderStrokesThumbnail(
-							strokesByItemRef.current.get(item.id) ?? [],
+							strokesByItem.get(item.id) ?? [],
 							Math.max(viewport.width, 1),
 							Math.max(viewport.height, 1),
 						)
@@ -253,7 +289,7 @@ const GalleryPanel: React.FC = () => {
 			if (!url) return;
 			setOpenItemThumbs((prev) => (prev[item.id] ? prev : { ...prev, [item.id]: url }));
 		},
-		[openItemThumbs, strokesByItemRef, viewport.width, viewport.height],
+		[openItemThumbs, strokesByItem, viewport.width, viewport.height],
 	);
 
 	// Clicking a row takes the user back to that document.
@@ -272,18 +308,14 @@ const GalleryPanel: React.FC = () => {
 	// Save works on any item, not just the visible one, so a non-active item is
 	// re-rendered offscreen rather than read off the live preview canvas.
 	const handleSaveOpenItem = useCallback(
-		async (item: OpenItem) => {
-			try {
-				const blob = await renderItemToBlob(item);
-				if (!blob) return;
-				// saveToGallery targets the active item, so activate before saving.
-				if (item.id !== activeItemId) activateItem(item.id);
-				await saveToGallery(blob, item.fileName || `${item.label}.png`);
-			} catch (err) {
-				console.error('Failed to save open item:', err);
-			}
+		(item: OpenItem) => {
+			requestSave(
+				(folderId) => commands.saveOpenItem(item, folderId),
+				// Already gallery-backed entries are overwritten in place.
+				item.galleryImageId !== null,
+			);
 		},
-		[activeItemId, activateItem, saveToGallery, renderItemToBlob],
+		[commands, requestSave],
 	);
 
 	const handleCloseOpenItem = useCallback(
@@ -297,23 +329,23 @@ const GalleryPanel: React.FC = () => {
 	const handleExportOpenItem = useCallback(
 		async (item: OpenItem) => {
 			try {
-				await exportOpenItem(item);
+				await commands.exportOpenItem(item);
 			} catch (err) {
 				console.error('Failed to export open item:', err);
 			}
 		},
-		[exportOpenItem],
+		[commands],
 	);
 
 	const handleExportGalleryImage = useCallback(
 		async (image: GalleryImage) => {
 			try {
-				await exportGalleryImage(image.id, image.fileName);
+				await commands.exportGalleryImage(image.id, image.fileName);
 			} catch (err) {
 				console.error('Failed to export gallery image:', err);
 			}
 		},
-		[exportGalleryImage],
+		[commands],
 	);
 
 	const handleMoveImage = useCallback(
@@ -518,7 +550,7 @@ const GalleryPanel: React.FC = () => {
 					)}
 
 					{/* If a folder is selected, show folder detail view */}
-					{selectedFolderId === AUTO_FOLDER_ID && !isSearching ? (
+					{selectedFolderId === OPENED_ITEMS_ID && !isSearching ? (
 						<div className='space-y-3'>
 							<div className='flex items-center gap-2'>
 								<button
@@ -529,7 +561,7 @@ const GalleryPanel: React.FC = () => {
 								>
 									<Icon name='arrow-left' size='sm' />
 								</button>
-								<p className='text-xs font-semibold text-slate-700 truncate flex-1'>Auto</p>
+								<p className='text-xs font-semibold text-slate-700 truncate flex-1'>Opened Items</p>
 								<span className='text-[10px] text-slate-400'>
 									{items.length} open item{items.length !== 1 ? 's' : ''}
 								</span>
@@ -564,6 +596,42 @@ const GalleryPanel: React.FC = () => {
 								)}
 							</div>
 
+							{/* Recent suggestions, shown when nothing is open yet */}
+							{showRecents && (
+								<div className='mb-4 space-y-1.5'>
+									<p className='text-[10px] font-medium text-slate-500 uppercase tracking-wide'>Recent</p>
+									<div
+										className='grid gap-1.5'
+										style={{ gridTemplateColumns: `repeat(${UI.GALLERY.THUMBNAIL_COLS}, minmax(0, 1fr))` }}
+									>
+										{recentEntries.map((entry) => (
+											<button
+												key={entry.galleryImageId}
+												type='button'
+												onClick={() => {
+													void commands.openGalleryImage(entry.galleryImageId);
+												}}
+												title={entry.fileName}
+												className='relative rounded-lg overflow-hidden border border-slate-200 hover:border-slate-400 transition-colors cursor-pointer p-0 bg-transparent'
+											>
+												{thumbnailUrls[entry.galleryImageId] ? (
+													<img
+														src={thumbnailUrls[entry.galleryImageId]}
+														alt={entry.fileName}
+														className='w-full aspect-square object-cover'
+													/>
+												) : (
+													<div className='w-full aspect-square bg-slate-100' />
+												)}
+												<span className='absolute bottom-0 left-0 right-0 text-[9px] text-white bg-black/60 truncate px-1 py-0.5'>
+													{entry.fileName}
+												</span>
+											</button>
+										))}
+									</div>
+								</div>
+							)}
+
 							{/* Search results or folder grid */}
 							{isSearching ? (
 								<div className='space-y-2'>
@@ -586,10 +654,10 @@ const GalleryPanel: React.FC = () => {
 												<button
 													type='button'
 													className='w-full text-left p-3 bg-transparent'
-													onClick={() => setSelectedFolder(AUTO_FOLDER_ID)}
-													aria-label='Open Auto folder'
+													onClick={() => setSelectedFolder(OPENED_ITEMS_ID)}
+													aria-label='Open Opened Items folder'
 												>
-													<p className='text-xs font-semibold text-slate-800 truncate'>Auto</p>
+													<p className='text-xs font-semibold text-slate-800 truncate'>Opened Items</p>
 													<p className='text-[10px] text-slate-500 mt-0.5'>
 														{items.length} open item{items.length !== 1 ? 's' : ''}
 													</p>
@@ -615,19 +683,14 @@ const GalleryPanel: React.FC = () => {
 																{count} image{count !== 1 ? 's' : ''}
 															</p>
 														</button>
-														{folder.name !== UNSORTED_FOLDER_NAME && (
-															<button
-																type='button'
-																aria-label='Folder actions'
-																onClick={(e) => {
-																	e.stopPropagation();
-																	handleFolderContextMenu(e, folder);
-																}}
-																className='absolute top-1 right-1 w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-opacity rounded'
-															>
-																•••
-															</button>
-														)}
+														<button
+															type='button'
+															aria-label={`Actions for folder ${folder.name}`}
+															onClick={(e) => handleFolderMenuButton(e, folder)}
+															className='absolute top-1 right-1 w-5 h-5 flex items-center justify-center text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity rounded'
+														>
+															•••
+														</button>
 													</li>
 												);
 											})}
@@ -709,7 +772,9 @@ const GalleryPanel: React.FC = () => {
 				/>
 			)}
 
-			{/* Open-item context menu (virtual Auto folder) */}
+			{saveDialog}
+
+			{/* Open-item context menu (virtual Opened Items folder) */}
 			{openItemMenu && (
 				<OpenItemContextMenu
 					item={openItemMenu.item}
