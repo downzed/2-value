@@ -42,10 +42,8 @@ export const FolderPickerDialog: React.FC<FolderPickerDialogProps> = ({
 	};
 
 	return (
-		<Modal>
+		<Modal title='Save to folder'>
 			<div ref={rootRef} className='space-y-4'>
-				<h2 className='text-sm font-semibold text-slate-800'>Save to folder</h2>
-
 				<ul className='grid grid-cols-2 gap-2 list-none p-0 m-0 max-h-[240px] overflow-y-auto'>
 					{sorted.map((folder) => (
 						<li key={folder.id}>
