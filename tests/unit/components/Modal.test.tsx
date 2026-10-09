@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { useRef, useState } from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import Modal from '../../../src/renderer/components/shared/Modal';
 
@@ -89,5 +90,89 @@ describe('Modal', () => {
 		render(<Modal title='T'>the content</Modal>);
 
 		expect(screen.getByRole('dialog').textContent).toContain('the content');
+	});
+});
+
+describe('Modal focus management', () => {
+	/** Renders a trigger plus the dialog, so there is something to restore to. */
+	function TriggerAndModal() {
+		const [open, setOpen] = useState(false);
+		return (
+			<>
+				<button type='button' onClick={() => setOpen(true)}>
+					Open dialog
+				</button>
+				{open && (
+					<Modal title='Save to folder'>
+						<button type='button'>Inside</button>
+					</Modal>
+				)}
+			</>
+		);
+	}
+
+	it('moves focus into the dialog on open', async () => {
+		render(<TriggerAndModal />);
+		screen.getByText('Open dialog').focus();
+
+		fireEvent.click(screen.getByText('Open dialog'));
+
+		expect(document.activeElement).toBe(screen.getByRole('dialog'));
+	});
+
+	it('restores focus when closed via its own button, not just on unmount', () => {
+		function Closable() {
+			const [open, setOpen] = useState(false);
+			return (
+				<>
+					<button type='button' onClick={() => setOpen(true)}>
+						Open dialog
+					</button>
+					{open && (
+						<Modal title='T'>
+							<button type='button' onClick={() => setOpen(false)}>
+								Confirm
+							</button>
+						</Modal>
+					)}
+				</>
+			);
+		}
+		render(<Closable />);
+		const trigger = screen.getByText('Open dialog');
+		trigger.focus();
+		fireEvent.click(trigger);
+
+		fireEvent.click(screen.getByText('Confirm'));
+
+		expect(document.activeElement).toBe(trigger);
+	});
+
+	it('can focus a specific element instead of the card', () => {
+		function WithInitialFocus() {
+			const inputRef = useRef<HTMLInputElement>(null);
+			return (
+				<Modal title='Rename' initialFocusRef={inputRef}>
+					<input ref={inputRef} aria-label='New name' />
+				</Modal>
+			);
+		}
+		render(<WithInitialFocus />);
+
+		expect(document.activeElement).toBe(screen.getByLabelText('New name'));
+	});
+
+	it('does not restore focus to a trigger that has left the document', () => {
+		// The menu row that opened the dialog may be unmounted by the time the
+		// dialog closes; focus must not be moved to a detached node.
+		const { unmount } = render(<TriggerAndModal />);
+		const trigger = screen.getByText('Open dialog');
+		trigger.focus();
+		fireEvent.click(trigger);
+
+		unmount();
+		trigger.remove();
+
+		expect(document.activeElement).not.toBe(trigger);
 	});
 });

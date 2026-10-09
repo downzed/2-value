@@ -1,4 +1,4 @@
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import type React from 'react';
 import type { ReactNode } from 'react';
 
@@ -13,6 +13,11 @@ interface ModalProps {
 	title?: string;
 	/** Overrides the accessible name when the visible heading is not descriptive enough. */
 	ariaLabel?: string;
+	/**
+	 * Element to focus on open instead of the card itself. Defaults to the card,
+	 * which is focusable via `tabIndex={-1}`.
+	 */
+	initialFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
 /**
@@ -26,8 +31,23 @@ interface ModalProps {
  * backdrop is `aria-hidden` because it is presentational — dismissal by clicking
  * it is handled by `useDismissable`, not by anything inside it.
  */
-const Modal: React.FC<ModalProps> = ({ children, widthClass = 'w-[360px]', title, ariaLabel }) => {
+const Modal: React.FC<ModalProps> = ({ children, widthClass = 'w-[360px]', title, ariaLabel, initialFocusRef }) => {
 	const titleId = useId();
+	const cardRef = useRef<HTMLDivElement>(null);
+
+	// Focus moves in on open and returns on unmount. Doing it here rather than in
+	// each dismissal path means Escape, a backdrop click and the dialog's own
+	// buttons all restore focus identically.
+	useEffect(() => {
+		const previouslyFocused = document.activeElement as HTMLElement | null;
+		(initialFocusRef?.current ?? cardRef.current)?.focus();
+
+		return () => {
+			// The trigger may itself be gone (e.g. the menu row that opened this),
+			// so only restore focus when it is still in the document.
+			if (previouslyFocused?.isConnected) previouslyFocused.focus();
+		};
+	}, [initialFocusRef]);
 
 	return (
 		<div className='fixed inset-0 z-[300] flex items-center justify-center'>
@@ -37,11 +57,15 @@ const Modal: React.FC<ModalProps> = ({ children, widthClass = 'w-[360px]', title
 			 */}
 			<div className='absolute inset-0 bg-black/40' aria-hidden='true' />
 			<div
+				ref={cardRef}
 				role='dialog'
 				aria-modal='true'
 				aria-label={ariaLabel}
 				aria-labelledby={ariaLabel ? undefined : titleId}
-				className={`relative bg-white rounded-xl shadow-2xl p-5 ${widthClass}`}
+				// Focusable so focus can land on the dialog itself, which works even
+				// when a dialog has no focusable children.
+				tabIndex={-1}
+				className={`relative bg-white rounded-xl shadow-2xl p-5 outline-none ${widthClass}`}
 			>
 				{title && (
 					<h2 id={titleId} className='text-sm font-semibold text-slate-800'>
