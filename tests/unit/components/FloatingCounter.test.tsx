@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
+import type { Image as ImageJS } from 'image-js';
 import FloatingCounter from '../../../src/renderer/components/FloatingCounter';
 import { createEditorState, createEditorStoreStub, createOpenItem } from '../../helpers/mocks';
 
@@ -19,7 +20,7 @@ vi.mock('../../../src/renderer/react/useStore', () => ({
 	useEditorStore: () => holders.getEditorStore(),
 	useGalleryStore: () => ({}),
 	useEditorSelector: (selector: (s: never) => unknown) => selector(holders.getEditorState() as never),
-	useGallerySelector: (selector: (s: never) => unknown) => selector({}),
+	useGallerySelector: (selector: (s: never) => unknown) => selector({} as never),
 }));
 
 // FloatingWidget uses useDraggablePanel which uses localStorage (already mocked in setup.ts)
@@ -29,24 +30,43 @@ let editorState: { current: EditorStateLike };
 let editorStub: ReturnType<typeof createEditorStoreStub>;
 
 /** Sets editor state from the legacy flat-field overrides the tests used. */
-function setState(overrides: Record<string, unknown>) {
+function setState(overrides: Parameters<typeof translate>[0]) {
 	editorState.current = createEditorState(translate(overrides));
 }
 
 /** Maps legacy flat fields onto the item-based EditorState shape. */
-function translate(overrides: Record<string, unknown>): Partial<EditorStateLike> {
-	const { blur, threshold, values, showOriginal, canUndo, canRedo, history, future, ...rest } = overrides;
+function translate(overrides: {
+	blur?: number;
+	threshold?: number;
+	values?: 2 | 3;
+	showOriginal?: boolean;
+	canUndo?: boolean;
+	canRedo?: boolean;
+	originalImage?: ImageJS | null;
+	[key: string]: unknown;
+}): Partial<EditorStateLike> {
+	const { blur, threshold, values, showOriginal, canUndo, canRedo, history, future, originalImage, ...rest } =
+		overrides;
 	const needsItem =
 		blur !== undefined ||
 		threshold !== undefined ||
 		values !== undefined ||
 		showOriginal !== undefined ||
 		canUndo !== undefined ||
-		canRedo !== undefined;
+		canRedo !== undefined ||
+		originalImage !== undefined;
 	if (!needsItem) return rest as Partial<EditorStateLike>;
 	return {
 		...rest,
-		items: [createOpenItem({ blur, threshold, values, showOriginal })],
+		items: [
+			createOpenItem({
+				blur,
+				threshold,
+				values,
+				showOriginal,
+				image: (originalImage ?? null) as ImageJS | null,
+			}),
+		],
 		activeItemId: 'item-1',
 	} as Partial<EditorStateLike>;
 }

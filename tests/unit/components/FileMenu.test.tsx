@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import FileMenu from '../../../src/renderer/components/shell/FileMenu';
 import type { FileMenuItem } from '../../../src/renderer/components/shell/FileMenu';
 
-function setup(items?: Partial<FileMenuItem>[]) {
+function setup(items?: (Partial<FileMenuItem> | undefined)[]) {
 	const onNew = vi.fn();
 	const defaults: FileMenuItem[] = [
 		{ id: 'new', label: 'New', shortcut: 'Ctrl+N', onSelect: onNew },

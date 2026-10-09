@@ -19,11 +19,11 @@ describe('shallowEqual', () => {
 		expect(shallowEqual([1, 2], [1, 2])).toBe(true);
 		expect(shallowEqual([1, 2], [1, 3])).toBe(false);
 		expect(shallowEqual(null, null)).toBe(true);
-		expect(shallowEqual(null, {})).toBe(false);
+		expect(shallowEqual<unknown>(null, {})).toBe(false);
 	});
 
 	it('returns false when only one side is an object', () => {
-		expect(shallowEqual(1, {})).toBe(false);
+		expect(shallowEqual<unknown>(1, {})).toBe(false);
 	});
 });
 

@@ -30,9 +30,6 @@ const makeImage = (id: string): GalleryImage => ({
 function makeRepository(): GalleryRepositoryPort {
 	return {
 		getData: vi.fn().mockResolvedValue({ version: 1, folders: [], images: [] }),
-		ensureUnsortedFolder: vi
-			.fn()
-			.mockResolvedValue({ id: 'unsorted', name: 'Unsorted', tags: [], createdAt: 0, sortOrder: 0 }),
 		createFolder: vi.fn(),
 		renameFolder: vi.fn(),
 		deleteFolder: vi.fn(),

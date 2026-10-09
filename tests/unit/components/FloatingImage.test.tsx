@@ -1,5 +1,6 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import type { Image as ImageJS } from 'image-js';
 import FloatingImage from '../../../src/renderer/components/FloatingImage';
 import {
 	createEditorState,
@@ -25,7 +26,7 @@ vi.mock('../../../src/renderer/react/useStore', () => ({
 	useEditorStore: () => holders.getEditorStore(),
 	useGalleryStore: () => ({}),
 	useEditorSelector: (selector: (s: never) => unknown) => selector(holders.getEditorState() as never),
-	useGallerySelector: (selector: (s: never) => unknown) => selector({}),
+	useGallerySelector: (selector: (s: never) => unknown) => selector({} as never),
 }));
 
 vi.mock('../../../src/renderer/utils/imageConversion', () => ({
@@ -37,12 +38,21 @@ let editorState: { current: EditorStateLike };
 let editorStub: ReturnType<typeof createEditorStoreStub>;
 
 /** Sets editor state from the legacy flat-field overrides the tests used. */
-function setState(overrides: Record<string, unknown>) {
+function setState(overrides: Parameters<typeof translate>[0]) {
 	editorState.current = createEditorState(translate(overrides));
 }
 
 /** Maps legacy flat fields onto the item-based EditorState shape. */
-function translate(overrides: Record<string, unknown>): Partial<EditorStateLike> {
+function translate(overrides: {
+	blur?: number;
+	threshold?: number;
+	values?: 2 | 3;
+	showOriginal?: boolean;
+	canUndo?: boolean;
+	canRedo?: boolean;
+	originalImage?: ImageJS | null;
+	[key: string]: unknown;
+}): Partial<EditorStateLike> {
 	const { blur, threshold, values, showOriginal, canUndo, canRedo, originalImage, ...rest } = overrides;
 	const needsItem =
 		blur !== undefined ||

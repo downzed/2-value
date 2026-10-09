@@ -224,8 +224,8 @@ export const EditTagsDialog: React.FC<EditTagsDialogProps> = ({ folder, onConfir
 	};
 
 	return (
-		<div className='fixed inset-0 z-300]flex items-center justify-center bg-black/40'>
-			<div className='bg-white rounded-xl shadow-2xl p-5 w-300 space-y-3'>
+		<div className='fixed inset-0 z-[300] flex items-center justify-center bg-black/40'>
+			<div className='bg-white rounded-xl shadow-2xl p-5 w-[300px] space-y-3'>
 				<h2 className='text-sm font-semibold text-slate-800'>Edit Tags — {folder.name}</h2>
 				<p className='text-xs text-slate-400'>Tags help generate image suggestions. Separate with commas.</p>
 				<form onSubmit={handleSubmit} className='space-y-3'>

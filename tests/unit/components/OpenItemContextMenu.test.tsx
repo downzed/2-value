@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { OpenItemContextMenu } from '../../../src/renderer/components/gallery/OpenItemContextMenu';
-import type { OpenItem } from '../../../src/renderer/hooks/useImage';
+import type { OpenItem } from '../../../src/renderer/core/types';
 
 function makeItem(overrides: Partial<OpenItem> = {}): OpenItem {
 	return {

@@ -4,7 +4,6 @@ import { openImageFile } from '../../utils/fileOps';
 import { useCommands } from '../../react/useCommands';
 import { useSaveFlow } from '../../react/useSaveFlow';
 import { useEditorSelector, useEditorStore, useGallerySelector, useGalleryStore } from '../../react/useStore';
-import { galleryRepository } from '../../utils/storage';
 import { FolderPickerDialog } from '../gallery/FolderPickerDialog';
 import FileMenu from './FileMenu';
 import { Icon } from '../shared/Icon';
@@ -15,11 +14,11 @@ interface PendingOpen {
 	file: File;
 }
 
-interface BottomPanelProps {
+interface TopPanelProps {
 	previewCanvasRef: React.RefObject<HTMLCanvasElement | null>;
 }
 
-const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
+const TopPanel: React.FC<TopPanelProps> = ({ previewCanvasRef }) => {
 	const editor = useEditorStore();
 	const gallery = useGalleryStore();
 	const commands = useCommands();
@@ -27,7 +26,7 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 
 	// Non-reactive actions.
 	const { newBlankCanvas, togglePanel, setFitMode, setZoom, zoomIn, zoomOut } = editor;
-	const { importImage, loadGallery } = gallery;
+	const { importImage, createFolder } = gallery;
 
 	// Reactive slices: editor state, then gallery state. Splitting these means a
 	// gallery reload no longer re-renders the status bar's zoom readout, and a
@@ -142,14 +141,9 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 		await doLoadFromFile({ file });
 	}, [pendingOpen, doLoadFromFile]);
 
-	const handleCreateFolderInPicker = useCallback(
-		async (name: string) => {
-			const folder = await galleryRepository.createFolder(name);
-			await loadGallery();
-			return folder;
-		},
-		[loadGallery],
-	);
+	// Routed through the gallery store so #runMutation records and rethrows
+	// failures; calling the repository directly swallowed them.
+	const handleCreateFolderInPicker = useCallback((name: string) => createFolder(name), [createFolder]);
 
 	// Saves into the gallery, not to disk. Use "Export as..." on a gallery item
 	// to download a file.
@@ -383,4 +377,4 @@ const BottomPanel: React.FC<BottomPanelProps> = ({ previewCanvasRef }) => {
 	);
 };
 
-export default BottomPanel;
+export default TopPanel;

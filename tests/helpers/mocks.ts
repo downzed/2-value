@@ -1,4 +1,7 @@
 import { vi } from 'vitest';
+import type { Image as ImageJS } from 'image-js';
+import type { GalleryState } from '../../src/renderer/core/GalleryStore';
+import type { EditorState, OpenItem } from '../../src/renderer/core/types';
 
 // ---------------------------------------------------------------------------
 // IndexedDB mock (jsdom doesn't implement it)
@@ -236,18 +239,22 @@ export function setupImageDataMock() {
 // Mock image-js Image object
 // ---------------------------------------------------------------------------
 
-export function createMockImage(width = 100, height = 100) {
+/**
+ * Minimal stand-in for an image-js `Image`.
+ *
+ * Only the members component tests actually touch are implemented, so the cast
+ * is deliberate: satisfying the full `Image` interface would add ~80 irrelevant
+ * members to every test.
+ */
+export function createMockImage(width = 100, height = 100): ImageJS {
 	const data = new Uint8ClampedArray(width * height * 4);
 	return {
 		width,
 		height,
 		getRawImage: () => ({ data, width, height }),
-	};
+	} as unknown as ImageJS;
 }
 
-// ---------------------------------------------------------------------------
-// Default context value factory
-// ---------------------------------------------------------------------------
 // Store mocks (Phase 4)
 //
 // Components now read the singleton stores via selectors in

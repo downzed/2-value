@@ -25,7 +25,6 @@ const makeFolder = (id: string, name: string, sortOrder = 0) => ({
 function makeRepository(overrides: Partial<GalleryRepositoryPort> = {}) {
 	const repo: GalleryRepositoryPort = {
 		getData: vi.fn().mockResolvedValue({ version: 1, folders: [], images: [] }),
-		ensureUnsortedFolder: vi.fn().mockResolvedValue(makeFolder('unsorted', 'Unsorted')),
 		createFolder: vi.fn().mockResolvedValue(makeFolder('f1', 'Refs')),
 		renameFolder: vi.fn().mockResolvedValue(undefined),
 		deleteFolder: vi.fn().mockResolvedValue(undefined),
@@ -301,7 +300,7 @@ describe('GalleryStore', () => {
 
 	describe('saveImageToGallery', () => {
 		it('overwrites the existing entry rather than creating a duplicate', async () => {
-			const id = await store.saveImageToGallery(new Blob(['x']), 'study.png', 'g1');
+			const id = await store.saveImageToGallery(new Blob(['x']), 'study.png', 'g1', null);
 
 			expect(repo.updateImageBlob).toHaveBeenCalledTimes(1);
 			expect(repo.importImage).not.toHaveBeenCalled();
