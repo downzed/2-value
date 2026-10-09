@@ -84,8 +84,7 @@ export const DeleteFolderDialog: React.FC<DeleteFolderDialogProps> = ({ folder, 
 	const [deleteImages, setDeleteImages] = useState(false);
 
 	return (
-		<Modal widthClass='w-[320px] space-y-4'>
-			<h2 className='text-sm font-semibold text-slate-800'>Delete "{folder.name}"?</h2>
+		<Modal widthClass='w-[320px] space-y-4' title={`Delete "${folder.name}"?`}>
 			{imageCount > 0 && (
 				<div className='space-y-2'>
 					<p className='text-xs text-slate-500'>
@@ -141,8 +140,7 @@ export const RenameFolderDialog: React.FC<RenameFolderDialogProps> = ({ folder, 
 	};
 
 	return (
-		<Modal widthClass='w-[280px] space-y-3'>
-			<h2 className='text-sm font-semibold text-slate-800'>Rename Folder</h2>
+		<Modal widthClass='w-[280px] space-y-3' title='Rename Folder'>
 			<form onSubmit={handleSubmit} className='space-y-3'>
 				<input
 					ref={inputRef}
@@ -187,8 +185,7 @@ export const EditTagsDialog: React.FC<EditTagsDialogProps> = ({ folder, onConfir
 	};
 
 	return (
-		<Modal widthClass='w-[300px] space-y-3'>
-			<h2 className='text-sm font-semibold text-slate-800'>Edit Tags — {folder.name}</h2>
+		<Modal widthClass='w-[300px] space-y-3' title={`Edit Tags — ${folder.name}`}>
 			<p className='text-xs text-slate-400'>Tags help generate image suggestions. Separate with commas.</p>
 			<form onSubmit={handleSubmit} className='space-y-3'>
 				<input
